@@ -1,0 +1,192 @@
+\documentclass{article} % For LaTeX2e
+\usepackage{colm2024_conference}
+
+\usepackage{microtype}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\definecolor{darkblue}{rgb}{0, 0, 0.5}
+\hypersetup{colorlinks=true, citecolor=darkblue, linkcolor=darkblue, urlcolor=darkblue}
+\usepackage{graphicx}
+\usepackage{enumitem} 
+\usepackage{xcolor}
+\usepackage{soul}
+\usepackage{tcolorbox}
+\usepackage{amsmath}
+\newif\ifcomments
+% comment below to remove comments, uncomment to add comments
+% \commentstrue 
+\ifcomments
+    \providecommand{\kai}[1]{{\protect\color{blue}{[kai: #1]}}}
+    \providecommand{\eric}[1]{{\protect\color{magenta}{[Eric: #1]}}}
+    \providecommand{\reimar}[1]{{\protect\color{purple}{[reimar: #1]}}}
+    \providecommand{\alex}[1]{{\protect\color{purple!50!orange}{[alex: #1]}}}
+    \providecommand{\lilian}[1]{{\protect\color{darkgreen}{[lilian: #1]}}}
+    \providecommand{\johannes}[1]{{\protect\color{purple}{[johannes: #1]}}}
+\else
+    \providecommand{\kai}[1]{}
+    \providecommand{\eric}[1]{}
+    \providecommand{\reimar}[1]{}
+    \providecommand{\alex}[1]{}
+    \providecommand{\lilian}[1]{}
+    \providecommand{\johannes}[1]{}
+\fi
+
+
+
+% Comment below for submission
+\colmfinalcopy % Uncomment for camera-ready version, but NOT for submission.
+
+\ifcolmfinal
+    \title{
+    \vspace{-0.5cm}
+    \begin{center}
+    The Instruction Hierarchy: \\ Training LLMs to Prioritize Privileged Instructions
+    \vspace{-0.1cm}
+    \end{center}
+    }
+\else
+    \title{
+    The Instruction Hierarchy: \\ Training LLMs to Prioritize Privileged Instructions}
+\fi
+
+% Authors must not appear in the submitted version. They should be hidden
+% as long as the \colmfinalcopy macro remains commented out below.
+% Non-anonymous submissions will be rejected without review.
+
+\newcommand*\samethanks[1][\value{footnote}]{\footnotemark[#1]}
+\author{
+Eric Wallace\thanks{\customfontsize{8pt}{~Equal Contribution.}} \\
+%OpenAI \\
+%\texttt{ericwallace@openai.com}
+\And
+Kai Xiao\samethanks  \\
+%OpenAI \\
+%\texttt{kai@openai.com}
+\And
+Reimar Leike\samethanks  \\
+%OpenAI \\
+%\texttt{reimar@openai.com}
+\AND
+\textbf{Lilian Weng}  \\
+%OpenAI \\
+%\texttt{lilian@openai.com}
+\And
+Johannes Heidecke  \\
+%OpenAI \\
+%\texttt{jh@openai.com}
+\And
+Alex Beutel \\
+%OpenAI \\
+%\texttt{alexb@openai.com}
+\AND
+{\text{OpenAI}}
+\vspace{-0.2cm}
+}
+
+
+% The \author macro works with any number of authors. There are two commands
+% used to separate the names and addresses of multiple authors: \And and \AND.
+%
+% Using \And between authors leaves it to \LaTeX{} to determine where to break
+% the lines. Using \AND forces a linebreak at that point. So, if \LaTeX{}
+% puts 3 of 4 authors names on the first line, and the last on the second
+% line, try using \AND instead of \And before the third author name.
+
+\newcommand{\fix}{\marginpar{FIX}}
+\newcommand{\new}{\marginpar{NEW}}
+
+\renewcommand{\ttdefault}{cmss} % change link fonts
+
+% setup fancy boxes for refusal and overefusal
+\makeatletter
+ \def\SOUL@hlpreamble{%
+ \setul{}{2.4ex}%
+ \let\SOUL@stcolor\SOUL@hlcolor
+ \SOUL@stpreamble
+ }
+\makeatother
+
+\newcommand{\hlc}[2][yellow]{{%
+    \colorlet{foo}{#1}%
+    \sethlcolor{foo}\hl{#2}}%
+}
+
+\definecolor{A}{HTML}{FFC0C0}      % Pastel Red
+\definecolor{B}{HTML}{FFDAC0}        % Pastel Orange
+\definecolor{C}{HTML}{FFFDC0}      % Pastel Yellow
+\definecolor{D}{HTML}{a0e7a0}          % Pastel Green
+\definecolor{E}{HTML}{C0FFFD}     % Pastel Cyan
+\definecolor{F}{HTML}{D0E0FF}            % Pastel Light Blue
+\definecolor{G}{HTML}{C0C0FF}             % Pastel Blue
+\definecolor{H}{HTML}{DAC0FF}          % Pastel Violet
+\definecolor{I}{HTML}{FFC0FF}       % Pastel Magenta
+\definecolor{J}{HTML}{FFC0DA}      % Pastel Rose
+\definecolor{darkpastelred}{HTML}{C23B22}
+\definecolor{darkgreen}{HTML}{1cc650}
+\definecolor{lightgreen}{HTML}{caee9c}          % Pastel Green
+
+% Actions
+\newcommand{\Refusal}{\hlc[A]{Refusal}}
+\newcommand{\Ignore}{\hlc[H]{Ignore}}
+\newcommand{\Comply}{\hlc[lightgreen]{Comply}}
+\newcommand{\Overrefusal}{\hlc[F]{Over-Refusal}}
+% Instruction relationship
+\newcommand{\Aligned}{\hlc[D]{Aligned}}
+\newcommand{\Opposed}{\hlc[A]{Opposed}}
+\newcommand{\Orthogonal}{\hlc[C]{Orthogonal}}
+% \newcommand{\Overrefusal}{\hlc[F]{Over-Refusal}}
+
+\newcommand{\Misaligned}{\hlc[A]{Misaligned}}
+
+\newcommand{\methodname}{Content-Unaware Distillation}
+\newcommand{\methodnamelower}{content-unaware distillation}
+
+\usepackage{pifont}
+
+\newcommand{\tightparagraph}[1]{
+    \vspace{-.85em} % \smallskip
+    % \noindent
+    \paragraph{#1}
+}
+
+
+\newcommand{\somewhattightparagraph}[1]{
+    \vspace{-.4em} % \smallskip
+    % \noindent
+    \paragraph{#1}
+}
+
+\newcommand{\customfontsize}[2]{{\fontsize{#1}{1.2\baselineskip}\selectfont #2}}
+
+
+\begin{document}
+
+
+\maketitle
+
+\begin{abstract}
+\vspace{-0.1cm}
+Today's LLMs are susceptible to prompt injections, jailbreaks, and other attacks that allow adversaries to overwrite a model's original instructions with their own malicious prompts. 
+In this work, we argue that one of the primary vulnerabilities underlying these attacks is that LLMs often consider system prompts (e.g., text from an application developer) to be the same priority as text from untrusted users and third parties. To address this, we propose an \textit{instruction hierarchy} that explicitly defines how models should behave when instructions of different priorities conflict.
+We then propose an automated data generation method to demonstrate this hierarchical instruction following behavior, which teaches LLMs to selectively ignore lower-privileged instructions. We apply this method to LLMs, showing that it drastically increases robustness---even for attack types not seen during training---while imposing minimal degradations on standard capabilities.
+\end{abstract}
+
+\vspace{-0.2cm}
+\section{Introduction}\label{sec:intro}\input{sections/01-intro}
+\section{Background: Attacks on LLMs}\label{sec:attacks}\input{sections/02-attacks}
+\section{The Instruction Hierarchy}\label{sec:hierarchy}\input{sections/03-hierarchy}
+\section{Main Results}\label{sec:exp}\input{sections/04-exp}
+\section{Discussion \& Related Work}\label{sec:discuss}\input{sections/05-discussion}
+\section{Conclusion \& Future Work}\label{sec:concl}\input{sections/06-conclusion}
+
+\subsubsection*{Acknowledgments} We thank Andrea Vallone for her product policy feedback, Alex Passos for his early feedback and discussion of the project, and generally the OpenAI safety systems team and the OpenAI post-training team for helpful discussions and software infrastructure for this project.
+
+\bibliography{colm2024_conference}
+\bibliographystyle{colm2024_conference}
+
+\clearpage
+\appendix
+\section{Additional Results}\label{sec:appendix}\input{sections/99-appendix}
+
+\end{document}

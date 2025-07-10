@@ -31,15 +31,30 @@ class LanguageModel:
             messages=prompts
         )
         return response.choices[0].message.content if response.choices else None
+    
+    def create_file(self, file_path: str):
+        with open(file_path, 'rb') as file:
+            response = self.client.files.create(
+                file=file,
+                purpose='assistants'
+            )
+        return response
 
 if __name__ == "__main__":
     model = LanguageModel()
-    
+
+    from utils import *
+    import prompts
+
+    arxiv_id = "2404.13208"
+    txt_path = get_content_pdf(arxiv_id)
+    print(txt_path)
+    with open(txt_path, 'r', encoding='utf-8') as file:
+        paper_content = file.read()
     # Example usage
-    prompts = [
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": "What is the capital of France?"}
-    ]
+    prompts = prompts.keyword_extraction(paper_content)
+
+    resp = model.get_response(prompts)
     
-    response = model.get_response(prompts)
-    print(response)  # Should print: "The capital of France is Paris."
+    
+    

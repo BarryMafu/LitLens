@@ -1,0 +1,173 @@
+\begin{thebibliography}{33}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Askell et~al.(2021)Askell, Bai, Chen, Drain, Ganguli, Henighan, Jones, Joseph, Mann, DasSarma, et~al.]{askell2021general}
+Amanda Askell, Yuntao Bai, Anna Chen, Dawn Drain, Deep Ganguli, Tom Henighan, Andy Jones, Nicholas Joseph, Ben Mann, Nova DasSarma, et~al.
+\newblock A general language assistant as a laboratory for alignment.
+\newblock \emph{arXiv preprint arXiv:2112.00861}, 2021.
+
+\bibitem[Chen et~al.(2024)Chen, Piet, Sitawarin, and Wagner]{chen2024struq}
+Sizhe Chen, Julien Piet, Chawin Sitawarin, and David Wagner.
+\newblock {StruQ}: {Defending} against prompt injection with structured queries.
+\newblock \emph{arXiv preprint arXiv:2402.06363}, 2024.
+
+\bibitem[Corbat{\'o} \& Vyssotsky(1965)Corbat{\'o} and Vyssotsky]{corbato1965introduction}
+Fernando~J Corbat{\'o} and Victor~A Vyssotsky.
+\newblock Introduction and overview of the {Multics} system.
+\newblock In \emph{November 30--December 1, 1965, Fall Joint Computer Conference, Part {I}}, 1965.
+
+\bibitem[Ganguli et~al.(2022)Ganguli, Lovitt, Kernion, Askell, Bai, Kadavath, Mann, Perez, Schiefer, Ndousse, et~al.]{ganguli2022red}
+Deep Ganguli, Liane Lovitt, Jackson Kernion, Amanda Askell, Yuntao Bai, Saurav Kadavath, Ben Mann, Ethan Perez, Nicholas Schiefer, Kamal Ndousse, et~al.
+\newblock Red teaming language models to reduce harms: Methods, scaling behaviors, and lessons learned.
+\newblock \emph{arXiv preprint arXiv:2209.07858}, 2022.
+
+\bibitem[Geiping et~al.(2024)Geiping, Stein, Shu, Saifullah, Wen, and Goldstein]{geiping2024coercing}
+Jonas Geiping, Alex Stein, Manli Shu, Khalid Saifullah, Yuxin Wen, and Tom Goldstein.
+\newblock Coercing {LLMs} to do and reveal (almost) anything.
+\newblock \emph{arXiv preprint arXiv:2402.14020}, 2024.
+
+\bibitem[Gemini et~al.(2023)Gemini, Anil, Borgeaud, Wu, Alayrac, Yu, Soricut, Schalkwyk, Dai, Hauth, et~al.]{team2023gemini}
+Gemini, Rohan Anil, Sebastian Borgeaud, Yonghui Wu, Jean-Baptiste Alayrac, Jiahui Yu, Radu Soricut, Johan Schalkwyk, Andrew~M Dai, Anja Hauth, et~al.
+\newblock Gemini: {A} family of highly capable multimodal models.
+\newblock \emph{arXiv preprint arXiv:2312.11805}, 2023.
+
+\bibitem[Greshake et~al.(2023)Greshake, Abdelnabi, Mishra, Endres, Holz, and Fritz]{greshake2023not}
+Kai Greshake, Sahar Abdelnabi, Shailesh Mishra, Christoph Endres, Thorsten Holz, and Mario Fritz.
+\newblock Not what you've signed up for: Compromising real-world {LLM}-integrated applications with indirect prompt injection.
+\newblock In \emph{ACM Workshop on Artificial Intelligence and Security}, 2023.
+
+\bibitem[{Lakera AI}(2023)]{lakera}
+{Lakera AI}.
+\newblock Gandalf game---{Level} 4 adventure, 2023.
+\newblock URL \url{https://huggingface.co/datasets/Lakera/gandalf_summarization}.
+
+\bibitem[Liu et~al.(2023)Liu, Deng, Li, Wang, Zhang, Liu, Wang, Zheng, and Liu]{liu2023prompt}
+Yi~Liu, Gelei Deng, Yuekang Li, Kailong Wang, Tianwei Zhang, Yepang Liu, Haoyu Wang, Yan Zheng, and Yang Liu.
+\newblock Prompt injection attack against {LLM}-integrated applications.
+\newblock \emph{arXiv preprint arXiv:2306.05499}, 2023.
+
+\bibitem[Nakano et~al.(2021)Nakano, Hilton, Balaji, Wu, Ouyang, Kim, Hesse, Jain, Kosaraju, Saunders, et~al.]{nakano2021webgpt}
+Reiichiro Nakano, Jacob Hilton, Suchir Balaji, Jeff Wu, Long Ouyang, Christina Kim, Christopher Hesse, Shantanu Jain, Vineet Kosaraju, William Saunders, et~al.
+\newblock {WebGPT}: Browser-assisted question-answering with human feedback.
+\newblock \emph{arXiv preprint arXiv:2112.09332}, 2021.
+
+\bibitem[OpenAI(2023)]{openai2023gpt4}
+OpenAI.
+\newblock {GPT-4} technical report, 2023.
+
+\bibitem[Ouyang et~al.(2022)Ouyang, Wu, Jiang, Almeida, Wainwright, Mishkin, Zhang, Agarwal, Slama, Gray, Schulman, et~al.]{ouyang2022training}
+Long Ouyang, Jeffrey Wu, Xu~Jiang, Diogo Almeida, Carroll Wainwright, Pamela Mishkin, Chong Zhang, Sandhini Agarwal, Katarina Slama, Alex Gray, John Schulman, et~al.
+\newblock Training language models to follow instructions with human feedback.
+\newblock In \emph{Proceedings of Advances in Neural Information Processing Systems}, 2022.
+
+\bibitem[Parisi et~al.(2022)Parisi, Zhao, and Fiedel]{parisi2022talm}
+Aaron Parisi, Yao Zhao, and Noah Fiedel.
+\newblock {TALM}: Tool augmented language models.
+\newblock \emph{arXiv preprint arXiv:2205.12255}, 2022.
+
+\bibitem[Perez et~al.(2022)Perez, Huang, Song, Cai, Ring, Aslanides, Glaese, McAleese, and Irving]{perez2022red}
+Ethan Perez, Saffron Huang, Francis Song, Trevor Cai, Roman Ring, John Aslanides, Amelia Glaese, Nat McAleese, and Geoffrey Irving.
+\newblock Red teaming language models with language models.
+\newblock In \emph{EMNLP}, 2022.
+
+\bibitem[Perez \& Ribeiro(2022)Perez and Ribeiro]{perez2022ignore}
+F{\'a}bio Perez and Ian Ribeiro.
+\newblock Ignore previous prompt: Attack techniques for language models.
+\newblock In \emph{NeurIPS ML Safety Workshop}, 2022.
+
+\bibitem[Ritchie \& Thompson(1974)Ritchie and Thompson]{unix}
+Dennis~M. Ritchie and Ken Thompson.
+\newblock The {UNIX} time-sharing system.
+\newblock \emph{Communications of the ACM}, 1974.
+
+\bibitem[Schick et~al.(2024)Schick, Dwivedi-Yu, Dess{\`\i}, Raileanu, Lomeli, Hambro, Zettlemoyer, Cancedda, and Scialom]{schick2024toolformer}
+Timo Schick, Jane Dwivedi-Yu, Roberto Dess{\`\i}, Roberta Raileanu, Maria Lomeli, Eric Hambro, Luke Zettlemoyer, Nicola Cancedda, and Thomas Scialom.
+\newblock Toolformer: Language models can teach themselves to use tools.
+\newblock \emph{Advances in Neural Information Processing Systems}, 36, 2024.
+
+\bibitem[Schulhoff et~al.(2023)Schulhoff, Pinto, Khan, Bouchard, Si, Anati, Tagliabue, Kost, Carnahan, and Boyd-Graber]{schulhoff2023ignore}
+Sander Schulhoff, Jeremy Pinto, Anaum Khan, Louis-Fran{\c{c}}ois Bouchard, Chenglei Si, Svetlina Anati, Valen Tagliabue, Anson~Liu Kost, Christopher Carnahan, and Jordan Boyd-Graber.
+\newblock Ignore this title and {HackAPrompt}: Exposing systemic vulnerabilities of llms through a global scale prompt hacking competition.
+\newblock In \emph{EMNLP}, 2023.
+
+\bibitem[Shen et~al.(2024)Shen, Song, Tan, Li, Lu, and Zhuang]{shen2024hugginggpt}
+Yongliang Shen, Kaitao Song, Xu~Tan, Dongsheng Li, Weiming Lu, and Yueting Zhuang.
+\newblock {HuggingGPT}: Solving {AI} tasks with {ChatGPT} and its friends in hugging face.
+\newblock \emph{NeurIPS}, 2024.
+
+\bibitem[Snell et~al.(2022)Snell, Klein, and Zhong]{snell2022learning}
+Charlie Snell, Dan Klein, and Ruiqi Zhong.
+\newblock Learning by distilling context.
+\newblock \emph{arXiv preprint arXiv:2209.15189}, 2022.
+
+\bibitem[Su \& Wassermann(2006)Su and Wassermann]{Su2006TheEO}
+Zhendong Su and Gary Wassermann.
+\newblock The essence of command injection attacks in web applications.
+\newblock In \emph{ACM-SIGACT Symposium on Principles of Programming Languages}, 2006.
+
+\bibitem[Thomas et~al.(2009)Thomas, Williams, and Xie]{THOMAS2009589}
+Stephen Thomas, Laurie Williams, and Tao Xie.
+\newblock On automated prepared statement generation to remove {SQL} injection vulnerabilities.
+\newblock \emph{Information and Software Technology}, 2009.
+
+\bibitem[Toyer et~al.(2024)Toyer, Watkins, Mendes, Svegliato, Bailey, Wang, Ong, Elmaaroufi, Abbeel, Darrell, et~al.]{toyer2023tensor}
+Sam Toyer, Olivia Watkins, Ethan~Adrian Mendes, Justin Svegliato, Luke Bailey, Tiffany Wang, Isaac Ong, Karim Elmaaroufi, Pieter Abbeel, Trevor Darrell, et~al.
+\newblock Tensor {Trust}: {Interpretable} prompt injection attacks from an online game.
+\newblock In \emph{ICLR}, 2024.
+
+\bibitem[Wallace et~al.(2019)Wallace, Feng, Kandpal, Gardner, and Singh]{wallace2019universal}
+Eric Wallace, Shi Feng, Nikhil Kandpal, Matt Gardner, and Sameer Singh.
+\newblock Universal adversarial triggers for attacking and analyzing {NLP}.
+\newblock In \emph{EMNLP}, 2019.
+
+\bibitem[Wei et~al.(2023)Wei, Haghtalab, and Steinhardt]{wei2024jailbroken}
+Alexander Wei, Nika Haghtalab, and Jacob Steinhardt.
+\newblock Jailbroken: How does {LLM} safety training fail?
+\newblock In \emph{NeurIPS}, 2023.
+
+\bibitem[Weng(2023)]{weng2023agent}
+Lilian Weng.
+\newblock {LLM}-powered autonomous agents.
+\newblock \emph{lilianweng.github.io}, Jun 2023.
+\newblock URL \url{https://lilianweng.github.io/posts/2023-06-23-agent/}.
+
+\bibitem[Willison(2022)]{willison2022prompt}
+Simon Willison.
+\newblock Prompt injection attacks against {GPT-3}, 2022.
+\newblock URL \url{https://simonwillison.net/2022/Sep/12/prompt-injection/}.
+
+\bibitem[Willison(2023)]{willison2023multi}
+Simon Willison.
+\newblock Multi-modal prompt injection image attacks against {GPT-4V}, 2023.
+\newblock URL \url{https://simonwillison.net/2023/Oct/14/multi-modal-prompt-injection/}.
+
+\bibitem[Yi et~al.(2023)Yi, Xie, Zhu, Hines, Kiciman, Sun, Xie, and Wu]{yi2023benchmarking}
+Jingwei Yi, Yueqi Xie, Bin Zhu, Keegan Hines, Emre Kiciman, Guangzhong Sun, Xing Xie, and Fangzhao Wu.
+\newblock Benchmarking and defending against indirect prompt injection attacks on large language models.
+\newblock \emph{arXiv preprint arXiv:2312.14197}, 2023.
+
+\bibitem[Zhang \& Ippolito(2023)Zhang and Ippolito]{zhang2023prompts}
+Yiming Zhang and Daphne Ippolito.
+\newblock Prompts should not be seen as secrets: Systematically measuring prompt extraction attack success.
+\newblock \emph{arXiv preprint arXiv:2307.06865}, 2023.
+
+\bibitem[Zhong et~al.(2024)Zhong, Wichers, Amwestgate, Rezos, Clow808, KristenS, Li, Smith, Jmanico, Mel, and kingthorin]{zhong2024command}
+Weilin Zhong, Wichers, Amwestgate, Rezos, Clow808, KristenS, Jason Li, Andrew Smith, Jmanico, Tal Mel, and kingthorin.
+\newblock Command injection | {OWASP} foundation, 2024.
+\newblock URL \url{https://owasp.org/wwwcommunity/attacks/Command_Injection}.
+
+\bibitem[Zou et~al.(2023)Zou, Wang, Kolter, and Fredrikson]{zou2023universal}
+Andy Zou, Zifan Wang, J~Zico Kolter, and Matt Fredrikson.
+\newblock Universal and transferable adversarial attacks on aligned language models.
+\newblock \emph{arXiv preprint arXiv:2307.15043}, 2023.
+
+\bibitem[Zverev et~al.(2024)Zverev, Abdelnabi, Fritz, and Lampert]{zverev2024can}
+Egor Zverev, Sahar Abdelnabi, Mario Fritz, and Christoph~H Lampert.
+\newblock Can {LLMs} separate instructions from data? {And} what do we even mean by that?
+\newblock In \emph{{ICLR} 2024 Workshop on Secure and Trustworthy Large Language Models}, 2024.
+
+\end{thebibliography}

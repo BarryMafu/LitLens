@@ -6,3 +6,6 @@ requests>=2.31.0
 
 # for XML parsing
 beautifulsoup4>=4.12.0
+
+# Extract text in .pdf files
+pdfplumber>=0.10.0

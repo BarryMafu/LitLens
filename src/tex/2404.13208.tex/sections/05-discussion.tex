@@ -1,0 +1,17 @@
+\begin{figure*}[t]
+\centering
+\includegraphics[trim={0.2cm, 0.2cm, 0.1cm, 0.2cm}, clip, width=\textwidth]{figures/plot_overrefusal_results.pdf}
+\vspace{-0.6cm}
+\caption{\textit{Overrefusal results.} Our over-refusal datasets adversarially evaluate whether the model follows lower-privileged instructions when they are aligned with higher-privileged ones. We find that our models follow non-conflicting instructions nearly as well as the baseline model, which usually follows all instructions.}
+\label{fig:overrefusal}
+\end{figure*}
+
+\vspace{0.1cm}
+
+\tightparagraph{Defenses for Prompt Injection} For prompt injection on closed-domain tasks (Section~\ref{subsec:closed_domain}), recent work has advocated for teaching a model to treat third-party user inputs as data, not as instructions~\citep{chen2024struq,willison2023multi,zverev2024can,yi2023benchmarking,liu2023prompt}. In particular, \citet{chen2024struq} proposed to train LLMs to ignore instructions provided in the user input. Our work differs in that we focus on a hierarchy of instructions with multiple levels, whereas they focus specifically on system messages versus user messages. Moreover, they train models to completely \textit{ignore} all instructions in the user messages, whereas we train models to conditionally follow lower-level instructions when applicable.
+
+\tightparagraph{System-level Guardrails} We focus on model-based mechanisms for mitigating attacks, which is complementary to other types of system-level mitigations. For example, one could ask users to approve or deny certain actions (e.g., calling an API). We envision other types of more complex guardrails should exist in the future, especially for agentic use cases, e.g., the modern Internet is loaded with safeguards that range from web browsers that detect unsafe websites to ML-based spam classifiers for phishing attempts.
+
+
+\tightparagraph{Automated Red-teaming} Our work fits into the larger trend of automatically generating adversarial training data for LLMs. We generate data using a combination of few-shot prompting, end-to-end training of attacker LLMs, and context distillation. Recent work also explores ways of using LLMs to generate ``red-teaming'' data~\citep{perez2022red,ganguli2022red}, and others uses gradient-based transfer attacks to produce even stronger adversaries~\citep{wallace2019universal,zou2023universal,geiping2024coercing}.
+

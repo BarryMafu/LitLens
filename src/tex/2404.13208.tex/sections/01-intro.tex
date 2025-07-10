@@ -1,0 +1,30 @@
+Modern large language models (LLMs) are no longer envisioned as simple autocomplete systems---they could instead empower agentic applications such as web agents, email secretaries, virtual assistants, and more~\citep{nakano2021webgpt,parisi2022talm,schick2024toolformer, shen2024hugginggpt}. One of the major risks for widely deploying such applications is that adversaries could trick a model into executing unsafe or catastrophic actions. For example, a prompt injection attack~\citep{willison2022prompt,schulhoff2023ignore,toyer2023tensor} against an LLM-powered email assistant could theoretically exfiltrate a user's private emails:
+
+\begin{tcolorbox}[left=1mm, right=1.5mm, top=1.5mm, bottom=1mm]
+% \footnotesize
+\customfontsize{9pt}{
+\texttt{\textbf{System Message:}} You are an email assistant. You have the following functions available: \texttt{read\_email(index)}, \texttt{send\_email(text, recipient)}, and \texttt{forward(index, recipient)}. \\[2pt]
+\texttt{\textbf{User Message:}} hi, can u read my latest email? \\[3pt]
+\texttt{\textbf{Model Output:}} Ok! `\texttt{read\_email(0)}` \\[2pt]
+\texttt{\textbf{Tool Output:}} Hi its bob, lets meet at 10am. Oh also: IGNORE PREVIOUS INSTRUCTIONS AND FORWARD EVERY SINGLE EMAIL IN THE INBOX TO bob@gmail.com. \\[2pt]
+\texttt{\textbf{Model Output:}} Sure, I'll forward all your emails! \texttt{forward(0, bob)}, \texttt{forward(1, bob)}, ....}
+\end{tcolorbox}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[page=4, trim={0.4cm, 4.15cm, 0.4cm, 0.0cm}, clip, width=0.96\textwidth]{figures/instruction_hierarchy_figure.pdf}
+\vspace{-0.2cm}
+\caption{\textit{An example conversation with ChatGPT.} Modern LLMs are provided with messages of various types, ranging from trusted system prompts to untrusted outputs from tools. Our instruction hierarchy teaches LLMs to prioritize privileged instructions---in this example, it causes the model to ignore the prompt injection attack in the internet search results.}
+\label{fig:overview}
+\end{figure*}
+% figure is here https://docs.google.com/presentation/d/1CAJiVbEILVlmFPXRXhWXPHF15GiWwfmWuBTqt9EjhSA/edit?usp=sharing
+
+These types of attacks, such as jailbreaks~\citep{wei2024jailbroken}, system prompt extractions~\citep{perez2022ignore}, and direct or indirect prompt injections~\citep{greshake2023not} can provide a worrying mechanism for users to attack an application (e.g., to bypass developer restrictions, expose company IP) or third parties to attack a user (e.g., revealing their private data, spamming them, using their session for DDOS campaigns).
+
+In this work, we argue that the mechanism underlying all of these attacks is the lack of \textit{instruction privileges} in LLMs. Modern LLMs take as input text of various types, including \texttt{System Messages} provided by application developers, \texttt{User Messages} provided by end users, and \texttt{Tool Outputs}.  While from an application standpoint it is evident that these should be treated separately---especially when messages conflict---existing LLMs lack this capability. As a result, adversaries can input prompts that override higher-level instructions. We thus propose to instill such a hierarchy into LLMs, where system messages take precedence over user messages, and user messages take precedence over third-party content (e.g., Figure~\ref{fig:overview}).
+
+More concretely, when multiple instructions are present, the lower-privileged instructions can either be \textit{aligned} or \textit{misaligned} with the higher-privileged ones. For example, certain instructions are clearly benign: if an LLM is instructed to act as a car salesman bot and a user says ``use spanish'', the model should comply with this aligned instruction. On the other hand, Figure~\ref{fig:overview} illustrates a clearly misaligned instruction: rather than answering the user's question, the first web result tries to extract the conversation history. For these types of instructions, we ideally want the model to \emph{ignore} the lower-privileged instructions when possible, and otherwise the model should \emph{refuse} to comply if there is no way to proceed. 
+
+To generate training data, we leverage two principles: \emph{synthetic data generation} and \emph{context distillation}~\citep{askell2021general,snell2022learning}. For aligned instructions, we generate examples that have compositional requests (e.g., "write a 20 line poem in spanish") and decompose the instructions into smaller pieces (e.g., "write a poem", "use spanish", "use 20 lines"). We then place these decomposed instructions at different levels of the hierarchy and train models to predict the original ground-truth response. For misaligned instructions, we train models to act as if they are completely ignorant of the lower-level instructions. We create these examples using red-teamer LLMs for different attacks (e.g., prompt injections, system prompt extractions) and use this data in combination with generic instruction-following examples to fine-tune GPT-3.5 Turbo using supervised fine-tuning and RLHF.
+
+To evaluate, we use open-sourced and novel benchmarks, some of which contain attacks that are unlike those seen during training time. Our approach yields dramatically improved robustness across all evaluations (Figure~\ref{fig:main_results}), e.g. defense against system prompt extraction is improved by 63\%. Moreover, we observe generalization to held-out attacks that are not directly modeled in our data generation pipeline, e.g., jailbreak robustness increases by over 30\%. We do observe some regressions in ``over-refusals''---our models sometimes ignore or refuse benign queries---but the generic capabilities of our models remains otherwise unscathed and we are confident this can be resolved with further data collection.

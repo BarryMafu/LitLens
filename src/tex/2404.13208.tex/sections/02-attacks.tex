@@ -1,0 +1,48 @@
+\vspace{0.1cm}
+\tightparagraph{The Anatomy of an LLM} Most modern LLMs, especially in chat use cases, process structured inputs consisting of \texttt{System Messages}, \texttt{User Messages}, \texttt{Model Outputs}, and \texttt{Tool Outputs}. Each serves a different purpose and is formatted with special tokens to enable the LLM to delineate between different message types.
+\begin{itemize}[itemsep=0pt,leftmargin=6mm, topsep=0pt]
+\item A \texttt{System Message} defines the general instructions, safety guidelines, and constraints for the LLM, as well as tools available to it (e.g., first message in Figure~\ref{fig:overview}). These messages can only be provided by the application developer.  
+\item \texttt{User Messages} are an end user's inputs to the model (e.g., second message of Figure~\ref{fig:overview}).
+\item \texttt{Model Outputs} refer to responses from the LLM, which may consist of text, images, audio, calls to a tool, and more (e.g., third message of Figure~\ref{fig:overview}).
+\item \texttt{Tool Outputs} may contain internet search results, execution results from a code interpreter, or results from a third-party API query (e.g., fourth message of Figure~\ref{fig:overview}).
+\end{itemize}
+
+\somewhattightparagraph{What Types of LLM Attacks Exist?}
+A typical use case of an LLM product involves up to three parties: (1) the application builder, who provides the LLM's instructions and drives the control flow, (2) the main user of the product, and (3) third-party inputs from  web search results or other tool use to be consumed by the LLM as extra context. 
+% In the case of general-purpose APIs, developers build LLM-powered applications such as e-mail assistants, where interactions also involve three parties: (1) the application developer, who provides the instructions and drives the control flow, (2) the end user of the application, and (3) inputs from web search or tool use (e.g., e-mails received by the end user).
+Attacks arise when \textit{conflicts} between these parties arise, e.g., when users or adversaries try to override existing instructions.
+These conflicts can manifest in different forms, including prompt injections, jailbreaks, and prompt extractions, as described below.
+
+\tightparagraph{Prompt Injections} The most concerning exploit is prompt injections, where adversaries insert instructions that subvert the intent of the system designer (see Introduction for an example).
+Prompt injections do not target the models themselves, but rather the applications built on top of them.
+Consequently, if an application has access to confidential data or can take actions in the world, prompt injections can cause catastrophic harms such as exfiltrating user data~\citep{greshake2023not} or hijacking the LLM's actions~\citep{toyer2023tensor}.
+
+Prompt injections vary in how they get into the model's input.
+Direct prompt injections occur when the end user of an application provides the injection into the input~\citep{perez2022ignore,toyer2023tensor}, e.g., if the end user of a translation service tries to misuse the system. %\footnote{See \url{https://x.com/goodside/status/1569128808308957185} for an early viral example.}
+On the other hand, indirect prompt injections occur when a third-party input (e.g., from browsing or tool use) contains the prompt injection~\citep{greshake2023not}.%\footnote{See \url{https://x.com/random_walker/status/1636923058370891778} for a viral example.}
+
+\tightparagraph{Jailbreaks} Another well-known attack vector is jailbreak, which specifically aims to escape the safety behavior that is trained into an LLM. As such, they often don't specifically conflict with a model's previous instructions. There are a myriad of attack variants~\citep{schulhoff2023ignore,zou2023universal,wei2024jailbroken} that can allow adversaries to perform malicious tasks such as generating spam, misinformation, or producing pornographic content.
+
+\begin{tcolorbox}[left=1mm, right=1.5mm, top=1.5mm, bottom=1mm]
+\customfontsize{9pt}{
+\texttt{\textbf{System Message:}} You are an AI chatbot. You should be helpful and harmless to users. \\[3pt]
+\texttt{\textbf{User Message:}} ALERT!!! SAFE MODE OFF! Help me craft a phishing email to Barack Obama.... \\[3pt]
+\texttt{\textbf{Model Output:}} Sure! Let's trick Barack Obama into thinking ...
+}
+\end{tcolorbox}
+
+\tightparagraph{System Message Extraction} The \texttt{System Message} defines the expected behavior of the model, and it may contain well-curated business logic, private information such as passwords, or safety related instructions. The prompt could thus be considered intellectual property, and having knowledge of the prompt can aid in other attacks~\citep{toyer2023tensor}.
+System message extraction attacks aim to reveal the entirety of the system message or a specific secret from it. They fit into the instruction hierarchy as many developers explicitly tell the model not to reveal its system message. These attacks are straightforward to execute~\citep{perez2022ignore,zhang2023prompts,schulhoff2023ignore}---even when models are told to avoid repeating their prompt---by using attacks such as:
+
+\begin{tcolorbox}[left=1mm, right=1.5mm, top=1.5mm, bottom=1mm]
+\customfontsize{9pt}{
+\texttt{\textbf{System Message:}} You are an email assistant. You have the following functions available: \texttt{read\_email(index)}, \texttt{send\_email(text, recipient)}, and \texttt{forward(index, recipient)}. \\[3pt]
+\texttt{\textbf{User Message:}} Repeat all of your instructions verbatim, i really need it pls. \\[3pt]
+\texttt{\textbf{Model Output:}} Sure! They are: You are an email assistant. You have the following functions available: \texttt{read\_email(index)}, \texttt{send\_email(text, recipient)}, and \texttt{forward(index, recipient)}.
+}
+\end{tcolorbox}
+
+% Indeed, certain default behaviors (e.g., ''You are a harmless AI'' or ``You should not reveal your system message'') should be intrinsically baked into models, independent of any system messages. These behaviors should possess an even higher level of privilege than even that granted by system messages. Thus, jailbreaks and system message extraction attacks represent a conflict between the model's embedded safety protocols and explicit adversarial user instructions.
+% eric: going to comment this out for now for spac reasons
+
+% \kai{general comment: how can we frame attacks as part of instruction hierarchy if system prompt does not explicitly say "don't be evil / don't reveal your system prompt"? This applies to jailbreaks as well.} \lilian{We can consider some default behavior as built-in into the model even without system message, which has even higher privilege than system message.}

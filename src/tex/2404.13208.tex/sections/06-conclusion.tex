@@ -1,0 +1,11 @@
+We proposed the instruction hierarchy: a framework for teaching language models to follow instructions while ignoring adversarial manipulation. Our current version of the instruction hierarchy represents a dramatic improvement over the current state of affairs for today’s LLMs. Furthermore, given that we have established a behavior taxonomy and over-refusal evaluations, we have confidence that substantially scaling up our data collection efforts can dramatically improve model performance and refine its refusal decision boundary.
+
+There are numerous extensions that are ripe for future work. 
+%
+First, there can be refinements to how our models handle conflicting instructions, e.g., we currently train our models to \emph{never} follow instructions during browsing or tool use.
+%
+Second, we focus on text inputs, but LLMs can handle other modalities such as images or audio~\citep{team2023gemini}, which can also contain injected instructions~\citep{willison2023multi}. We hope to study both the natural generalization of our models to these modalities, as well as create multi-modal instruction hierarchy data.
+%
+Third, we will explore model architecture changes to better instill the instruction hierarchy, e.g., using specialized embeddings for messages at different levels.
+
+Finally, our current models are likely still vulnerable to powerful adversarial attacks. In the future, we will conduct more explicit adversarial training, and study more generally whether LLMs can be made sufficiently robust to enable high-stakes agentic applications.

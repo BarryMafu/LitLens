@@ -6,12 +6,19 @@
 
 import requests
 from bs4 import BeautifulSoup
+import os
+import tarfile
+import pdfplumber
 
 RESPONSE_CODE_OK = 200
 
 class LitlensException(Exception):
     """Custom exception for LitLens errors."""
     pass
+
+def is_valid_arxiv_id(arxiv_id: str) -> bool:
+    # TODO: use Regex to validate arXiv ID format
+    return True
 
 def get_basic_info(arxiv_id: str):
     url = f"http://export.arxiv.org/api/query?id_list={arxiv_id}"
@@ -71,7 +78,6 @@ def get_arxiv_id_by_title(title: str):
     raise LitlensException(f"No results found for title: {title}")
     
 def trim_version(arxiv_id: str):
-    """Trim the version number from the arXiv ID."""
     if 'v' in arxiv_id:
         return arxiv_id.split('v')[0]
     return arxiv_id
@@ -91,8 +97,70 @@ def get_citation(arxiv_id: str):
     ]
     return titles
 
+def get_reference(arxiv_id: str):
+    arxiv_id = trim_version(arxiv_id) # no "v" allowed in semantic API
+    url = f"https://api.semanticscholar.org/graph/v1/paper/arXiv:{arxiv_id}/references"
+    response = requests.get(url)
+
+    if response.status_code != RESPONSE_CODE_OK:
+        raise LitlensException(f"Failed to fetch references: {response.status_code}")
+    
+    data = response.json()
+    titles = [
+        paper['citedPaper']['title'] for paper in data['data']
+    ]
+    return titles
+
+def get_content_tex(arxiv_id: str):
+    # Download 
+    url = f"https://arxiv.org/e-print/{arxiv_id}"
+    response = requests.get(url, stream=True)
+
+    if response.status_code != RESPONSE_CODE_OK:
+        raise LitlensException(f"Failed to fetch content: {response.status_code}")
+    
+    # Create directory
+    cwd = os.getcwd()
+    tar_path = os.path.join(cwd, f"src/tar/{arxiv_id}.tar.gz")
+    tex_path = os.path.join(cwd, f"src/tex/{arxiv_id}.tex")
+    
+    # Save .tar.gz file
+    with open(tar_path, 'wb') as file:
+        for chunk in response.iter_content(chunk_size=8192):
+            file.write(chunk)
+
+    # 
+    with tarfile.open(tar_path, "r:gz") as tar:
+        tar.extractall(tex_path)
+
+def get_content_pdf(arxiv_id: str):
+    url = f"https://arxiv.org/pdf/{arxiv_id}.pdf"
+    response = requests.get(url, stream=True)
+
+    if response.status_code != RESPONSE_CODE_OK:
+        raise LitlensException(f"Failed to fetch PDF content: {response.status_code}")
+    
+    # Create directory
+    cwd = os.getcwd()
+    pdf_path = os.path.join(cwd, f"src/pdf/{arxiv_id}.pdf")
+    
+    # Save PDF file
+    with open(pdf_path, 'wb') as file:
+        for chunk in response.iter_content(chunk_size=8192):
+            file.write(chunk)
+
+    with pdfplumber.open(pdf_path) as pdf:
+        text = ""
+        for page in pdf.pages:
+            text += page.extract_text()
+    
+    txt_path = os.path.join(cwd, f"src/txt/{arxiv_id}.txt")
+    with open(txt_path, 'w', encoding='utf-8') as file:
+        file.write(text)
+    return txt_path
+
 if __name__ == "__main__":
-    title = "Attention Is All"
-    arxiv_id = get_arxiv_id_by_title(title)
-    for t in get_citation(arxiv_id):
-        print(t)
+    arxiv_id = "2404.13208"
+    print(get_content_pdf(arxiv_id))
+
+# https://api.semanticscholar.org/graph/v1/paper/arXiv:1706.03762/references
