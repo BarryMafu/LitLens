@@ -89,8 +89,8 @@ class LitLens:
             paper_abstracts.append(get_basic_info(arxiv_id)['summary'])
         sr_prompt = pr.second_round(paper_titles, paper_abstracts, self.config.count_second_round, paper_content)
         print(sr_prompt)
-        return
-        # response = self.model.get_response(sr_prompt)
+        # return
+        response = self.model.get_response(sr_prompt)
         return response.splitlines() if response else []
     
 if __name__ == "__main__":
@@ -109,3 +109,19 @@ if __name__ == "__main__":
     for paper in second_round_papers:
         print("  - ", paper)
     
+def get_recommendations(paper_name: str)-> str:
+    arxiv_id = get_arxiv_id_by_title(paper_name)
+    print(f"arXiv:{arxiv_id}: ", get_basic_info(arxiv_id)['title'])
+    litlens = LitLens()
+    paper_content = litlens.get_paper_content(arxiv_id)
+    paper_titles = litlens.get_all_papers(arxiv_id, paper_content)
+    # print(paper_titles)
+    # first_round_papers = litlens.first_round(paper_titles, paper_content)
+    first_round_papers = paper_titles['cited'] + paper_titles['reference'] + paper_titles['search']
+    print("First Round Papers: ", len(first_round_papers))
+    second_round_papers = litlens.second_round(first_round_papers, paper_content)
+    print("Second Round Papers: ", len(second_round_papers))
+    ans = ""
+    for paper in second_round_papers:
+        ans = ans + "  - " + paper
+    return ans
