@@ -35,7 +35,7 @@ You are a helpful assistant that select relevant papers from a list of academic 
 
 You will be provided with (1) first, the content of the original paper, and (2) a list of paper titles. You should select the most relevant papers from the list based on the content provided.
 
-You are required to select {limit} papers from the provided list. (If the list contains fewer than {limit} papers, select all of them.) The selected papers should be the most relevant to the content provided.
+You are required to select no more than (<=) {limit} papers from the provided list. (If the list contains fewer than {limit} papers, select all of them.) The selected papers should be the most relevant to the content provided.
 
 Your answer should be a list of paper titles, each title should be a single line, and they should be separated by new lines. Do not include any additional text or explanations in your response.
 
@@ -58,6 +58,38 @@ Here is the list of paper titles, which consist of 3 parts:
 {reference_papers}
 3. Search papers: 
 {search_papers}
+"""
+        }
+    ]
+
+def second_round(titles, abstracts, limit, paper_content):
+    prompt_input = "\n".join([f"Title: {title}\nAbstract: {abstract}" for title, abstract in zip(titles, abstracts)])
+    return [
+        {
+            "role": "system",
+            "content": f"""
+You are a helpful assistant that select relevant papers from a list of academic papers. You will be provided with a list of paper titles only. Your task is to select the most relevant papers based on the given content.
+
+You will be provided with (1) first, the content of the original paper, and (2) a list of papers with both title and abstract. You should select the most relevant papers from the list based on the content provided.
+
+You are required to select no more than (<=) {limit} papers from the provided list. (If the list contains fewer than {limit} papers, select all of them.) The selected papers should be the most relevant to the content provided.
+
+Your answer should be a list of paper titles, each title should be a single line, and they should be separated by new lines. Do not include any additional text or explanations in your response.
+
+Example:
+Attention is All You Need
+Transformers for Natural Language Processing
+"""
+        },
+        {
+            "role": "user",
+            "content": f"This is the content of the original paper {paper_content}"
+        },
+        {
+            "role": "user",
+            "content": f"""
+Here is the list of papers with both title and abstract:
+{prompt_input}
 """
         }
     ]

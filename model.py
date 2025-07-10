@@ -5,7 +5,7 @@
 # Copyright: (2025) Mizu Studio
 
 from dotenv import load_dotenv
-load_dotenv("api_key.env")
+load_dotenv("../api_key.env")
 
 import os
 from openai import OpenAI
@@ -13,12 +13,14 @@ from dataclasses import dataclass
 
 @dataclass
 class ModelConfig:
-    model_name: str = "doubao-seed-1-6-250615"
+    model_name: str = "deepseek-r1-250528"
     base_url: str = "https://ark.cn-beijing.volces.com/api/v3"
     api_key: str = os.getenv("API_KEY")
 
 class LanguageModel:
     def __init__(self, model_config: ModelConfig = ModelConfig()):
+        #print(f"#DEBUG {model_config.api_key}")
+        #print(f"#DEBUG {model_config.model_name}")
         self.client = OpenAI(
             base_url=model_config.base_url,
             api_key=model_config.api_key
@@ -41,7 +43,12 @@ class LanguageModel:
         return response
 
 if __name__ == "__main__":
-    model = LanguageModel()
+    config = ModelConfig(
+        model_name="qwen-plus",
+        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        api_key=os.getenv("DASHSCOPE_API_KEY")
+    )
+    model = LanguageModel(model_config=config)
 
     from utils import *
     import prompts

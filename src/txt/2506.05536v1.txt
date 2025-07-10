@@ -1,0 +1,1161 @@
+5202
+nuJ
+5
+]hp-tnauq[
+1v63550.6052:viXra
+Quantum circuits as a game: A reinforcement learning agent for quantum compilation
+and its application to reconfigurable neutral atom arrays
+Kouhei Nakaji,1,2 Jonathan Wurtz,3 Haozhe Huang∗,4,5 Luis Mantilla
+Calder´on∗,4,5 Karthik Panicker,2 Elica Kyoseva,1 and Ala´n Aspuru-Guzik1,2,4,5,6
+1NVIDIA Corporation, 2788 San Tomas Expressway, Santa Clara, 95051, CA, USA
+2Department of Chemistry, University of Toronto, Lash Miller Chemical Laboratories,
+80 St. George Street, Toronto, ON M5S 3H6, Canada
+3QuEra Computing Inc., 1284 Soldiers Field Road, Boston, MA, 02135, USA
+4Department of Computer Science, University of Toronto,
+Sandford Fleming Building, 10 King’s College Road, Toronto, ON M5S 3G4, Canada
+5Vector Institute for Artificial Intelligence, 661 University Ave. Suite 710, Toronto, ON M5G 1M1, Canada
+6Acceleration Consortium, 700 University Ave., Toronto, ON M7A 2S4, Canada
+(Dated: June 12, 2025)
+We introduce the “quantum circuit daemon” (QC-Daemon), a reinforcement learning agent for
+compiling quantum device operations aimed at efficient quantum hardware execution. We apply
+QC-Daemon to the move synthesis problem called the Atom Game, which involves orchestrating
+parallelcircuitsonreconfigurableneutralatomarrays. Inournumericalsimulation,theQC-Daemon
+isimplementedbytwodifferenttypes oftransformerswithaphysically motivatedarchitectureand
+trained by a reinforcement learning algorithm. We observe a reduction of the logarithmic infidelity
+for various benchmark problems up to 100 qubits by intelligently changing the layout of atoms.
+Additionally,wedemonstratethetransferabilityofourapproach: aTransformer-basedQC-Daemon
+trained on a diverse set of circuits successfully generalizes its learned strategy to previously unseen
+circuits.
+I. INTRODUCTION The recent development of quantum devices high-
+lights the need to effectively plan and synthesize the
+Automated planning, often discussed in the context of execution of quantum device operations. For example,
+artificial intelligence, robotics, and operations research, quantum hardware based on reconfigurable atom arrays
+has garnered significant interest due to its ability to (RAA) [9, 10] has the freedom to change the layout of
+produce efficient plans or policies that achieve prede- atoms,eachstoringaqubit,duringcomputation. Hence,
+fined objectives [1–4]. This approach is used to deter- wecanconsiders t tobethelayoutandplanitstransition
+mine a sequence of actions—often constrained by avail- accordingly. Therecentadvancesoflogicalquantumpro-
+able resources, temporal relationships, or environmen- cessors[10–15]alsoemphasizestheimportanceofcareful
+tal conditions—that leads from an initial state to a de- planning of resource preparation for fault-tolerant quan-
+sired goal state. Techniques from reinforcement learning tum computation.
+(RL) [5] and deep learning, particularly deep RL [6, 7], We focus on the application of automated planning
+play a key role in automated planning. to RAA, with a particular emphasis on the important
+The aim of this paper is to introduce automated plan- role of RL in enhancing planning capabilities. To this
+ning of quantum device operations for executing quan- end, we build instances of both the QC-Game and QC-
+tum circuits. This planning, whose goal is to maximize Daemon tailored to this type of quantum processor. We
+thefidelity—i.e.,theoverlapbetweentheidealandactual designaQC-Gameenvironment,termedtheAtomGame,
+outputstates—ofanexecutedquantumcircuit,iscrucial wheretheQC-Daemonlearnstodynamicallyreconfigure
+for the efficient quantum circuit execution. During the atomlayoutswhileexecutingquantumgates. Ourimple-
+execution of a circuit, the state of a device s changes as mentation employs a Transformer-based model having a
+t
+timeevolves. Thisstatecanbethephysicalarrangement physically motivated architecture for the QC-Daemon,
+of qubits, the error rates for each qubit, the temperature enabling it to flexibly handle varying circuit structures
+of the quantum processor, or any other classical variable and atom configurations. Reinforcement learning plays
+we can control. Inspired by the gaming testbeds for RL a crucial role in maximizing the benefits of automated
+algorithms [8], we call the task of finding the optimal se- planning: the RL-trained QC-Daemon achieves a con-
+quenceofactionsthatmaximizethefidelityofaquantum siderable reduction in the total cost represented as the
+circuitbycontrollingthevariablesins thequantum cir- logarithmic infidelity across benchmark experiments in-
+t
+cuitgame (QC-Game). Weformalizesuchplanninggame volving circuits with up to 100 qubits. Importantly, we
+as a Markov decision process, and propose an AI solver demonstratethetransferabilityofourapproachbyshow-
+that we call the quantum circuit daemon (QC-Daemon). ing that a Transformer-based QC-Daemon trained on a
+diverse set of circuits can successfully apply its learned
+strategy to previously unseen circuits.
+∗ Theseauthorscontributedequally. ThispapercontributestothegrowingsubfieldofRAA2
+Training Inference
+a
+t
+QC-Daemon
+s
+t
+a
+t
+r
+t
+Qubit
+Emulator
+Manipulation
+QC-Game Play s
+t
+FIG. 1. Training and inference with the QC-Game. During training, QC-Daemon accumulates experiences from playing the
+QC-Game with quantum circuits, gets feedback r , and updates its parameters. During inference, it plays the QC-Game to
+t
+generate qubit manipulations to execute the target circuit based on its experiences.
+movesynthesis,whichmapsabstractcircuitexecutionsto Section III, we describe the Atom Game, an instance of
+hardware-levelinstructionsofRAAs. Duetotheirinher- theQC-Gameforneutralatomatomarrays. Wedevelop
+entflexibility,themappinggeneralizesthelayoutsynthe- a QC-Daemon to solve the Atom Game in Section IV.
+sis problem [16] on a superconducting architecture. The Section V is dedicated to study the effects of the dy-
+novel contribution of this paper is to consider the move namic layout reconfiguration using the proposed solvers.
+synthesisproblemfromanRLperspective[17]. Ourwork We conclude with some discussions in Section VI.
+also contributes to the field of AI for quantum comput-
+ing[18]byproposingaphysicallymotivatedarchitecture
+suitable for quantum computation.
+It should be noted that even though we focus on op-
+timizing the reconfiguration step to simplify the prob-
+lem structure for the first AI-based neutral atom com-
+piler, the other processes may become more important II. THE GAME OF QUANTUM CIRCUITS
+depending on the problem. For example, if the circuit
+has a sparse and repetitive structure, optimizing the ini-
+tial layout may be more important than the reconfigura- In this section, we describe a general framework for
+tion step. Our RL compiler can be extended to handle building the QC-Daemon, an automated planning agent
+other operations, including initialization, which we leave forquantumcircuitsexecution. First,wedesigntheQC-
+for future work. Game for optimizing the sequence of device operations
+The rest of the paper is organized as follows. In Sec- in Section IIA and then introduce its player, the QC-
+tion II, we introduce the QC-Game and QC-Daemon. In Daemon, in Section IIB.3
+A. The QC-Game circuitC,quantumcircuitcompilationaimstoreducethe
+depthofsuchcircuitbycreatingashorterbutequivalent
+quantum circuit at the software level [21–23], and mul-
+TheQC-Gameconsistsoffindingtheoptimalsequence
+tiple RL algorithms have been proposed for such prob-
+of device operations to execute a given quantum circuit
+lem [24–26]. In contrast, the QC-Game aims to imple-
+while controlling the variables that affect its execution.
+ment C in the best possible way for a specific quantum
+This game can be formulated with a Markov decision
+processor to implement a given circuit. The QC-Game
+processes (S,A,P,R) as we explain below.
+is closely related to quantum layout synthesis and both
+GivensomecircuitC,apre-processingstepdecomposes
+routines share the same goal. However, most layout syn-
+the circuit into a sequence of parallelizable sets of one-
+thesis algorithms only optimize device operations con-
+qubit gates, and parallelizable sets of two-qubit gates
+strained to C for every j [27]—similar to an iterative
+[19]. This decomposition can be done in many ways, j
+greedy optimization
+such as an ASAP heuristic [20]. Then, we ignore all one-
+qubitgatesforpurposesofmovesynthesissincetheycan (cid:18) (cid:19)
+be performed locally and with much higher fidelity com- (a∗) = argmaxr , (2)
+t t≥0 t
+pared to the two-qubit gates. The resulting data is T at t≥0
+disjoint chunks representing parallel two qubit gate exe-
+whereas the QC-Game does so constrained to C —
+cutionsC ={C }T−1,whereallgatesinC commuteand j:T
+t t=0 t leveraging global information.
+act on independent qubits. Consequently, each chunk
+can be implemented in one time step. This work pre-
+sumesC isfixed; futureworkmayco-optimizethecircuit
+parallelism consecutively with the move synthesis step.
+Duetohardwareconstraints,implementingC requires
+t B. The QC-Daemon
+many actions, such as moving atoms around in the ar-
+ray to obey gate adjacency constraints. To this end, the
+player of the game then plans actions for each chunk C t Giventheexponentiallylargestateandactionspaceof
+givenadeviceconfigurations t ∈S andallfuturechunks the QC-Game, we need to search an approximate solu-
+C t:T :={C j }T j= − t 1. Eachactiona t ∈A t ischosenfromthe tion. We focus on designing a policy function π, a well-
+set of feasible device operations at time t. Each action studied technique in optimal control theory, which pro-
+spaceA t isasubsetofA,thesetofallpossibledeviceop- vides the probability distribution of actions conditioned
+erations. The game then evolves as s t+1 ∼ P(s t ,a t ,C t ), to a given state.
+where P :S×A×C −→P(S) is the transition kernel—
+For the QC-Game, we define the QC-Daemon to be a
+which depends on the underlying quantum device, and
+policy function
+ends when t becomes T. For simplicity, we let P be a
+deterministic function P : S ×A×C −→ S in our sim-
+π(a |s ,t,C ) (3)
+t t t:T
+ulations, but in real settings, this assumption might not
+hold.
+that is aware of the current time step t, the remaining
+The goal of the QC-Game is to maximize the fidelity quantum circuit C , and the device state s . Formally,
+t:T t
+of implementing the target circuit. However, measuring in RL, both t and C are included in the definition of
+t:T
+this fidelity is inconvenient in practice and thus requires thestates ,butweexplicitlyseparatethemtoemphasize
+t
+aproxythatiseasytocomputeandrelatestothecircuit this look-ahead characteristic of the QC-Daemon.
+fidelity. Examples of such proxy include the execution
+The QC-Daemon can be implemented by using a neu-
+time or the gate depth of the circuit, since both tend to
+ral network π , and in that case, each input is often con-
+increasedecoherenceanddecreasecircuitfidelity. Wecan θ
+thendefinearewardmodelR:S×S×C −→R,basedon verted to an embedding—a vector of k real components
+that, after training, aims to be a better representation
+the logarithmic infidelity, which counts actions weighted
+of the input. We note that the function that creates an
+by the (log) fidelity of that action as a cost. Each action
+embedding of the upcoming circuit C , which we call
+a thushasasignalr =R(s ,s ,C ). Thisallowsusto t:T
+t t t t+1 t a quantum circuit feature, is reusable in different types
+rewrite the objective ofQC-Gameas finding the optimal
+of QC-Games. Studying the transferability of quantum
+sequenceofactionsthatmaximizethecumulativereward
+circuit features across multiple QC-Game settings is an
+during the circuit execution
+interesting direction for future research.
+(a )∗ =argmax (cid:88) γtr , (1) QC-Daemon uses QC-Game in two ways (Fig. 1):
+t t≥0 t
+∀t: at
+t≥0
+TrainingandinferencewiththeQC-Game. Duringtrain-
+ing, QC-Daemon accumulates experiences from playing
+where γ ∈(0,1] is a discount factor. the QC-Game with quantum circuits, gets feedback r ,
+t
+We emphasize that the QC-Game and what is com- and updates its parameters. During inference, it plays
+monly referred by quantum circuit compilation are dif- the QC-Game to generate qubit manipulations to exe-
+ferent and achieve complementary goals. Given a target cute the target circuit based on its experiences.4
+III. APPLICATIONS IN RECONFIGURABLE
+ATOM ARRAYS
+Inthissection,weintroducetheAtomGame,aspecific
+instanceoftheQC-Game,designedforRAAs. TheAtom
+Game addresses the problem of planning a sequence of
+layout reconfigurations, i.e. scheduling the 2D positions
+of each atom, for an input circuit (cf. Fig. 2). First,
+Section IIIA provides an overview of neutral atom ar-
+raysandSectionIIIBexplainsindetailtheAtomGame.
+Then,SectionIIICdescribesoneproxyforcircuitfidelity
+based on the noise introduced when moving atoms and
+executing gates. This proxy is closely related to the log-
+arithmic infidelity of the circuit. Finally, Section IIID
+briefly discusses an alternative application of the Atom
+Game to a neutral atom logical processor.
+A. Reconfigurable neutral atom arrays
+Reconfigurable atom arrays (RAAs) are a quantum
+computing architecture based on optically trapped neu-
+1.Resort in 2.Move to 4.Move to
+tralatoms,whereeachatomhostsaqubitinitselectronic
+storage region gate region storage region
+ground states [28]. Each neutral atom’s position is fixed
+in optical traps using a spatial light modulator (SLM) 3.Do parallel
+laser. Forsimplicity,wedefinethetwo-dimensionalposi- gates on pairs
+tions of the traps as V ⊂N×N. The device state is then
+the joint position of all N atoms
+(cid:16) (cid:17)N
+s := v(t) ∈VN, (4)
+t q q=1
+where v(t) := (c(t),r(t)) ∈ V denotes the position of the q q q
+q-th atom at time t and N is the number of atoms.
+The movement of atoms is implemented by means
+of dynamical tweezers created by a laser controlled by
+crossed acousto-optic deflectors (AOD). The AOD laser
+projects both horizontal and vertical beams, forming a
+2D grid of optical traps, with one trap at each inter-
+section of every row and column. These traps can cap-
+ture, move, and release atoms by turning on and off and
+moving the positions of the rows and columns, enabling
+changes of the positions s .
+t
+Single-qubit operations are performed within each oc-
+cupied trap by a Raman laser system [29, 30]. In con-
+trast, two-qubit operations involve bringing two atoms
+into close proximity and exciting them into Rydberg
+states with a global Rydberg laser [9, 11]. In this work,
+we assume a “zoned” register layout with a storage and
+a gate region, as shown in Fig. 2. For each two-qubit
+parallelgatechunkC ∈C,atomsaremovedfromastor-
+t
+ageregiontothegateregionusingthedynamictweezers.
+Then,alaserenactsaCZgatebetweeneachpairofatoms
+in the gate region. Then, atoms are moved back to the
+storage region in preparation for the next set of gates.
+enoZ
+egarotS
+enoZ
+etaG
+QC-Daemon
+FIG.2. Thestructureoftheatomgameonazonedreconfig-
+urable atom array. Given a sequence of parallel 2-qubit gate
+chunks C = {C } , the QC-Daemon synthesizes moves by t t≥0
+definingatompositionss thatminimizesomeobjectivegiven t
+bytheefficiencyofimplementingthatreconfiguration. Then,
+a back-end compiler synthesizes those reconfigurations into
+atommoveswiththeAODs. Thecomputationisexecutedin
+4 steps: first, atoms are resorted in the storage region; then,
+atomsaremovedtothegateregion;thenaparallelentangling
+CZ gate is done on all pairs; then, all atoms are moved back
+tothesamepositions,andtheprocessrepeatsforallchunks.
+B. The Atom Game
+The Atom Game is a QC-Game where the goal is to
+choose the device state s , for each parallel gate chunk
+t
+C , that minimizes the overhead cost of gate execution
+t
+caused by atom reconfiguration. Having determined a
+state for each gate chunk, the complete circuit is exe-
+cuted by repeating four steps each time-step t, as repre-
+sented in Fig. 2. First, atoms are loaded if the storage
+region is empty, or reconfigured otherwise, to state s
+t
+and then all necessary one-qubit gates are performed in
+this region. Second, atoms participating in the parallel
+two-qubitgatesofthecorrespondingtime-steparemoved5
+adjacenttoeachotherinthegateregion. Third,aparal- our approach applies to any definition.
+lel CZ entangling gate is done on all pairs present in the
+gate region. Finally, all atoms are moved back to their
+original locations in the storage region. This process is C. Reconfiguration cost estimation
+then repeated until the circuit is fully executed.
+Theproblemoffindingnear-optimallasercontrolsteps Toreconfigurethestorageregionfromlayouts tos
+t t+1
+foragivenlayoutofatomss t andtwo-qubitgatesC t has or implement a set of gates C t from layout s t , the dy-
+been studied in the previous literature [20, 31–37]. In namic AODs must implement a sequence of moves sat-
+most of these studies, the layouts before and after gate isfying constraints. For each chunk C , we can associate
+t
+execution (i.e., the atom positions from steps 1 and 4 a cost—or, equivalently, a reward—that reflects the log
+in Fig. 2) within a chunk remain the same. However, infidelity of executing the underlying AOD moves:
+Ref. [35] introduces a method that modifies the layout
+after the gate execution to minimize the atoms’ moving J(D,M)=αDN +βM. (8)
+distance to implement C . For ease of discussion, we
+t
+assume the former case of having the same layout, but The first term represents idling error, where D is the
+our approach can be easily extended to the latter case. durationofthemoves,N isthetotalnumberofqubitsin
+In most of these previous methods, we can calculate thearray,andα≥0istheinversecoherencetimeofeach
+the cost, such as the circuit infidelity, associated with qubit. Thesecondtermrepresentsthemoveerror,where
+applying gates C in a given configuration of atoms s . M is the number of qubits “touched”, e.g., participating
+t j
+We call the cost of such execution in that move, and β ≥ 0 is a fixed cost corresponding
+to the fidelity loss from picking up and dropping off an
+G(s ,C ). (5) atom to and from an AOD. By using the function J, we
+t t
+model the cost for gate execution and the layout change
+Similarly, for a given layout change a : s (cid:55)→ s , we as follows:
+t t t+1
+call its cost of movement
+L(s ,s )=J (D (s ,s ),M (s ,s )), (9)
+t t+1 L t t+1 L t t+1
+L(s ,s ), (6)
+t t+1 G(s ,C )=J (D (s ,C ),M (s ,C )), (10)
+t t G t t G t t
+and refer to L as the layout function. With these cost
+whereD (s ,s )andM (s ,s )arethedurationand
+L t t+1 L t t+1
+functions, we define the reward at time t as
+the number of touches for the layout change s (cid:55)→ s ,
+t t+1
+whileD (s ,C )andM (s ,C )correspondtotheseval-
+R(s ,s ,C ):=−L(s ,s )−G(s ,C ) G t t G t t
+t t+1 t t t+1 t+1 t (7) ues when executing the gates C t from the layout s t .
++G(s 0 ,C t ), Instead of explicitly constructing a sequence of AOD
+moves to calculate a reconfiguration cost—as done
+wherethelasttermisthegatecostwhenusingtheinitial
+in previous works [20, 31–37]—we instead estimate
+configuration s and acts as a baseline reference.
+0 D ,M ,D ,andM withanupperboundthatdepends
+L L G G
+Finally, to synthesize the actual reconfiguration ac-
+on the number of moves, a value obtained with a graph-
+tions, a lower-level compiler then converts each reconfig-
+theoretic heuristic. The steps to estimate D (s ,s )
+L t t+1
+uration step into a sequence of valid AOD moves: first,
+and M (s ,s ) are as follows:
+L t t+1
+perform a to reconfigure the positions of atoms in the
+t
+storageregion, andthenmoveatomstoexecutethetwo- 1. Accumulate the active participants
+qubit gates. The process of Atom Game is summarized Givenalayoutchanges (cid:55)→s ,identifyallatoms
+t t+1
+in Algorithm 1. q for which v(t) ̸= v(t+1). From that subset, iden-
+q q
+tify all “active” columns and rows
+Algorithm 1 One run of the Atom Game
+(cid:91) (cid:91)
+A = {c(t),c(t+1)}, A = {r(t),r(t+1)}
+Require: s , {C }T−1, π c q q r q q
+0 t t=0
+1: for t←1 to T do q q
+2: Sample a t ∼π(a t |s t ,t,C t:T ) in that rearrangement. The active participants A
+3: Set s t+1 =P(s t ,a t ,C t )
+are the atoms that are in one of the active rows or
+4: r t =−L(s t ,s t+1 )−G(s t+1 ,C t )+G(s 0 ,C t )
+5: end for columns and are consistent with the crossed AOD
+6: return {s t ,a t ,r t } t≥0 constraints. This set may include atoms which do
+not change location, as they get “caught” in the
+crossed AOD.
+Previous works have focused on minimizing G(s,C ).
+t
+However, our study explores how to reconfigure the 2. Estimate the number of moves
+atoms for a given function G using the formalism of Given the active participants A, the number of
+the QC-Game. Therefore, although we provide a spe- movesn(t) iscomputedbasedonalog-depthrecon-
+m
+cific protocol for estimating G and L in Section IIIC, figuration heuristic [38] with infinite swap space.6
+Formoredetailsonestimatingn(t),seeSec.IIIC2. one time step
+m
+3. Compute the total reconfiguration cost ((2,0), (1,2))(cid:55)→((5,1), (4,4))
+Thetotalnumberoftouchesisequaltothenumber
+((2,0), (1,2))̸(cid:55)→((5,1), (5,4)).
+of moves times the number of active participants
+M L = ϵn( m t)|A| scaled by some constant ϵ ∼ 1 that The second move is invalid, as the AOD columns have
+estimates how many atoms are touched per move. crossed during the transfer (Fig. 3 bottom left).
+Here, we assume that half the atoms are moved Code to compute D is provided here [39].
+per step ϵ = 0.5. The total duration is equal to
+the number of moves times the characteristic time
+per move D = n(t)τ. Assuming constant accel-
+L m
+eration moves [10], the characteristic time is the 2. Estimating the number of moves n(t)
+m
+square root of the maximum distance between the
+start and end of all the active participants,
+A simpleparallel move scheduler maybe implemented
+(cid:113) usingavertexcoloringoftheconflictgraphG . Avertex
+τ=max (cid:2) |v( q t)−v( q t+1)|/γ (cid:3) , colouring partitions k subsets of vertices such c that every
+q∈A
+partitionisanindependentsetwithnotwoverticesshar-
+where γ is a constant having the dimension of the ing an edge. If a subset of vertices on the conflict is an
+acceleration. independent set, it can be done in a single AOD move,
+as no two pairs of moves conflict.
+We approximate D G (s t ,C t ) and M G (s t ,C t ) with a Thus, moves can be scheduled in any order by moving
+two-step process. The first step moves the relevant pairs each partition in a single move from start to end. The
+of atoms within the storage region in C t to be adjacent. number of moves equals k, and each atom is touched
+The second step then moves such pairs of atoms to the exactly once. Finding the minimum number of par-
+gate region in parallel to execute C t . This results in titions k min , known as the chromatic number, is an
+archetypal NP-complete optimization problem. Brooks’
+D (s ,C )=D (s ,s˜)+T , (11)
+G t t L t t G theorem states that the chromatic number of a graph
+M G (s t ,C t )=M L (s t ,s˜ t ), (12) is upper bounded by the maximum connectivity of the
+graph [40], which can be found efficiently with a greedy
+where s˜ t is the intermediate state in which atoms are heuristic. Thus, an (over)estimate of n(t) = ∆(G )+1,
+reconfigured to be adjacent in the storage region. The m c
+the maximum connectivity of the conflict graph.
+term T denotes the total time to move atoms from the
+G
+A more advanced move scheduler can be implemented
+storage to the gate region and back.
+based on a divide-and-conquer approach first introduced
+in [38] by adding intermediate moves in a swap region to
+some intermediate positions s →s′ →s′′ →···→s .
+1. The conflict graph t t+1
+Crucially, the new conflict graph of each intermediate
+move is the union of the two induced subgraphs of the
+The Conflict Graph G is a tool to schedule moves un-
+c original conflict graph, plus extra edges from the many-
+derthecrossedAODconstraintsandisdefinedasfollows.
+to-one constraint. If an extensive number of edges can
+Given a layout change s (cid:55)→s , each vertex is an atom
+t t+1 alwaysberemovedinthismannerwithaMaxCutheuris-
+participating in the change, with an edge between ver-
+tic,thenumberofmovesrequiredtoremovealledgesand
+tices if the two moves cannot be done in parallel due to
+thus reconfigure the layout is logarithmic in the number
+violating the crossed AOD constraints (cf Fig. 3). There
+of edges in the conflict graph n(t) =δlog (cid:0) |V(G )| (cid:1) . This
+are two classes of edges in the conflict graph correspond- m c
+is a divide-and-conquer approach, as the conflict graph
+ing to the following two constraints:
+• Many-to-one constraint: An AOD row cannot split is iteratively partitioned into smaller and smaller graphs
+until the resorting is complete. It is beyond the scope of
+into multiple rows, and multiple rows cannot merge
+this work to analyze the specific action of this iterative
+into one. For example, in one time step
+partitioning. Here we simply assume that the swap re-
+((2,0), (1,2))(cid:55)→((6,0), (5,1)) gion is large enough so that the landscape is convex and
+a greedy MaxCut heuristic always succeeds. The partic-
+((2,0), (1,2))̸(cid:55)→((6,4), (5,1)).
+ular exponent of the partitioning is represented by δ ∼1
+which we assume to be order 1 in this work.
+The second move is invalid, as the AOD row picking
+uprow0cannotsplittodropontorows2and3(Fig.3 Thus, to estimate the number of moves, we count the
+top left). number of edges in the conflict graph and take the log
+• Ordering constraint: Two rows or columns of the (inanybase). Theiterationexponentδ isthenanoverall
+AOD may not cross each other during the move, so scale factor of the cost function n(t) → δn(t), which is
+m m
+twoatomsmaynotmoveoutoforder. Forexample,in irrelevant to the action of the QC-Daemon.7
+Many-to-one conflict
+Start
+1
+1
+d
+2 a e
+2 b c f
+1 2 1,2
+Crossing conflict
+1
+2
+2
+1
+End
+1 2 1 2
+FIG.3. Defining the conflict graph. Left: thetwokindsofparallelmovesdisallowedbythecrossedAODconstraints. Top:
+a many-to-one conflict, where two AOD rows/columns (purple) merge or separate into one row/column. Bottom: a crossing
+conflict, where two rows/columns change order during the move. This can happen in both the X and Y directions. Right: an
+examplereconfiguration,withactiveparticipantsingreenandinactiveparticipantsingrey. Theconflictgraphedgesareshown
+as purple dashed; it is three-colorable, as shown in the three colours of parallel directed moves.
+xxx xxx xxx xxx
+xxx xxx xxx
+xxx xxx xxx xxx xxx
+MLP Readout (Pooling)
+xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx
+xxx xxx xxx xxx xxx xxx xxx xxx xxx
+xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx
+xxx xxx xxx xxx ...
+t atom id xxx xxx xxx Gates Transformer Gates Transformer Moves Transformer
+xxx xxx xxx xxx xxx
+Gates embedder Gates embedder Moves embedder
+...
+xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx
+xxx xxx xxx xxx xxx xxx xxx xxx xxx
+xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx
+...
+Chunk Chunk Planned moves
+Chunks including the current atom
+debmE debmE
+Value Policy (QC-Daemon)
+xxx xxx xxx xxx
+xxx xxx xxx
+xxx xxx xxx xxx xxx
+MLP Mixer
++ + +
+FIG. 4. The implementation of the atom-by-atom policy (QC-Daemon) πA and the value function. Our model comprises two
+parts: static feature extraction (left) and dynamic feature extraction, which are implemented using the Gate Transformer and
+MoveTransformer(right). Thestaticfeaturesareindependentofthecircuitandtheplannedmoves,andindicatewhichtraps
+are more favorable for each atom at each time step. The dynamic features are conditioned on the circuit and the already
+planned moves.8
+D. Remark on logical processor A. Auto regressive action generation
+Theactiongenerationisperformedbydeterminingthe
+Even though we demonstrate the framework for mov-
+action of each playable atom in auto-regressive manner.
+ing individual physical qubits, we can also use the same
+Atom Game framework for moving groups of physical LetP t =(q b ) b |P = t 1 |. TheQC-Daemonpolicycanbedecom-
+qubits in a coarse-grained manner. This opens the door posed as
+toactivelyoptimizingthelayoutofthequbitsinanerror-
+corrected quantum computer using reinforcement learn- π(a |s ,t,C )= (cid:89) πA (cid:18) a(b)|s ,t,C ,q , (cid:16) a(b′) (cid:17)b−1 (cid:19) ,
+t t t:T t t t:T b t
+ing, as the constraints of such a system may be similar b′=1
+b
+to those present in crossed AOD grids [38]. (14)
+Using our compilation approach on groups of atoms,
+where each group corresponds to a particular logical where the function πA is an atom-by-atom policy that
+qubit and is moved all together, can enable larger determines the action for each playable atom q b . Each
+amountsofparallelizationinthelogicaltransversalgates action specifies only the next position of the atom. The
+of a circuit [10, 41]. Furthermore, abstracting away the actiona(b) generatedforatombisusedinsubsequentac-
+t
+hardware implementation, the Atom Game framework tiongenerationsforeachplayableatom. Theseindividual
+couldbeusedforcircuitcompilationintopologicalcodes, actions are finally aggregated into the overall action as
+where logical qubits are “carved out” on a grid, as it
+a =
+(cid:16)
+a(b)
+(cid:17)|Pt|
+.
+happens with surface codes [42, 43]. In such cases, logi- t t
+b=1
+cal qubits can be defined via holes or patches in a grid,
+and logical operations are performed via braiding [44]
+or lattice surgery [45], respectively. Thus, each logical B. Our model
+qubitisdefinedwithinaspatialregioninthetopological
+codegridthatchangesthroughoutthecircuitimplemen- Here, we describe our model for πA. For notational
+tation [46], and consequently, will have a cost associated convenience, we write s = (v )N and the layout after
+to its movement with such a grid. t q q=1
+applying
+(cid:16) a(b′) (cid:17)b−1
+to s as
+(cid:0) v′(cid:1)N
+in this section. We
+Previously, surface code compilation has been solved t b′=1 t q q=1
+with heuristic algorithms [47–49]. These compilers opti- also write the current playable atom as q .
+0
+mize over the logical lattice instructions that allow im- Our model comprises two parts: static feature extrac-
+plementingquantumalgorithms,suchasentanglingmea- tion and dynamic feature extraction. The static features
+surementswithlatticesurgerymergesandsplits,distilla- do not depend on the circuit or the planned moves, and
+tionofmagicstatesinspecificregions,andotherinstruc- describewhichtrapsaremorefavorableforeachatomat
+tions that are required for universality. Given its resem- eachtimestep. Thedynamicfeaturesareconditionedon
+blance to the RAA compilation problem, the QC-Game the circuit and the already planned moves. The input of
+framework would similarly benefit circuit compilation at static features is the time t, the playable atom’s id, and
+the logical circuit level, accounting for information en- (cid:0) v′(cid:1)N . In contrast, the input of the dynamic features
+coded in the reward function that would otherwise be q q=1
+encompass the subsequent chunks c=C ,··· ,C that
+challenging to include in non-data-driven methods. t1 tK
+include the current playable atom, where K (Horizon-
+Length) is a hyper-parameter, as well as (v )N and
+q q=1
+(cid:0) v′(cid:1)N
+.
+q q=1
+IV. PLAYING THE ATOM GAME
+1. Static feature extraction
+Inthissection,weintroduceourQC-DaemonforAtom
+Game. Our QC-Daemon determines the actions of each
+The input of the static feature extraction is converted
+‘playable atom’ for each time t. The playable atoms are
+into a vector embedding: t → e , atom id → e , and
+chosen in the following manner. Let f be the function t a
+(v′)N →e . They are then concatenated into a vector
+to extract the list of qubit indices included in C . The q q=1 l
+t e:
+playable atoms P are defined as
+t
+e=e ⊕e ⊕e (15)
+W−1 t a l
+(cid:91)
+P = f(C ), (13)
+t t+w Finally, a multilayer perceptron is applied to e to obtain
+w=0
+d:={d }
+ngrid.
+j j=1
+whereW (WindowSize)isthehyperparameter. Namely, For building e , we use the MLP-Mixer [50]. The
+l
+theatomsincludedinthegatesinthenextW chunksare MLP-Mixer is a neural network architecture that relies
+used as the playable atoms. solely on multi-layer perceptrons (MLPs), without using9
+convolutions or attention mechanisms. It operates on The output of the Gates Transformer has the same
+image patches rather than individual pixels, processing structure as Eg ⊕Eg , and we use the last n
+atoms grids grids
+data through two types of MLPs: one mixes informa- vectors in the later calculation. We write the list of vec-
+tionacrossspatial(patch)dimensionsandanothermixes torsobtainedbyapplyingGatesTransformertothek-th
+across channel dimensions. This separation allows the input chunk as F(k) :={f(k)} ngrids.
+j j=1
+MLP-Mixer to capture local and global data patterns. b. Moves transformer The moves already planned
+In our case, we use
+(cid:0) v′(cid:1)N
+as the input to the MLP- are processed by the Moves Transformer. In this com-
+q q=1
+Mixer, treating each spatial cell as a patch embedding ponent, the Transformer layer captures correlations be-
+that contains one-hot encoded atom assignments. tween already planned moves and potential moves of the
+current playable atom. The input to the Transformer is
+builtviathemovesembedder,producingEm ⊕Em ,
+atoms grids
+where Em includes n embeddings and Em in-
+2. Dynamic feature extraction atoms atoms grids
+cludesn embeddings. Asinthecaseofthegatesem-
+grids
+bedder, we define learnable embeddings e (v) for each
+m
+TwotypesofTransformers, theGateTransformerand grid position e . Then, the element of Em is
+m atoms
+the Move Transformer, are used to extract dynamic fea-
+tures. The output from those components is combined [Em ] =e (v′)−e (v ) (18)
+atoms q m q m q
+and processed in the readout layer.
+a. Gates Transformer In each chunk, we consider For Em , we set [Em ] =e (v(j))−e (v ).
+grids grids j m m q0
+the gate containing the current playable atom (PA-gate) ThearchitectureoftheMovesTransformeristhesame
+along with other gates (non-PA-gates) included in the as the Gates Transformer. The attention mask is also
+chunk. The Transformer layer captures correlations be- designed similarly. We accept all the information flow at
+tween these non-PA-gates and the PA-gate by assuming thesameposition. Fortheinformationflowtoadifferent
+that the playable atom moves to each position of the position, we only accept the flow from Em to Em .
+atoms grids
+grids. Inaddition,weprohibitanyflowfromthepositionwhere
+The input to the Transformer layer is constructed via [Em ] =0.
+atoms q
+a gate embedder, whose output is Eg ⊕Eg , where The output of the Moves Transformer has the same
+atoms grids
+Eg includes n embeddings and Eg includes structure as Em ⊕Em , and we use the last n
+atoms atoms grids atoms grids grids
+n embeddings. For each position of the traps v, we vectors in the later calculation. We write the list of vec-
+grids
+define learnable embeddings e (v). Then the element of tors obtained by applying Moves Transformer as F(0) :=
+g
+E atoms is {f( j 0)} n j= gr 1 ids.
+c. Readout The outputs from Gates Transformer
+[Eg ]
+atoms q and Moves transformer is aggregated by the following
+(cid:26) e (v′)−e (v′ ) the non-PA gates include q mean pooling step to F ={f } ngrids, where
+= g q g q′ , j j=1
+0 otherwise
+(16) f := 1 (cid:88) K f(k). (19)
+j K+1 j
+whereq′istheIDoftheatomthatcoupleswithq-thatom k=0
+in the non-PA gate. Let v(1)···v(ngrids) be the positions
+of all traps. Then the element of E is
+grids
+3. The QC-Daemon’s policy and its value function
+[Eg ] =e (v(j))−e (v′ ). (17)
+grids j g g q0
+F anddareusedtocalculatethepolicy(QC-Daemon).
+The Gates Transformer is composed of multiple layers We also describe how the value function is constructed
+of (i) the multi-head attention, (ii) the layer norm, and for the actor-critic type RL algorithm.
+(iii) the multi-layer perceptron. In the multi-head atten- a. Policy (QC-Daemon) For each position, MLP is
+tionlayer,theinformationofeachvectorateachposition appliedtof foreachj,andconvertedtoone-dimensional
+j
+propagates to the output of different positions; how the outputo . Thelogitisdefinedbyw :=o +d . Thegrid
+j j j j
+information propagates is governed by the so-called at- IDj issampledaccordingtotheprobabilityproportional
+tentionmechanism[51],buttheattentionmaskprohibits to exp(w ), but the grid IDs filled with other atom are
+j
+some propagation. We accept all the information flow at masked.
+the same position, namely, the information at a position b. Value WefirstmaskthegridIDsfilledwithother
+can be included in the output at that position. For the atom; let {j ,··· ,j } be the list of IDs unmasked, then
+1 m
+information flow to a different position, we only accept one vector f, which is the average of f ···f is cal-
+the flow from Eg to Eg . In addition, we prohibit culated. Then, MLP with one-dimension j a 1 l out j p m ut is ap-
+atoms grids
+any flow from the position where [Eg ] =0. The at- pliedtofandanotherMLPwithone-dimensionaloutput
+atoms q
+tention mask is setup to realize the information flow and is applied to d. Finally, these outputs are summarized
+is used in all the multi-head attention layers. as the output of the value function.10
+V. NUMERICAL EXPERIMENTS B. Transferability evaluation
+In this section, we show two types of numerical exper- We also conducted an experiment to evaluate the
+iments. In the first experiment in Section VA, we train transferability of QC-Daemon. In this experiment, the
+themodelwithonecircuitandapplyittothatsamecir- model was built using only dynamic feature extraction,
+cuit. In the second experiment in Section VB, we first allowingittogeneralizeacrossdifferentqubitcountsand
+train the model with 30 circuits with different numbers circuit structures. An attention mechanism, which en-
+of qubits and apply it to new unseen problems to verify ables the model to handle variable-length inputs, makes
+the transferability of our model. this possible.
+Asthetrainingdataset,wegenerated30Hamiltonians,
+each consisting of 40 terms of local random Pauli opera-
+A. Training from scratch tors acting on 40–50 qubits. These were converted into
+quantum circuits by applying 4 steps of Trotterization,
+We use quantum circuits for quantum Fourier trans- and used for training. During training, one Hamiltonian
+form (qft), quantum neural network (qnn), variational was randomly selected from the 30, and the model was
+quantum eigensolver (groundstate), quantum approx- executed starting from a random initial configuration.
+imate optimization algorithm (qaoa) from the MQT The model was then updated based on the execution re-
+Bench [52] and generate Hamiltonian evolution circuits sult, using the same hyperparameters as in previous ex-
+for the Fermi-Hubbard model [53] (hubbard). For the periments.
+Fermi-Hubbard model simulation, we use the first-order As the test dataset, we additionally generated three
+Lie-Trotterformulatodecomposethetimeevolution, re- new test circuits not included in the training dataset
+peatingtheoperationtwice. Specifically,foragiventime with40–50qubitsusingthesameprocedureasdescribed
+evolution eiHt with H as the Hamiltonian having the above. We compared the best outcomes from 1-shot, 10-
+Pauli decomposition H = (cid:80) c P , we obtain the circuit shot,and100-shotevaluationstothoseobtainedwithout
+j j j
+for our simulation by training, where n-shot denotes the best result obtained
+from n independent runs of the trained model on the
+ t/∆t same circuit.
+(cid:89)
+ eicjPj∆t  , c j ∈R and t/∆t=2. We also repeated the same procedure using larger
+Hamiltonianswith60termsactingon80–100qubits,and
+j
+studiedtheperformance. Thetrainingisperformedona
+ForcalculatingthereconfigurationcostofLandG,we system with six NVIDIA H100 Tensor Core GPUs.
+set the physical parameters in Eq. (8) to α = 0.02 and In Fig. 7, we show the change in the mean reward
+β = 0.002. We use proximal policy optimization (PPO) for each iteration during the training of the transfer-
+[54] as the RL algorithm. The other hyper-parameters able models with 40–50 qubit circuit datasets (left) and
+arelistedinAppendixA.Thetrainingisperformedona 80–100 qubit circuit datasets (right). The reward is cal-
+system equipped with eight NVIDIA H100 Tensor Core culated as the cost reduction compared to the case with-
+GPU. outreconfiguration. Apositiverewardindicatesthatthe
+In Fig. 5, we show the cost reduction ratio at each cost is reduced compared to the case without reconfigu-
+iteration for each benchmark problem. The horizontal ration. Themeanrewardiscalculatedasthemovingav-
+axis represents the number of training iterations, and erage over the past 50 steps. In both cases, the mean re-
+the vertical axis indicates the cost reduction compared ward becomes positive after several thousand iterations,
+to the case where no reconfiguration is performed, which indicatingthatthemodelsuccessfullylearnsgenerallyef-
+corresponds to the gray dotted line. Each green line cor- fectivereconfigurationstrategiesacrossmultiplecircuits.
+respondstothetrainingwithadifferentseedfortheran- Table I and Table II show the cost reduction for test
+dom generation of the initial configuration and model circuitswithandwithouttransferforthe40–50qubitcir-
+parameters. We see that the cost reduction is negative cuitdatasets(left)andthe80–100qubitcircuitdatasets,
+atthebeginningoftraining,whichmeansthatthegener- for each number of shots. Even in the 1-shot case, we
+ated actions increase the cost due to unnecessary layout observe that the model trained with the datasets can
+changes. However, after some iterations, the cost reduc- successfully generate practical reconfiguration steps for
+tion becomes positive, and we can achieve a reduction unseen circuits, though the untrained model generates
+in cost of up to about 20% through layout changes. In unreasonable layout changes. Table III shows the du-
+Fig. 6, we show the number of actions that change the ration (seconds) for generating all the actions for each
+layout of atoms; namely, we count only the actions that numberofshotsusingthesametestcircuitasinTableII
+specify a position for a playable atom different from its onasystemequippedwithanNVIDIAH100TensorCore
+current grid. We see that at the beginning of training, GPU. We also show the number of chunks in the same
+many actions are generated, but only a few remain after table. We see that the difference in execution time be-
+training. This implies that the QC-Daemon successfully tween 1 shot and 10 shots is smaller than a factor of two
+learns how to generate effective layout changes. duetoefficientparallelcomputation. Theexecutiontime11
+20
+0
+20
+40
+60
+0 1000 2000 3000 4000 5000 6000
+Iterations
+)%(
+noitcudeR
+qaoa (14 qubits)
+10
+0
+10
+20
+30
+40
+seed 0
+seed 1 50
+seed 2
+60
+no reconfiguration
+0 250 500 750 10001250150017502000
+Iterations
+)%(
+noitcudeR
+groundstate (14 qubits)
+10
+0
+10
+20
+30
+seed 0 40
+seed 1
+seed 2 50
+no reconfiguration
+60
+0 10 20 30 40 50
+Iterations
+)%(
+noitcudeR
+random (30 qubits)
+seed 0
+seed 1
+seed 2
+no reconfiguration
+20
+0
+20
+40
+60
+80
+0 1000 2000 3000 4000 5000 6000
+Iterations
+)%(
+noitcudeR
+qnn (50 qubits)
+10
+0
+10
+20
+30
+seed 0
+seed 1 40
+seed 2
+50
+no reconfiguration
+0 2000 4000 6000 8000 10000
+Iterations
+)%(
+noitcudeR
+hubbard (100 qubits)
+0
+20
+40
+seed 0
+60 seed 1
+seed 2
+no reconfiguration 80
+0 1000 2000 3000 4000 5000 6000
+Iterations
+)%(
+noitcudeR
+qft (100 qubits)
+seed 0
+seed 1
+seed 2
+no reconfiguration
+FIG. 5. Cost reduction (%) for each benchmark across training iterations, as achieved by our QC-Daemon in the experiment
+described in Section VA. The model is trained from scratch and applied to the same circuit. The horizontal axis shows the
+numberoftrainingiterations,whiletheverticalaxisindicatesthecostreductionrelativetothebaselinewithoutreconfiguration
+(graydottedline). Eachgreenlinerepresentsatrainingrunwithadifferentrandomseedforinitializingtheconfigurationand
+model parameters.
+100
+80
+60
+40
+20
+0
+0 1000 2000 3000 4000 5000 6000
+Iterations
+tnuoC
+qaoa (14 qubits)
+100
+seed 0
+seed 1
+seed 2 80
+60
+40
+20
+0
+0 250 500 750 10001250150017502000
+Iterations
+tnuoC
+groundstate (14 qubits)
+seed 0 200
+seed 1
+175
+seed 2
+150
+125
+100
+75
+50
+25
+0
+0 200 400 600 800 1000
+Iterations
+tnuoC
+random (30 qubits)
+seed 0
+seed 1
+seed 2
+500
+400
+300
+200
+100
+0
+0 1000 2000 3000 4000 5000 6000
+Iterations
+tnuoC
+qnn (50 qubits)
+seed 0 800
+seed 1
+seed 2 700
+600
+500
+400
+300
+200
+100
+0
+0 1000 2000 3000 4000 5000 6000
+Iterations
+tnuoC
+hubbard (100 qubits)
+700
+seed 0
+seed 1 600
+seed 2
+500
+400
+300
+200
+100
+0
+0 10002000300040005000600070008000
+Iterations
+tnuoC
+qft (100 qubits)
+seed 0
+seed 1
+seed 2
+FIG. 6. The number of reconfiguration actions for each benchmark at each iteration in the same experiment as Fig. 5. We
+count only the actions that result in a playable atom being placed at a different grid location, thereby changing the overall
+layout.12
+1000
+500
+0
+500
+1000
+1500
+2000
+0 2000 4000 6000 8000 10000
+Iterations
+draweR
+40-50 qubits (Training)
+1000
+500
+0
+500
+1000
+1500
+2000
+0 5000 10000 15000 20000 25000 30000
+Iterations
+draweR
+80-100 qubits (Training)
+FIG. 7. The change in the mean reward for each iteration during the training of the transferable models with 40–50 qubit
+circuitdatasets(left)and80–100qubitcircuitdatasets(right). Themeanrewardiscalculatedasthemovingaverageoverthe
+past 50 steps. A positive reward indicates that the cost is reduced compared to the case without reconfiguration.
+with100shotsscalesslightlyworsefromthe10-shotcase,
+TABLEIII.Theduration(seconds)forgeneratingalltheac-
+but is still better than linear scaling. We note that most
+tionsforeachnumberofshotsusingthesametestcircuitasin
+of the computational time was dedicated to the action
+TableIIonasystemequippedwithanNVIDIAH100Tensor
+generation from the model on the GPU. If we use a re-
+Core GPU.
+ward that requires intensive CPU resources, the scaling
+Seed Qubits Chunks 1 shot 10 shots 100 shots
+behaviour would degrade.
+0 97 436 12.83 18.32 87.02
+1 84 490 12.45 17.44 81.74
+TABLE I. Cost reduction with and without transfer in the
+2 92 335 13.12 17.60 85.84
+40–50 qubit experiments for each number of shots.
+Seed Qubits Transfer 1 shot 10 shots 100 shots
+No -74.95% -72.91% -72.31% dataset class in this demonstration, it would be bene-
+0 48
+Yes 8.36% 8.36% 8.90% ficial to pre-train the model on various quantum circuits
+No -78.42% -76.77% -73.85% as a foundation model for generating layout changes in
+1 42
+Yes 7.42% 8.52% 10.33% future research.
+No -62.85% -62.81% -57.49%
+2 46
+Yes 8.32% 8.60% 9.20%
+VI. DISCUSSIONS AND CONCLUSIONS
+TABLE II. Results of the same experiment as in Table I, Inthispaper,weintroducedtheQC-Gameasaframe-
+but conducted with 80–100 qubit circuits for each number of work based on Markov decision processes to dynami-
+shots. cally control the state of a device while executing a
+Seed Qubits Transfer 1 shot 10 shots 100 shots given quantum circuit. We then propose QC-Daemon
+as an agent to solve the QC-Game. An essential appli-
+No -86.98% -86.43% -85.31%
+0 97 cation of the QC-Game is the Atom Game, which in-
+Yes 6.66% 8.51% 8.51%
+volves planning the sequence of reconfiguring the layout
+No -78.37% -78.37% -77.21%
+1 84 of atoms in reconfigurable neutral atom arrays. The ac-
+Yes 7.90% 8.66% 8.85%
+tual physical operations for reconfiguration and gate ex-
+No -92.18% -91.64% -90.86%
+2 92 ecution in the Atom Game are handled abstractly, mak-
+Yes 7.06% 7.78% 8.57%
+ing the approach compatible with any reconfiguration
+or gate-execution protocol. We demonstrated that our
+The transferability shown in the experiment is practi- reinforcement-learning agent, QC-Daemon, constructed
+cally essential, as it provides a way to generate moves with two types of transformers, can reduce the logarith-
+without additional training. While we restrict the mic infidelity compared to the scenario where no layout13
+changeismade, acrossvariousbenchmarkproblems. We of the atom move; however, additional operations neces-
+also demonstrate the transferability of our model using sary for a logical processor, such as the implementation
+datasets of 40–50 qubits and 80–100 qubits. This trans- of non-transversal gates, will affect the advantage of our
+ferability is beneficial for rapidly generating physical op- QC-Daemon.
+erations in practical applications.
+There are multiple directions for future research. As
+we note in Section I, this work focuses on optimizing the ACKNOWLEDGEMENT
+reconfiguration step to simplify the problem structure.
+However, other stages in the compilation pipeline may A related work [37] considering the reconfiguration
+become more important depending on the nature of the process was posted almost simultaneously with this
+target circuit such as initialization. Extending our AI manuscript. Although developed independently, their
+compiler to support additional stages is an important study addresses a similar problem and provides comple-
+direction for future research. mentaryinsights. Weacknowledgetheirtimelycontribu-
+Ourrewardprovidesaroughestimateoftheinfidelity, tion to this rapidly evolving field.
+and we do not perform a full simulation of schedul- The authors thank early discussions with Shengtao
+ing gates or reconfigurations on an actual quantum de- Wang and Casey Duckering. H.H. acknowledge sup-
+vice. Performing such simulations would require assum- port from the NSERC-Google Industrial Research Chair
+ing specific details of a real scheduler. In principle, this award. L.M.C. acknowledges support from the Novo
+would only involve modifying the definitions of G(s ,C ) Nordisk Foundation, NNF Quantum Computing Pro-
+t t
+and L(s ,s ). Additionally, in our setting, the re- gramme. K.P. acknowledges the generous support of
+t t+1
+configuration/gate execution protocols are given as in- theCanada150ResearchChairsProgramthroughA.A.-
+puts. However, another possibility is training the agent G. A.A.-G. thanks Anders G. Frøseth for his generous
+to produce the physical atom moves for reconfiguration support and acknowledges the generous support of Nat-
+or gate execution directly, given a particular atom lay- ural Resources Canada and the Canada 150 Research
+out. The application for fault-tolerant quantum com- Chairsprogram. ThisresearchispartoftheUniversityof
+putation (FTQC) is also an interesting direction. We Toronto’sAccelerationConsortium, whichreceivesfund-
+expect that the same argument applies in FTQC by us- ing from the CFREF-2022-00042 Canada First Research
+ing a logical qubit instead of a physical one as the unit Excellence Fund.
+[1] M. Ghallab, D. Nau, and P. Traverso, Automated Plan- H.Pichler,andM.D.Lukin,“Parallelimplementationof
+ning: theory and practice. Elsevier, 2004. high-fidelitymultiqubitgateswithneutralatoms,”Phys.
+[2] G. C. Pflug and A. Pichler, Multistage stochastic opti- Rev. Lett., vol. 123, p. 170503, Oct 2019.
+mization, vol. 1104. Springer, 2014. [10] D. Bluvstein, S. J. Evered, A. A. Geim, S. H. Li,
+[3] C. Aeronautiques, A. Howe, C. Knoblock, I. D. McDer- H. Zhou, T. Manovitz, S. Ebadi, M. Cain, M. Kali-
+mott,A.Ram,M.Veloso,D.Weld,D.W.Sri,A.Barrett, nowski,D.Hangleiter,etal.,“Logicalquantumprocessor
+D.Christianson,etal.,“Pddl—theplanningdomaindef- based on reconfigurable atom arrays,” Nature, vol. 626,
+inition language,” Technical Report, Tech. Rep., 1998. no. 7997, pp. 58–65, 2024.
+[4] D. McDermott, “The formal semantics of processes in [11] S. J. Evered, D. Bluvstein, M. Kalinowski, S. Ebadi,
+pddl,” in Proc. ICAPS Workshop on PDDL, pp. 101– T. Manovitz, H. Zhou, S. H. Li, A. A. Geim, T. T.
+155, Citeseer, 2003. Wang, N. Maskara, et al., “High-fidelity parallel entan-
+[5] R. S. Sutton, “Reinforcement learning: An introduc- gling gates on a neutral-atom quantum computer,” Na-
+tion,” A Bradford Book, 2018. ture, vol. 622, no. 7982, pp. 268–272, 2023.
+[6] V. Franc¸ois-Lavet, P. Henderson, R. Islam, M. G. Belle- [12] G.A.team,“Quantumerrorcorrectionbelowthesurface
+mare, J. Pineau, et al., “An introduction to deep rein- codethreshold,”Nature,vol.638,p.920–926,Dec.2024.
+forcement learning,” Foundations and Trends® in Ma- [13] N. Berthusen, J. Dreiling, C. Foltz, J. P. Gaebler, T. M.
+chine Learning, vol. 11, no. 3-4, pp. 219–354, 2018. Gatterman, D. Gresh, N. Hewitt, M. Mills, S. A. Moses,
+[7] D. Silver, A. Huang, C. J. Maddison, A. Guez, L. Sifre, B. Neyenhuis, P. Siegfried, and D. Hayes, “Experiments
+G. Van Den Driessche, J. Schrittwieser, I. Antonoglou, with the four-dimensional surface code on a quantum
+V. Panneershelvam, M. Lanctot, et al., “Mastering the charge-coupleddevicequantumcomputer,”Physical Re-
+game of go with deep neural networks and tree search,” view A, vol. 110, Dec. 2024.
+nature, vol. 529, no. 7587, pp. 484–489, 2016. [14] N. Lacroix, A. Bourassa, F. J. Heras, L. M. Zhang,
+[8] V. Mnih, K. Kavukcuoglu, D. Silver, A. A. Rusu, J. Ve- J.Bausch, A.W.Senior, T.Edlich, N.Shutty, V.Sivak,
+ness, M. G. Bellemare, A. Graves, M. Riedmiller, A. K. A. Bengtsson, et al., “Scaling and logic in the color
+Fidjeland, G. Ostrovski, et al., “Human-level control code on a superconducting quantum processor,” arXiv
+through deep reinforcement learning,” nature, vol. 518, preprint arXiv:2412.14256, 2024.
+no. 7540, pp. 529–533, 2015. [15] H. Aghaee Rad, T. Ainsworth, R. Alexander, B. Al-
+[9] H. Levine, A. Keesling, G. Semeghini, A. Omran, T. T. tieri, M. Askarani, R. Baby, L. Banchi, B. Baragiola,
+Wang, S. Ebadi, H. Bernien, M. Greiner, V. Vuleti´c, J. Bourassa, R. Chadwick, et al., “Scaling and network-14
+ing a modular photonic quantum computer,” Nature, [32] B.Tan,D.Bluvstein,M.D.Lukin,andJ.Cong,“Qubit
+pp. 1–8, 2025. mapping for reconfigurable atom arrays,” in Proceed-
+[16] B.TanandJ.Cong,“Optimalitystudyofexistingquan- ingsofthe41stIEEE/ACMInternationalConferenceon
+tum computing layout synthesis tools,” IEEE Transac- Computer-Aided Design, ICCAD ’22, (New York, NY,
+tions on Computers, vol. 70, no. 9, pp. 1363–1373, 2021. USA), Association for Computing Machinery, 2022.
+[17] M. G. Pozzi, S. J. Herbert, A. Sengupta, and R. D. [33] J. Ruan, X. Fang, H. Zhang, A. Li, T. Humble, and
+Mullins, “Using reinforcement learning to perform qubit Y. Ding, “Powermove: Optimizing compilation for neu-
+routing in quantum compilers,” ACM Transactions on tral atom quantum computers with zoned architecture,”
+Quantum Computing, vol. 3, p. 1–25, May 2022. arXiv preprint arXiv:2411.12263, 2024.
+[18] Y.Alexeev,M.H.Farag,T.L.Patti,M.E.Wolf,N.Ares, [34] J.LudmirandT.Patel,“Parallax: Acompilerforneutral
+A. Aspuru-Guzik, S. C. Benjamin, Z. Cai, Z. Chandani, atom quantum computers under hardware constraints,”
+F.Fedele,etal.,“Artificialintelligenceforquantumcom- inSC24: InternationalConferenceforHighPerformance
+puting,” arXiv preprint arXiv:2411.09131, 2024. Computing, Networking, Storage and Analysis,pp.1–17,
+[19] Y. Shi, N. Leung, P. Gokhale, Z. Rossi, D. I. Schuster, IEEE, 2024.
+H.Hoffmann,andF.T.Chong,“Optimizedcompilation [35] W.-H.Lin,D.B.Tan,andJ.Cong,“Reuse-awarecompi-
+ofaggregatedinstructionsforrealisticquantumcomput- lation for zoned quantum architectures based on neutral
+ers,” in Proceedings of the Twenty-Fourth International atoms,”in2025IEEEInternationalSymposiumonHigh
+Conference on Architectural Support for Programming Performance Computer Architecture (HPCA), pp. 127–
+Languages and Operating Systems, ASPLOS ’19, (New 142, IEEE, 2025.
+York,NY,USA),p.1031–1044,AssociationforComput- [36] Y. Stade, L. Schmid, L. Burgholzer, and R. Wille, “An
+ing Machinery, 2019. abstract model and efficient routing for logical entan-
+[20] D.B.Tan,W.-H.Lin,andJ.Cong,“Compilationfordy- glinggatesonzonedneutralatomarchitectures,”in2024
+namically field-programmable qubit arrays with efficient IEEE International Conference on Quantum Computing
+and provably near-optimal scheduling,” arXiv preprint and Engineering (QCE), p. 784–795, IEEE, Sept. 2024.
+arXiv:2405.15095, 2024. [37] Y. Stade, W.-H. Lin, J. Cong, and R. Wille, “Routing-
+[21] A. Barenco, C. H. Bennett, R. Cleve, D. P. DiVincenzo, aware placement for zoned neutral atom-based quantum
+N. Margolus, P. Shor, T. Sleator, J. A. Smolin, and computing,” arXiv preprint arXiv:2505.22715, 2025.
+H. Weinfurter, “Elementary gates for quantum compu- [38] Q.Xu,J.P.BonillaAtaides,C.A.Pattison,N.Raveen-
+tation,” Physical review A, vol. 52, no. 5, p. 3457, 1995. dran, D. Bluvstein, J. Wurtz, B. Vasi´c, M. D. Lukin,
+[22] A. W. Harrow, B. Recht, and I. L. Chuang, “Efficient L.Jiang,andH.Zhou,“Constant-overheadfault-tolerant
+discrete approximations of quantum gates,” Journal of quantumcomputationwithreconfigurableatomarrays,”
+Mathematical Physics, vol. 43, no. 9, pp. 4445–4451, Nature Physics, vol. 20, p. 1084–1090, Apr. 2024.
+2002. [39] https://github.com/QuEraComputing/
+[23] C. M. Dawson and M. A. Nielsen, “The solovay-kitaev reconfiguration_cost_estimator.
+algorithm,” arXiv preprint quant-ph/0505030, 2005. [40] R. L. Brooks, “On colouring the nodes of a network,”
+[24] L. Moro, M. G. Paris, M. Restelli, and E. Prati, “Quan- MathematicalProceedingsoftheCambridgePhilosophical
+tumcompilingbydeepreinforcementlearning,”Commu- Society, vol. 37, p. 194–197, Apr. 1941.
+nications Physics, vol. 4, no. 1, p. 178, 2021. [41] P. S. Rodriguez, J. M. Robinson, P. N. Jepsen,
+[25] T.Fo¨sel,M.Y.Niu,F.Marquardt,andL.Li,“Quantum Z. He, C. Duckering, C. Zhao, K.-H. Wu, J. Campo,
+circuit optimization with deep reinforcement learning,” K. Bagnall, M. Kwon, et al., “Experimental demonstra-
+arXiv preprint arXiv:2103.07585, 2021. tion of logical magic state distillation,” arXiv preprint
+[26] D. Kremer, V. Villar, H. Paik, I. Duran, I. Faro, and arXiv:2412.15165, 2024.
+J. Cruz-Benito, “Practical and efficient quantum circuit [42] A. Y. Kitaev, “Fault-tolerant quantum computation by
+synthesis and transpiling with reinforcement learning,” anyons,” Annals of physics, vol. 303, no. 1, pp. 2–30,
+arXiv preprint arXiv:2405.13196, 2024. 2003.
+[27] B.TanandJ.Cong,“Optimalitystudyofexistingquan- [43] C. Nayak, S. H. Simon, A. Stern, M. Freedman, and
+tum computing layout synthesis tools,” IEEE Transac- S. Das Sarma, “Non-abelian anyons and topological
+tions on Computers, vol. 70, no. 9, pp. 1363–1373, 2020. quantum computation,” Reviews of Modern Physics,
+[28] D. Bluvstein, H. Levine, G. Semeghini, T. T. Wang, vol. 80, no. 3, pp. 1083–1159, 2008.
+S. Ebadi, M. Kalinowski, A. Keesling, N. Maskara, [44] R.RaussendorfandJ.Harrington,“Fault-tolerantquan-
+H. Pichler, M. Greiner, et al., “A quantum processor tum computation with high threshold in two dimen-
+based on coherent transport of entangled atom arrays,” sions,”Physical review letters,vol.98,no.19,p.190504,
+Nature, vol. 604, no. 7906, pp. 451–456, 2022. 2007.
+[29] H. Levine, D. Bluvstein, A. Keesling, T. T. Wang, [45] D.Horsman,A.G.Fowler,S.Devitt,andR.VanMeter,
+S. Ebadi, G. Semeghini, A. Omran, M. Greiner, “Surface code quantum computing by lattice surgery,”
+V.Vuleti´c,andM.D.Lukin,“Dispersiveopticalsystems New Journal of Physics,vol.14,no.12,p.123011,2012.
+for scalable raman driving of hyperfine qubits,” Phys. [46] D.Litinski,“Agameofsurfacecodes: Large-scalequan-
+Rev. A, vol. 105, p. 032618, Mar 2022. tum computing with lattice surgery,” Quantum, vol. 3,
+[30] L. M. K. Vandersypen and I. L. Chuang, “Nmr tech- p. 128, 2019.
+niquesforquantumcontrolandcomputation,”Rev.Mod. [47] A.PalerandA.G.Fowler,“Opensurgeryfortopological
+Phys., vol. 76, pp. 1037–1069, Jan 2005. assemblies,” 2020.
+[31] B.TanandJ.Cong,“Optimallayoutsynthesisforquan- [48] M. Beverland, V. Kliuchnikov, and E. Schoute, “Surface
+tumcomputing,”inProceedingsofthe39thInternational code compilation via edge-disjoint paths,” PRX Quan-
+Conference on Computer-Aided Design, pp. 1–9, 2020. tum, vol. 3, no. 2, p. 020342, 2022.15
+[49] G. Watkins, H. M. Nguyen, K. Watkins, S. Pearce, H.- [52] N. Quetschlich, L. Burgholzer, and R. Wille, “MQT
+K. Lau, and A. Paler, “A high performance compiler for Bench: Benchmarking software and design automa-
+very large scale surface code computations,” Quantum, tion tools for quantum computing,” Quantum, 2023.
+vol. 8, p. 1354, 2024. MQT Bench is available at https://www.cda.cit.tum.
+[50] I. O. Tolstikhin, N. Houlsby, A. Kolesnikov, L. Beyer, de/mqtbench/.
+X.Zhai,T.Unterthiner,J.Yung,A.Steiner,D.Keysers, [53] F.Arute,K.Arya,R.Babbush,D.Bacon,J.C.Bardin,
+J.Uszkoreit,et al.,“Mlp-mixer: Anall-mlparchitecture R.Barends,A.Bengtsson,S.Boixo,M.Broughton,B.B.
+for vision,” Advances in neural information processing Buckley, et al., “Observation of separated dynamics of
+systems, vol. 34, pp. 24261–24272, 2021. charge and spin in the fermi-hubbard model,” arXiv
+[51] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, preprint arXiv:2010.07965, 2020.
+L. Jones, A. N. Gomez, L(cid:32). Kaiser, and I. Polosukhin, [54] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and
+“Attentionisallyouneed,”Advances in neural informa- O. Klimov, “Proximal policy optimization algorithms,”
+tion processing systems, vol. 30, 2017. arXiv preprint arXiv:1707.06347, 2017.
+Appendix A: Hyper-parameter of the numerical experiment
+1. Machine learning model parameters
+TABLE IV. Model architecture, training, and experimental parameters. The device parameters are used to compute a dimen-
+sionless quantity, the infidelity. Therefore, while each parameter may originally have a physical unit, the units are omitted in
+the description, and only scalar values are shown.
+Category Parameters
+Dynamic feature: Gate transformer Embedding dimension = 20
+Number of layers = 3
+Number of heads in multi-head attention = 4
+Dynamic feature: Move transformer Embedding dimension = 20
+Number of layers = 3
+Number of heads in multi-head attention = 4
+Static feature Player embedding dimension = 40
+Time embedding dimension = 40
+Board embedding dimension = 10
+Number of layers in MLP-Mixer = 1
+Training parameters: PPO Clipping coefficient (ϵ) = 0.2
+Entropy coefficient (c ) = 0.01
+entropy
+Value function coefficient (c ) = 0.5
+vf
+Maximum gradient norm = 0.5
+Learning rate = 0.00025
+Device parameters: Acceleration constant (γ)=1
+Inverse coherence time (α)=0.02
+Atom loss parameter (β)=0.02
+Inter-zone transfer time (T )=10
+G
+Lattice spacing of the grid =1
+Other parameters Window size (W) = 2
+Horizon length (K) = 516
+2. Size of the grids
+TABLEV.Thelistofthesizeofthegridsineachbenchmarkexperiment. Thebenchmark’transfer’representstheexperiment
+in Section VB.
+Benchmark Qubits Grid size (row × col)
+qaoa 14 4×10
+groundstate 14 4×10
+random 30 7×10
+qnn 50 5×20
+qft 100 10×20
+hubbard 100 10×20
+transfer-learning 40-50 5×20
+transfer-learning 80-100 10×20

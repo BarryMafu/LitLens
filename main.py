@@ -6,7 +6,7 @@
 
 from dataclasses import dataclass
 from utils import *
-from model import LanguageModel
+from model import LanguageModel, ModelConfig
 import prompts as pr
 
 @dataclass
@@ -22,8 +22,8 @@ class LitLensConfig:
 
 class LitLens:
     def __init__(self,
+        model: LanguageModel = LanguageModel(),
         config: LitLensConfig = LitLensConfig(),
-        model: LanguageModel = LanguageModel()
     ):
         self.model = model 
         self.config = config
@@ -52,6 +52,8 @@ class LitLens:
         if self.config.verbose:
             print(f"Fetching reference papers ...")
         reference = get_reference(arxiv_id)
+        print("$ Cit count: ", len(cited))
+        print("$ Ref count: ", len(reference))
         if self.config.limit_cited > 0:
             cited = cited[:self.config.limit_cited] # TODO: Maybe another way
         if self.config.limit_reference > 0:
@@ -61,6 +63,7 @@ class LitLens:
         if self.config.verbose:
             print(f"Fetching relative papers with keywords: {keywords}")
         search = [paper['title'] for paper in search_arxiv(keywords, self.config.limit_search)]
+        print("$ Src count: ", len(search))
         return {
             "cited": cited,
             "reference": reference,
@@ -75,13 +78,34 @@ class LitLens:
         response = self.model.get_response(fr_prompts)
         return response.splitlines() if response else []
     
+    def second_round(self, paper_titles, paper_content):
+        if self.config.verbose:
+            print(f"Selecting papers... (Round 2 / 3)")
+        paper_abstracts = []
+        for title in paper_titles:
+            arxiv_id = get_arxiv_id_by_title(title)
+            print("#DBG 2 ", arxiv_id)
+            print("#DBG 2 ", get_basic_info(arxiv_id))
+            paper_abstracts.append(get_basic_info(arxiv_id)['summary'])
+        sr_prompt = pr.second_round(paper_titles, paper_abstracts, self.config.count_second_round, paper_content)
+        print(sr_prompt)
+        return
+        # response = self.model.get_response(sr_prompt)
+        return response.splitlines() if response else []
+    
 if __name__ == "__main__":
-    arxiv_id = "2404.13208"
+    paper_name = "Routing-Aware Placement for Zoned Neutral Atom-based Quantum Computing"
+    arxiv_id = get_arxiv_id_by_title(paper_name)
+    print(f"arXiv:{arxiv_id}: ", get_basic_info(arxiv_id)['title'])
     litlens = LitLens()
     paper_content = litlens.get_paper_content(arxiv_id)
     paper_titles = litlens.get_all_papers(arxiv_id, paper_content)
-    first_round_papers = litlens.first_round(paper_titles, paper_content)
-    print("First Round Papers:")
-    for title in first_round_papers:
-        print("  - ", title)
+    # print(paper_titles)
+    # first_round_papers = litlens.first_round(paper_titles, paper_content)
+    first_round_papers = paper_titles['cited'] + paper_titles['reference'] + paper_titles['search']
+    print("First Round Papers: ", len(first_round_papers))
+    second_round_papers = litlens.second_round(first_round_papers, paper_content)
+    print("Second Round Papers: ", len(second_round_papers))
+    for paper in second_round_papers:
+        print("  - ", paper)
     

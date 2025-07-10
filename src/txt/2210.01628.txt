@@ -1,0 +1,2159 @@
+Monte Carlo Tree Search based Variable Selection
+for High Dimensional Bayesian Optimization
+LeiSong∗, KeXue∗, XiaobinHuang,ChaoQian†
+StateKeyLaboratoryforNovelSoftwareTechnology,
+NanjingUniversity,Nanjing210023,China
+{songl, xuek, huangxb, qianc}@lamda.nju.edu.cn
+Abstract
+Bayesianoptimization(BO)isaclassofpopularmethodsforexpensiveblack-box
+optimization,andhasbeenwidelyappliedtomanyscenarios. However,BOsuffers
+fromthecurseofdimensionality,andscalingittohigh-dimensionalproblemsisstill
+achallenge. Inthispaper,weproposeavariableselectionmethodMCTS-VSbased
+onMonteCarlotreesearch(MCTS),toiterativelyselectandoptimizeasubsetof
+variables.Thatis,MCTS-VSconstructsalow-dimensionalsubspaceviaMCTSand
+optimizesinthesubspacewithanyBOalgorithm. Wegiveatheoreticalanalysisof
+thegeneralvariableselectionmethodtorevealhowitcanwork. Experimentson
+high-dimensionalsyntheticfunctionsandreal-worldproblems(i.e.,NAS-bench
+problemsandMuJoColocomotiontasks)showthatMCTS-VSequippedwitha
+properBOoptimizercanachievestate-of-the-artperformance.
+1 Introduction
+Inmanyreal-worldtaskssuchasneuralarchitecturesearch(NAS)[41]andpolicysearchinrein-
+forcementlearning(RL)[6],oneoftenneedstosolvetheexpensiveblack-boxoptimizationproblems.
+Bayesianoptimization(BO)[2,11,23,32]isasample-efficientalgorithmforsolvingsuchproblems.
+Ititerativelyfitsasurrogatemodel,typicallyGaussianprocess(GP),andmaximizesanacquisition
+function to obtain the next point to evaluate. While BO has been employed in a wide variety of
+settings,successfulapplicationsareoftenlimitedtolow-dimensionalproblems.
+Recently,scalingBOtohigh-dimensionalproblemshasreceivedalotofinterest. Decomposition-
+basedmethods[13,15,17,26,31]assumethatthehigh-dimensionalfunctiontobeoptimizedhas
+acertainstructure,typicallytheadditivestructure. Bydecomposingtheoriginalhigh-dimensional
+functionintothesumofseverallow-dimensionalfunctions, theyoptimizeeachlow-dimensional
+functiontoobtainthepointinthehigh-dimensionalspace. However,itisnoteasytodecidewhether
+adecompositionexistsaswellastolearnthedecomposition.
+Other methods often assume that the original high-dimensional function with dimension D has
+a low-dimensional subspace with dimension d (cid:28) D, and then perform the optimization in the
+low-dimensionalsubspaceandprojectthelow-dimensionalpointbackforevaluation. Forexample,
+embedding-basedmethods[20,27,42]usearandommatrixtoembedtheoriginalspaceintothelow-
+dimensionalsubspace. Anotherwayistoselectasubsetofvariablesdirectly,whichcanevenavoid
+thetime-consumingmatrixoperationsofembedding-basedmethods. Forexample,Dropout[21]
+selectsdvariablesrandomlyineachiteration. Notethatforbothembeddingandvariableselection
+methods,theparameterdcanhavealargeinfluenceontheperformance,whichis,however,difficult
+tosetinreal-worldproblems.
+∗EqualContribution
+†CorrespondingAuthor
+36thConferenceonNeuralInformationProcessingSystems(NeurIPS2022).
+2202
+voN
+61
+]GL.sc[
+2v82610.0122:viXraInthispaper,weproposeanewVariableSelectionmethodusingMonteCarloTreeSearch(MCTS),
+calledMCTS-VS.MCTSisemployedtopartitionthevariablesintoimportantandunimportantones,
+andonlythoseselectedimportantvariablesareoptimizedviaanyblack-boxoptimizationalgorithm,
+e.g.,vanillaBO[32]orTuRBO[10].Thevaluesofunimportantvariablesaresampledusinghistorical
+information. ComparedwithDropout-BO,MCTS-VScanselectimportantvariablesautomatically.
+Wealsoprovideregretandcomputationalcomplexityanalysesofgeneralvariableselectionmethods,
+showing that variable selection can reduce the computational complexity while increasing the
+cumulative regret. Our regret bound generalizes that of GP-UCB [38] which always selects all
+variables,aswellasthatofDropout[21]whichselectsdvariablesrandomlyineachiteration. The
+resultssuggestthatagoodvariableselectionmethodshouldselectasimportantvariablesaspossible.
+Experimentsonhigh-dimensionalsyntheticfunctionsandreal-worldproblems(i.e.,NASandRL
+problems)showthatMCTS-VSisbetterthanthepreviousvariableselectionmethodDropout[21],
+andcanalsoachievethecompetitiveperformancetostate-of-the-artBOalgorithms. Furthermore,its
+runningtimeissmallduetotheadvantageofvariableselection. WealsoobservethatMCTS-VScan
+selectimportantvariables,explainingitsgoodperformancebasedonourtheoreticalanalysis.
+2 Background
+2.1 BayesianOptimization
+Weconsidertheproblemmax f(x),wheref isablack-boxfunctionandX ⊆RD isthedomain.
+x∈X
+ThebasicframeworkofBOcontainstwocriticalcomponents: asurrogatemodelandanacquisition
+function. GP is the most popular surrogate model. Given the sampled data points {(xi,yi)}t−1,
+i=1
+whereyi =f(xi)+(cid:15)i and(cid:15)i ∼N(0,η2)istheobservationnoise,GPatiterationtseekstoinfer
+f ∼ GP(µ(·),k(·,·)+η2I), specified by the mean µ(·) and covariance kernel k(·,·), where I is
+theidentitymatrixofsizeD. Afterthat,anacquisitionfunction,e.g.,ProbabilityofImprovement
+(PI) [19], Expected Improvement (EI) [16] or Upper Confidence Bound (UCB) [38], is used to
+determinethenextquerypointxtwhilebalancingexploitationandexploration.
+2.2 High-dimensionalBayesianOptimization
+ScalingBOtohigh-dimensionalproblemsisachallengeduetothecurseofdimensionalityandthe
+computationcost. Asthedimensionincreases,thesearchspaceincreasesexponentially,requiring
+more samples, and thus more expensive evaluations, to find a good solution. Furthermore, the
+computationcostofupdatingtheGPmodelandoptimizingtheacquisitionfunctionwillbevery
+time-consuming[30]. Therehavebeenafewcommonapproachestotacklehigh-dimensionalBO
+withdifferentassumptions.
+Decomposition. Assumingthatthefunctioncanbedecomposedintothesumoflow-dimensional
+functionswithdisjointsubspaces,Kandasamyetal.[17]proposedtheAdd-GP-UCBalgorithmto
+optimizethoselow-dimensionalfunctionsseparately,whichwasfurthergeneralizedtooverlapping
+subspaces[26,31].Wangetal.[43]proposedensembleBOthatusesanensembleofadditiveGP
+modelsforscalability.Hanetal.[13]constrainedthedependencygraphsofdecompositiontotree
+structurestofacilitatethedecompositionlearningandoptimization. Formostproblems,however,the
+decompositionisunknown,andalsodifficulttolearn.
+Embedding. Assumingthatonlyafewdimensionsaffectthehigh-dimensionalfunctionsignificantly,
+embedding-basedmethodsembedthehigh-dimensionalspaceintoalow-dimensionalsubspace,and
+optimizeinthesubspacewhileprojectingthepointbackforevaluation. REMBOanditsvariantsuse
+arandommatrixtoembedthesearchspaceintoalow-dimensionalsubspace[3,4,42].Nayebietal.
+[27]usedahash-basedmethodforembedding.Lethametal.[20]proposedALEBO,focusingon
+severalmisconceptionsinREMBOtoimprovetheperformance. TheVAE-basedapproacheswere
+alsoemployedtoprojectastructuredinputspace(e.g.,graphsandimages)toalow-dimensional
+subspace[12,22].
+Variable Selection. Based on the same assumption as embedding, variable selection methods
+iterativelyselectasubsetofvariablestobuildalow-dimensionalsubspaceandoptimizethrough
+BO.Theselectedvariablescanbeviewedasimportantvariablesthatarevaluableforexploitation,
+orhavinghighuncertaintythatarevaluableforexploration. AclassicalmethodisDropout[21],
+2which randomly chooses d variables in each iteration. Spagnol et al. [37] uses Hilbert Schmidt
+Independencecriteriontoguidevariableselection. Whenevaluatingthesampledpoint,thevalues
+of those unselected variables are obtained by random sampling or using historical information.
+VS-BO[33]selectsvariableswithlargerestimatedgradientsandusesCMA-ES[14]toobtainthe
+valuesofunselectedvariables. Notethatvariableselectioncanbefasterthanembedding,becausethe
+embeddingcost(e.g.,matrixinversion)istime-consumingforhigh-dimensionaloptimization.
+Bothembeddingandvariableselectionmethodsneedtospecifytheparameterd,i.e.,thedimension
+oflow-dimensionalsubspace,whichwillaffecttheperformancesignificantly,butisnoteasytoset.
+TherearealsosomemethodstoimprovethebasiccomponentsofBOdirectlyforhigh-dimensional
+problems. Forexample,DNGO[36]usestheneuralnetworkasanalternativeofGPtospeedup
+inference; BO-PP [29] generates pseudo-points (i.e., data points whose objective values are not
+evaluated)toimprovetheGPmodel;SAASBO[9]usessparsity-inducingpriortoperformvariable
+selectionimplicitly,makingthecoefficientsofunimportantvariablesneartozeroandthusrestraining
+over-explorationonthesevariables. NotethatdifferentfromDropoutandourproposedMCTS-VS,
+SAASBOstilloptimizesallvariables,andalsoduetoitshighcomputationalcostofinference,itis
+verytime-consumingasreportedin[9]. Thesemethodscanbecombinedwiththeabove-mentioned
+dimensionalityreductionmethods,whichmaybringfurtherimprovement.
+2.3 MonteCarloTreeSearch
+MCTS[5]isatreesearchalgorithmbasedonrandomsampling, andhasshowngreatsuccessin
+high-dimensionaltasks,suchasGo[34,35]. Atreenoderepresentsastate,describingthecurrent
+situation,e.g.,thepositioninpathplanning. EachtreenodeX storesavaluev representingits
+X
+goodness,andthenumbern thatithasbeenvisited. TheyareusedtocalculateUCB[1],i.e.,
+X
+(cid:113)
+v +2C 2(logn )/n , (1)
+X p p X
+whereC isahyper-parameter,andn isthenumberofvisitsoftheparentofX. UCBconsiders
+p p
+bothexploitationandexploration,andwillbeusedfornodeselection.
+MCTSiterativelyselectsaleafnodeofthetreeforexpansion. Eachiterationcanbedividedintofour
+steps: selection,expansion,simulationandback-propagation. Startingfromtherootnode,selection
+is to recursively select a node with larger UCB until a leaf node, denoted as X. Expansion is to
+executeacertainactioninthestaterepresentedbyX andtransfertothenextstate,e.g.,moveforward
+andarriveatanewpositioninpathplanning. WeusethechildnodeY ofX torepresentthenext
+state. Simulationistoobtainthevaluev viarandomsampling. Back-propagationistoupdatethe
+Y
+valueandthenumberofvisitsofY’sancestors.
+Totacklehigh-dimensionaloptimization,Wangetal.[40]proposedLA-MCTS,whichappliesMCTS
+toiterativelypartitionthesearchspaceintosmallsub-regions,andoptimizesonlyinthegoodsub-
+regions. That is, the root of the tree represents the entire search space Ω, and each tree node X
+representsasub-regionΩ . Thevaluev ismeasuredbytheaverageobjectivevalueofthesampled
+X X
+pointsinthesub-regionΩ . Ineachiteration,afterselectingaleafnodeX,LA-MCTSperforms
+X
+the optimization in Ω by vanilla BO [32] or TuRBO [10], and the sampled points are used for
+X
+clusteringandclassificationtobifurcateΩ intotwodisjointsub-regions,whichare“good”and
+X
+“bad”,respectively. Notethatthesub-regionsaregeneratedbydividingtherangeofvariables,and
+theirdimensionalitydoesnotdecrease,whichisstillthenumberofallvariables.Wangetal.[40]
+haveempiricallyshownthegoodperformanceofLA-MCTS.However,asthedimensionincreases,
+thesearchspaceincreasesexponentially,andmorepartitionsandevaluationsarerequiredtofinda
+goodsolution,makingtheapplicationofLA-MCTStohigh-dimensionaloptimizationstilllimited.
+3 MCTS-VSMethod
+In this section, we propose a Variable Selection method based on MCTS for high-dimensional
+BO,brieflycalledMCTS-VS.ThemainideaistoapplyMCTStoiterativelypartitionallvariables
+into important and unimportant ones, and perform BO only for those important variables. Let
+[D] = {1,2,...,D}denotetheindexesofallvariablesx,andxM denotethesubsetofvariables
+indexedbyM⊆[D].
+We first introduce a D-dimensional vector named variable score, which is a key component of
+MCTS-VS.Itsi-thelementrepresentstheimportanceofthei-thvariablex . Duringtherunning
+i
+3processofMCTS-VS,afteroptimizingasubsetxMofvariableswhereM⊆[D]denotestheindexes
+ofthevariables,asetDofsampledpointswillbegenerated,andthepair(M,D)willberecorded
+intoasetD,calledinformationset. ThevariablescorevectorisbasedonD,andcalculatedas
+   
+s= (cid:88) (cid:88) yi·g(M) (cid:14)  (cid:88) |D|·g(M), (2)
+(M,D)∈D(xi,yi)∈D (M,D)∈D
+wherethefunctiong :2[D] →{0,1}D givestheBooleanvectorrepresentationofavariableindex
+subsetM⊆[D](i.e.,thei-thelementofg(M)is1ifi∈M,and0otherwise),and/istheelement-
+wisedivision. Eachdimensionof (cid:80) (cid:80) yi·g(M)isthesumofqueryevaluations
+(M,D)∈D (xi,yi)∈D
+usingeachvariable, andeachdimensionof (cid:80) |D|·g(M)isthenumberofqueriesusing
+(M,D)∈D
+eachvariable. Thus, thei-thelementofvariablescores, representingtheimportanceofthei-th
+variablex ,isactuallymeasuredbytheaveragegoodnessofallthesampledpointsthataregenerated
+i
+byoptimizingasubsetofvariablescontainingx . Thevariablescoreswillbeusedtodefinethe
+i
+valueofeachtreenodeofMCTSaswellasfornodeexpansion.
+In MCTS-VS, the root of the tree represents all variables. A tree node X represents a subset of
+variables,whoseindexsetisdenotedbyA ⊆[D],anditstoresthevaluev andthenumbern
+X X X
+ofvisits, whichareusedtocalculatethevalueofUCBasinEq.(1). Thevaluev isdefinedas
+X
+the average score (i.e., importance) of the variables contained by X, which can be calculated by
+s·g(A )/|A |,whereg(A )istheBooleanvectorrepresentationofA and|A |isthesizeof
+X X X X X
+A ,i.e.,thenumberofvariablesinnodeX.
+X
+Ateachiteration,MCTS-VSfirstrecursivelyselectsanodewithlargerUCBuntilaleafnode(denoted
+asX),whichisregardedascontainingimportantvariables. NotethatifweoptimizethesubsetxA
+X
+ofvariablesrepresentedbytheleafX directly,thevariablesinxA willhavethesamescore(because
+X
+theyareoptimizedtogether),andtheirrelativeimportancecannotbefurtherdistinguished. Thus,
+MCTS-VSuniformlyselectsavariableindexsubsetMfromA atrandom,andemploysBOto
+X
+optimizexMaswellasxA X\M;thisprocessisrepeatedforseveraltimes. Afterthat,theinformation
+setDwillbeaugmentedbythepairsoftheselectedvariableindexsubsetM(orA \M)andthe
+X
+correspondingsampledpointsgeneratedbyBO.Thevariablescorevectorswillbeupdatedusing
+thisnewD. Basedons,thevariableindexsetA representedbytheleafX willbedividedintotwo
+X
+disjointsubsets,containingvariableswithlargerandsmallerscores(i.e.,importantandunimportant
+variables),respectively,andtheleafX willbebifurcatedintotwochildnodesaccordingly. Finally,
+the v values of these two children will be calculated using the variable score vector s, and back-
+propagationwillbeperformedtoupdatethevvalueandthenumberofvisitsofthenodesalongthe
+currentpathofthetree.
+MCTS-VS can be equipped with any specific BO optimizer, resulting in the concrete algorithm
+MCTS-VS-BO,whereBOisusedtooptimizetheselectedsubsetsofvariablesduringtherunning
+ofMCTS-VS.ComparedwithLA-MCTS[40],MCTS-VSappliesMCTStopartitionthevariables
+insteadofthesearchspace,andthuscanbemorescalable. Comparedwiththepreviousvariable
+selectionmethodDropout[21],MCTS-VScanselectimportantvariablesautomaticallyinsteadof
+randomlyselectingafixednumberofvariablesineachiteration. Nextweintroduceitindetail.
+3.1 DetailsofMCTS-VS
+TheprocedureofMCTS-VSisdescribedinAlgorithm1. Inline1,itfirstinitializestheinformation
+set D. In particular, a variable index subset M is randomly sampled from [D], and the Latin
+i
+hypercubesampling[24]isusedtogeneratetwosets(denotedasD
+i
+andD¯i )ofN
+s
+pointstoform
+thetwopairsof(M
+i
+,D
+i
+)and(M¯
+i
+,D¯i ),whereM¯
+i
+=[D]\M
+i
+. ThisprocesswillberepeatedforN
+v
+times,resultingintheinitialD={(M
+i
+,D
+i
+),(M¯
+i
+,D¯i )}N
+i=
+v
+1
+. Thevariablescorevectorsiscalculated
+usingthisinitialDinline3,andtheMonteCarlotreeisinitializedinline4byaddingonlyaroot
+node, whose v value is calculated according to s and number of visits is 0. MCTS-VS uses the
+variablettorecordthenumberofevaluationsithasperformed,andthustissetto2×N ×N in
+v s
+line5astheinitialDcontains2×N ×N sampledpointsintotal.
+v s
+Ineachiteration(i.e., lines7–28)ofMCTS-VS,itselectsaleafnodeX byUCBinline10, and
+optimizes the variables (i.e., xA ) represented by X in lines 13–23. Note that to measure the
+X
+relativeimportanceofvariablesinxA ,MCTS-VSoptimizesdifferentsubsetsofvariablesofxA
+X X
+4Algorithm1MCTS-VS
+Parameters: batch size N of variable index subset, sample batch size N , total number N of
+v s e
+evaluations,thresholdN forre-initializingatreeandN forsplittinganode,hyper-parameter
+bad split
+kforthebest-kstrategy
+Process:
+1: InitializetheinformationsetD={(M i ,D i ),(M¯ i ,D¯i )}N i= v 1 ;
+2: StorethebestksampledpointsinD;
+3: CalculatethevariablescoresusingDasinEq.(2);
+4: InitializetheMonteCarlotree;
+5: Sett=2×N v ×N s andn bad =0;
+6: whilet<N e do
+7: ifn bad >N bad then
+8: InitializetheMonteCarlotreeandsetn bad =0
+9: endif
+10: X ←theleafnodeselectedbyUCB;
+11: LetA X denotetheindexesofthesubsetofvariablesrepresentedbyX;
+12: Increasen bad by1oncevisitingarightchildnodeonthepathfromtherootnodetoX;
+13: forj =1:N v do
+14: SampleavariableindexsubsetMfromA X uniformlyatrandom;
+15: FitaGPmodelusingthepoints{(xi M ,yi)}t i=1 sampled-so-far,whereonlythevariables
+indexedbyMareused;
+16: Generate{xt+i}Ns bymaximizinganacquisitionfunction;
+M i=1
+17: Determine{xt+i }Ns bythe“fill-in”strategy;
+[D]\M i=1
+18: Evaluatext+i =[x M t+i,x [ t D + ] i \M ]toobtainyt+ifori=1,2,...,N s ;
+19: D=D∪{(M,{(xt+i,yt+i)}Ns )};
+i=1
+20: Storethebestkpointssampled-so-far;
+21: t=t+N s ;
+22: Repeatlines15–21forM¯ =A X \M
+23: endfor
+24: CalculatethevariablescoresusingDasinEq.(2);
+25: if|A X |>N split then
+26: BifurcatetheleafnodeX intotwochildnodes,whosev valueandnumberofvisitsare
+calculatedbysandsetto0,respectively
+27: endif
+28: Back-propagatetoupdatethevvalueandnumberofvisitsofthenodesonthepathfromthe
+roottoX
+29: endwhile
+insteadofxA
+X
+directly. Thatis,avariableindexsubsetMisrandomlysampledfromA
+X
+inline14,
+andthecorrespondingsubsetxM ofvariablesisoptimizedbyBOinlines15–16. Thedatapoints
+{(xi ,yi)}t sampled-so-farisusedtofitaGPmodel,andN (calledsamplebatchsize)newpoints
+M i=1 s
+{xt+i}Ns aregeneratedbymaximizinganacquisitionfunction. NotethatthisisastandardBO
+M i=1
+procedure,whichcanbereplacedbyanyothervariant. Toevaluatext+i,weneedtofillinthevalues
+M
+oftheothervariablesxt+i ,whichwillbeexplainedlater. Afterevaluatingxt+i =[xt+i,xt+i ]
+[D]\M M [D]\M
+inline18,theinformationsetDisaugmentedwiththenewpairof(M,{(xt+i,yt+i)}Ns )inline19,
+i=1
+andtisincreasedbyN s accordinglyinline21. Forfairness,thecomplementsubsetx M¯ ofvariables,
+whereM¯ =A \M,isalsooptimizedbythesameway,i.e.,lines15–21ofAlgorithm1isrepeated
+X
+forM¯. ThewholeprocessofoptimizingxM andx M¯ inlines14–22willberepeatedforN v times,
+whichiscalledbatchsizeofvariableindexsubset.
+Tofillinthevaluesoftheun-optimizedvariablesinline17,weemploythebest-kstrategy,which
+utilizes the best k data points sampled-so-far, denoted as {(x∗j,y∗j)}k . That is, {y∗j}k are
+j=1 j=1
+theklargestobjectivevaluesobserved-so-far. Ifthei-thvariableisun-optimized,itsvaluewillbe
+uniformlyselectedfrom{x∗j}k atrandom. Thus,MCTS-VSneedstostorethebestkdatapoints
+i j=1
+in line 2 after initializing the information set D, and update them in line 20 after augmenting D.
+Otherdirect“fill-in”strategiesincludesamplingthevaluerandomly,orusingtheaveragevariable
+5valueofthebestkdatapoints. Thesuperiorityoftheemployedbest-kstrategywillbeshowninthe
+experimentsinAppendixD.
+AfteroptimizingthevariablesxA representedbytheselectedleafX,thevariablescorevectors
+measuringtheimportanceofeach X variablewillbeupdatedusingtheaugmentedDinline24. Ifthe
+number|A |ofvariablesintheleafX islargerthanathresholdN (i.e.,line25),A willbe
+X split X
+dividedintotwosubsets. Onecontainsthose“important”variableindexeswithscorelargerthan
+theaveragescoreofxA , andtheothercontainstheremaining“unimportant”ones. TheleafX
+X
+willbebifurcatedintoaleftchildY andarightchildZ inline26,containingthoseimportantand
+unimportantvariables,respectively. Meanwhile,v andv willbecalculatedaccordingtos,andthe
+Y Z
+numberofvisitsis0,i.e.,n =n =0. Finally,MCTS-VSperformsback-propagationinline28to
+Y Z
+re-calculatethevvalueandincreasethenumberofvisitsby1foreachancestorofY andZ.
+MCTS-VSwillrununtilthenumbertofperformedevaluationsreachesthebudgetN . Notethat
+e
+astheMonteCarlotreemaybebuiltimproperly,weuseavariablen torecordthenumberof
+bad
+visitingarightchildnode(regardedascontainingunimportantvariables),measuringthegoodness
+ofthetree. Inline5ofAlgorithm1,n isinitializedas0. Duringtheprocedureofselectinga
+bad
+leafnodebyUCBinline10,n willbeincreasedby1oncevisitingarightchildnode,whichis
+bad
+updatedinline12. Ifn islargerthanathresholdN (i.e.,line7),thecurrenttreeisregardedas
+bad bad
+bad,andwillbere-initializedinline8. Furthermore,thefrequencyofre-initializationcanbeusedto
+indicatewhetherMCTS-VScandoagoodvariableselectionforthecurrentproblem. Foreaseof
+understanding,wealsoprovideanexampleillustrationofMCTS-VSinAppendixA.
+4 TheoreticalAnalysis
+AlthoughitisdifficulttoanalyzetheregretofMCTS-VSdirectly,wecantheoreticallyanalyzethe
+influenceofgeneralvariableselectionbyadoptingtheacquisitionfunctionGP-UCB.Theconsidered
+general variable selection framework is as follows: after selecting a subset of variables at each
+iteration, thecorrespondingobservationdata (i.e., thedata points sampled-so-farwhereonlythe
+selected variables are used) is used to build a GP model, and the next data point is sampled by
+maximizingGP-UCB.WeuseM todenotethesampledvariableindexsubsetatiterationt,andlet
+t
+|M |=d .
+t t
+Regret Analysis. Let x∗ denote an optimal solution. We analyze the cumulative regret R =
+T
+(cid:80)T (f(x∗)−f(xt)), i.e., thesumofthegapbetweentheoptimumandthefunctionvaluesof
+t=1
+the selected points by iteration T. To derive an upper bound on R , we pessimistically assume
+T
+thattheworstfunctionvalue,i.e.,min x[D]\Mt f([xM t ,x [D]\M t ]),givenxM t isreturnedinevaluation.
+Asin[21,38],weassumethatX ⊂ [0,r]D isconvexandcompact,andf satisfiesthefollowing
+Lipschitzassumption.
+Assumption4.1. Thefunctionf isaGPsamplepath. Forsomea,b>0,givenL>0,thepartial
+derivativesoff satisfythat∀i∈[D],∃α ≥0,
+i
+P (sup |∂f/∂x |<α
+L)≥1−ae−(L/b)2
+. (3)
+x∈X i i
+BasedonAssumption4.1,wedefineα∗tobetheminimumvalueofα suchthatEq.(3)holds,which
+i i
+characterizestheimportanceofthei-thvariablex . Thelargerα∗,thegreaterinfluenceofx onthe
+i i i
+functionf. Letα =max α∗.
+max i∈[D] i
+Theorem4.2givesanupperboundonthecumulativeregretR withhighprobabilityforgeneral
+T
+variableselectionmethods. TheproofisinspiredbythatofGP-UCBwithoutvariableselection[38]
+andprovidedinAppendixB.1. Ifweselectallvariableseachtime(i.e.,∀t:M =[D])andassume
+t
+∀i:α∗ ≤1,theregretboundEq.(4)becomesR ≤ (cid:112) C Tβ∗γ +2,whichisconsistentwith[38].
+i T 1 T T
+Note that ∀t : |M | = d = D in this case, which implies that β increases with t, leading to
+t t t
+β∗ = β . WecanseethatusingvariableselectionwillincreaseR by2 (cid:80)T (cid:80) α∗Lr,
+T T T t=1 i∈[D]\M t i
+relatedtotheimportance(i.e., α∗)ofunselectedvariablesateachiteration. Themoreimportant
+i
+variablesunselected,thelargerR . Meanwhile,theterm (cid:112) C Tβ∗γ willdecreaseasβ∗ relieson
+T 1 T T T
+thenumberd ofselectedvariablespositively. Ideally,iftheunselectedvariablesateachiterationare
+t
+alwaysunrelated(i.e.,α∗=0),theregretboundwillbebetterthanthatofusingallvariables[38].
+i
+(cid:112)
+Theorem 4.2. ∀δ ∈ (0,1), let β = 2log(4π /δ) + 2d log(d t2br log(4Da/δ)) and L =
+t t t t
+b (cid:112) log(4Da/δ),whereristheupperboundoneachvariable,and{π } satisfies (cid:80) π−1 =1
+t t≥1 t≥1 t
+6andπ >0. Letβ∗ =max β . AtiterationT,thecumulativeregret
+t T 1≤i≤T t
+R ≤ (cid:112) C Tβ∗γ +2α +2 (cid:88)T (cid:88) α∗Lr (4)
+T 1 T T max t=1 i∈[D]\M t i
+holdswithprobabilityatleast1−δ,whereC isaconstant,γ =max I(y ,f ),I(·,·)isthe
+1 T |D|=T D D
+informationgain,andy andf arethenoisyandtrueobservationsofasetDofpoints,respectively.
+D D
+Byselectingdvariablesrandomlyateachiterationandassumingthatr =1and∀i:α∗ ≤1,ithas
+i
+beenproved[21]thatthecumulativeregretofDropoutsatisfies
+(cid:112)
+R ≤ C Tβ γ +2+2TL(D−d). (5)
+T 1 T T
+Inthiscase,wehaved =|M |=d,r =1and∀i:α∗ ≤1. Thus,Eq.(4)becomes
+t t i
+(cid:112)
+R ≤ C Tβ∗γ +2+2TL(D−d). (6)
+T 1 T T
+Notethatβ∗ = β here,asβ increaseswithtgivend = d. ThisimpliesthatourboundEq.(4)
+T T t t
+forgeneralvariableselectionisageneralizationofEq.(5)forDropout[21]. In[33],aregretbound
+analysishasalsobeenperformedforvariableselection,byoptimizingoverdfixedimportantvariables
+andusingacommonparameterαtocharacterizetheimportanceofalltheotherD−dvariables.
+ComputationalComplexityAnalysis. ThecomputationalcomplexityofoneiterationofBOde-
+pendsonthreecriticalcomponents: fittingaGPsurrogatemodel,maximizinganacquisitionfunction
+andevaluatingasampledpoint.Ifusingthesquaredexponentialkernel,thecomputationalcomplexity
+offittingaGPmodelatiterationtisO(t3+t2d ).Maximizinganacquisitionfunctionisrelatedtothe
+t
+optimizationalgorithm. IfweusetheQuasi-NewtonmethodtooptimizeGP-UCB,thecomputational
+complexityisO(m(t2+td +d2))[28],wheremdenotestheQuasi-Newton’srunningrounds. The
+t t
+costofevaluatingasampledpointisfixed. Thus,byselectingonlyasubsetofvariables,insteadof
+allvariables,tooptimize,thecomputationalcomplexitycanbedecreasedsignificantly. Thedetailed
+analysisisprovidedinAppendixB.2.
+Insight. Theaboveregretandcomputationalcomplexityanalyseshaveshownthatvariableselection
+can reduce the computational complexity while increasing the regret. Given the number d of
+t
+variablestobeselected,agoodvariableselectionmethodshouldselectasimportantvariablesas
+possible,i.e.,variableswithaslargeα∗aspossible,whichmayhelptodesignandevaluatevariable
+i
+selectionmethods. TheexperimentsinSection5.1willshowthatMCTS-VScanselectagoodsubset
+ofvariableswhilemaintainingasmallcomputationalcomplexity.
+5 Experiment
+ToexaminetheperformanceofMCTS-VS,weconductexperimentsondifferenttasks,including
+syntheticfunctions,NAS-benchproblemsandMuJoColocomotiontasks,tocompareMCTS-VS
+with other black-box optimization methods. For MCTS-VS, we use the same hyper-parameters
+except C , which is used for calculating UCB in Eq. (1). For Dropout and embedding-based
+p
+methods,wesettheparameterdtothenumberofvaliddimensionsforsyntheticfunctions,anda
+reasonablevalueforreal-worldproblems. Thehyper-parametersofthesamecomponentsofdifferent
+methodsaresettothesame. Weusefiveidenticalrandomseeds(2021–2025)forallproblemsand
+methods. More details about the settings can be found in Appendix C. Our code is available at
+https://github.com/lamda-bbo/MCTS-VS.
+5.1 SyntheticFunctions
+WeuseHartmann(d=6)andLevy(d=10)asthesyntheticbenchmarkfunctions,andextendthem
+tohighdimensionsbyaddingunrelatedvariablesas[20,27,42]. Forexample,Hartmann6_300has
+thedimensionD =300,andisgeneratedbyappending294unrelateddimensionstoHartmann. The
+variablesaffectingthevalueoff arecalledvalidvariables.
+EffectivenessofVariableSelection. Dropout[21]isthepreviousvariableselectionmethodwhich
+randomly selects d variables in each iteration, while our proposed MCTS-VS applies MCTS to
+automaticallyselectimportantvariables. WecomparethemagainstvanillaBO[32]withoutvariable
+selection. ThefirsttwosubfiguresinFigure1showthatDropout-BOandMCTS-VS-BOarebetter
+thanvanillaBO,implyingtheeffectivenessofvariableselection. WecanalsoseethatMCTS-VS-BO
+performsthebest,implyingthesuperiorityofMCTS-basedvariableselectionoverrandomselection.
+7WealsoequipMCTS-VSandDropoutwiththeadvancedBOalgorithmTuRBO[10],resultingin
+MCTS-VS-TuRBOandDropout-TuRBO.ThelasttwosubfiguresinFigure1showthesimilarresults
+exceptthatMCTS-VS-TuRBOneedsmoreevaluationstobebetterthanDropout-TuRBO.Thisis
+becauseTuRBOcostsmoreevaluationsthanBOonthesameselectedvariables,andthusneedsmore
+evaluationstogeneratesufficientsamplesforanaccurateestimationofthevariablescoreinEq.(2).
+Vanilla BO Dropout-BO MCTS-VS-BO TuRBO Dropout-TuRBO MCTS-VS-TuRBO
+0.04 3.0 0.04
+2.5
+0.02 2.0 0.02
+1.5
+0.00 1.0 0.00
+0.5
+0.02
+0.02 0 100 200 300 400 500
+Number of evaluations
+0.04
+0.04
+0.050 0.025 0.000 0.025 0.050
+0.050 0.025 0.000 0.025 0.050
+eulaV
+Hartmann6_300
+3.0
+2.5
+2.0
+1.5
+1.0
+0.5
+0 100 200 300 400 500
+Number of evaluations
+eulaV
+Hartmann6_500
+3.0
+2.5
+2.0
+1.5
+1.0
+0.5
+0 100 200 300 400 500
+Number of evaluations
+eulaV
+Hartmann6_300
+3.0
+2.5
+2.0
+1.5
+1.0
+0.5
+0 100 200 300 400 500
+Number of evaluations
+eulaV
+Hartmann6_500
+Figure1: Performancecomparisonamongthetwovariableselectionmethods(i.e.,MCTS-VSand
+Dropout)andtheBOmethods(i.e.,VanillaBOandTuRBO)ontwosyntheticfunctions.
+Comparison with State-of-The-Art Methods. We compare MCTS-VS with the state-of-the-art
+methods,includingTuRBO[10],LA-MCTS-TuRBO[40],SAASBO[9],HeSBO[27],ALEBO[20]
+and CMA-ES [14]. TuRBO fits a collection of local models to optimize in the trust regions for
+overcomingthehomogeneityoftheglobalmodelandover-exploration. LA-MCTS-TuRBOapplies
+MCTStopartitionthesearchspaceandusesTuRBOtooptimizeinasmallsub-region. SAASBO
+usessparsity-inducingpriortoselectvariablesimplicitly. HeSBOandALEBOarestate-of-the-art
+embeddingmethods. CMA-ESisapopularevolutionaryalgorithm. WealsoimplementVAE-BO
+bycombiningVAE[18]withvanillaBOdirectly,asabaselineoflearning-basedembedding. For
+MCTS-VS,weimplementthetwoversionsofMCTS-VS-BOandMCTS-VS-TuRBO,i.e.,MCTS-VS
+equippedwithvanillaBOandTuRBO.
+AsshowninFigure2,MCTS-VScanachievethebestperformanceexceptonLevy10_100,whereitis
+alittleworsethanTuRBO.Forlow-dimensionalfunctions(e.g.,D =100forLevy10_100),TuRBO
+canadjustthetrustregionquicklywhileMCTS-VSneedssamplestoestimatethevariablescore.
+Butasthedimensionincreases,thesearchspaceincreasesexponentiallyanditbecomesdifficult
+forTuRBOtoadjustthetrustregion;whilethenumberofvariablesonlyincreaseslinearly,making
+MCTS-VSmorescalable. SAASBOhassimilarperformancetoMCTS-VSduetotheadvantage
+ofsparsity-inducingprior. HeSBOisnotstable,whichhasamoderateperformanceonHartmann
+butarelativelygoodperformanceonLevy. NotethatweonlyrunSAASBOandALEBOfor200
+evaluationsonHartmannfunctionsbecauseithasalreadytakenmorethanhourstofinishoneiteration
+whenthenumberofsamplesislarge. MoredetailsaboutruntimeareshowninTable1. VAE-BOhas
+theworstperformance,suggestingthatthelearningalgorithminhigh-dimensionalBOneedstobe
+designedcarefully. Wealsoconductexperimentsonextremelylowandhighdimensionalvariantsof
+Hartmann(i.e.,Hartmann6_100andHartmann6_1000),showingthatMCTS-VSstillperformswell,
+andperformthesignificancetestbyrunningeachmethodmoretimes. PleaseseeAppendixE.
+MCTS-VS-BO MCTS-VS-TuRBO TuRBO LA-MCTS-TuRBO
+SAASBO HeSBO ALEBO CMA-ES VAE-BO
+0.04
+0 0.04
+0.02 10
+0.02 20
+0.00 30
+0.00 40
+0.02 50
+0.02 0 100 200 300 400 500
+0.04 Number of evaluations
+0.04
+0.050 0.025 0.000 0.025 0.050
+0.050 0.025 0.000 0.025 0.050
+eulaV
+Levy10_100
+0
+10
+20
+30
+40
+0 100 200 300 400 500
+Number of evaluations
+eulaV
+Levy10_300
+3.0
+2.5
+2.0
+1.5
+1.0
+0.5
+0.0
+0 100 200 300 400 500
+Number of evaluations
+eulaV
+Hartmann6_300
+3.0
+2.5
+2.0
+1.5
+1.0
+0.5
+0.0
+0 100 200 300 400 500
+Number of evaluations
+eulaV
+Hartmann6_500
+Figure2: ComparisonamongMCTS-VSandstate-of-the-artmethodsonsyntheticfunctions.
+Next,wecomparethepracticalrunningoverheadsofthesemethods. Weruneachmethodfor100
+evaluations independently using 30 different random seeds, and calculate the average wall clock
+time. TheresultsareshowninTable1. Asexpected,whenusingvariableselection(i.e.,Dropoutand
+MCTS-VS),thetimeislessthanthatofVanillaBOorTuRBO,becauseweonlyoptimizeasubsetof
+variables. MCTS-VSisalittleslowerthanDropout,whichisbecauseMCTS-VSneedstobuildthe
+searchtreeandcalculatethevariablescore,whileDropoutonlyrandomlyselectsvariables. MCTS-
+VSismuchfasterthanLA-MCTS-TuRBO,showingtheadvantageofpartitioningthevariablesto
+partitioningthesearchspace. SAASBOoptimizesallvariablesinsteadofonlyasubsetofvariables
+andusesNo-U-Turnsampler(NUTS)toinference,consuming×500–×1000time. HeSBOand
+8Table1: Wallclocktime(inseconds)comparisonamongdifferentmethods.
+METHOD LEVY10_100 LEVY10_300 HARTMANN6_300 HARTMANN6_500
+VANILLABO 3.190 4.140 4.844 5.540
+DROPOUT-BO 2.707 3.225 3.237 3.685
+MCTS-VS-BO 2.683 3.753 3.711 4.590
+TURBO 8.621 9.206 9.201 9.754
+LA-MCTS-TURBO 14.431 22.165 25.853 34.381
+MCTS-VS-TURBO 4.912 5.616 5.613 5.893
+SAASBO / / 2185.678 4163.121
+HESBO 220.459 185.092 51.678 55.699
+ALEBO / / 470.714 512.641
+CMA-ES 0.030 0.043 0.043 0.045
+Table2: RecallcomparisonbetweenMCTS-VSandDropout.
+METHOD LEVY10_100 LEVY10_300 HARTMANN6_300 HARTMANN6_500
+DROPOUT 0.100 0.030 0.020 0.012
+MCTS-VS 0.429 0.433 0.352 0.350
+ALEBOconsume×10–×500timecomparedwiththevariableselectionmethods. CMA-ESis
+veryfastbecauseitdoesnotneedtofitaGPmodeloroptimizeanacquisitionfunction. Thereasons
+forthesmallrunningoverheadofMCTS-VScanbesummarizedasfollows: 1)itonlyoptimizesa
+selectedsubsetofvariables;2)thedepthofthesearchtreeisshallow,i.e.,O(logD)inexpectation
+and less than D in the worse case; 3) the variable score vector in Eq. (2) is easy to calculate for
+bifurcatingatreenode.
+WhyMCTS-VSCanPerformWell. Thetheoreticalresultshavesuggestedthatagoodvariable
+selectionmethodshouldselectasimportantvariablesaspossible. Thus,wecomparethequalityof
+thevariablesselectedbyMCTS-VSandDropout(i.e.,randomselection),measuredbytherecall
+d∗/d,wheredisthenumberofvalidvariables,andd∗ isthenumberofvalidvariablesselectedat
+t t
+iterationt. Dropoutrandomlyselectsdvariablesateachiteration, andthus, therecallisd/D in
+expectation. ForMCTS-VS,werunMCTS-VS-BOfor600evaluationsonfivedifferentrandom
+seeds, and calculate the average recall. As shown in Table 2, the average recall of MCTS-VS is
+muchlargerthanthatofDropout,implyingthatMCTS-VScanselectbettervariablesthanrandom
+selection,andthusachieveagoodperformanceasshownbefore. Meanwhile,therecallbetween0.35
+and0.433ofMCTS-VSalsoimpliesthatthevariableselectionmethodcouldbefurtherimproved.
+5.2 Real-WorldProblems
+WefurthercompareMCTS-VSwiththebaselinesonreal-worldproblems,includingNAS-Bench-
+101[45],NAS-Bench-201[7],HopperandWalker2d. NAS-Benchproblemsarepopularbenchmarks
+inhigh-dimensionalBO.HopperandWalker2darerobotlocomotiontasksinMuJoCo[39],whichis
+apopularblack-boxoptimizationbenchmarkandmuchmoredifficultthanNAS-Benchproblems.
+Theexperimentalresultsonmorereal-worldproblemscanrefertoAppendixE.
+NAS-BenchProblems. NAS-Bench-101isatabulardatasetthatmapsconvolutionalneuralnetwork
+architecturestotheirtrainedandevaluatedperformanceonCIFAR-10,andwecreateaconstrained
+problemwithD =36inthesamewayas[20]. NAS-Bench-201isanextensiontoNAS-Bench-101,
+leading to a problem with D = 30 but without constraints. Figure 3 shows the results with the
+wallclocktimeasthex-axis,wherethegraydashedlinedenotestheoptimum. Theresultsusing
+thenumberofevaluationsasthex-axisareprovidedinAppendixE,showingthattheperformance
+ofBO-stylemethodsissimilar,asalreadyobservedin[20]. Thismaybebecausetherearemany
+structures whose objective values are close to the optimum. But when considering the actual
+runtime,MCTS-VS-BOisstillclearlybetterasshowninFigure3,duetotheadvantageofvariable
+selection. WealsoprovideresultsonmoreNAS-Benchproblems,includingNAS-Bench-1Shot1[46],
+TransNAS-Bench-101[8]andNAS-Bench-ASR[25]inAppendixE.
+MuJoCo Locomotion Tasks. Next we turn to the more difficult MuJoCo tasks in RL. The goal
+is to find the parameters of a linear policy maximizing the accumulative reward. Different from
+9MCTS-VS-BO MCTS-VS-TuRBO TuRBO LA-MCTS-TuRBO
+SAASBO HeSBO ALEBO CMA-ES VAE-BO
+0.04 0.945
+0.04 0.02 0.940
+0.935
+0.02 0.00 0.930
+0.00 0.925
+0.02 0.920
+0.02 0 100 200
+0.04 Time (sec)
+0.04
+0.050 0.025 0.000 0.025 0.050
+0.050 0.025 0.000 0.025 0.050
+ycaruccA
+NAS-Bench-101
+0.73
+0.72
+0.71
+0.70
+0.69
+0.68 0 100 200
+Time (sec)
+ycaruccA
+NAS-Bench-201
+2000
+1500
+1000
+500
+0 0 300 600 900
+Number of evaluations
+Figure3: ComparisononNAS-Bench.
+draweR
+Hopper
+800
+600
+400
+200
+0 0 300 600 900
+Number of evaluations
+draweR
+Walker2D
+Figure4: ComparisononMuJoCo.
+previousproblems,theobjectivef (i.e.,theaccumulativereward)ishighlystochastichere,making
+itdifficulttosolve. Weusethemeanofthreeindependentevaluationstoestimatef,andlimitthe
+evaluationbudgetto1200duetoexpensiveevaluation. NotethatwedonotrunSAASBO,ALEBO,
+andVAE-BObecauseSAASBOandALEBOareextremelytime-consuming,andVAE-BObehaves
+badlyinpreviousexperiments. TheresultsareshowninFigure4. TuRBObehaveswellonHopper
+withalowdimensionD =33,andMCTS-VS-TuRBO,combiningtheadvantageofvariableselection
+andTuRBO,achievesbetterperformance,outperformingalltheotherbaselines. OnWalker2dwitha
+highdimensionD =102,MCTS-VS-BOperformsthebest,becauseofthegoodscalability. Most
+methodshavelargevarianceduetotherandomnessoff. ForHeSBO,wehavelittleknowledgeabout
+theparameterd,anduse10and20forHopperandWalker2d,respectively. Itsperformancemay
+beimprovedbychoosingabetterd,which,however,requiresrunningtheexperimentmanytimes,
+andistime-consuming. NotethatonthetwoMuJoCotasks,HopperandWalker2d,eachvariableis
+valid. ThegoodperformanceofMCTS-VSmaybebecauseoptimizingonlyasubsetofvariablesis
+sufficientforachievingthegoalandMCTS-VScanselectthem. Forexample,theWalker2Drobot
+consistsoffourmainbodyparts: atorso,twothighs,twolegsandtwofeet,whereadjacentones
+areconnectedbytwohinges. Thegoalistomoveforwardbyoptimizingthehinges,eachofwhich
+is valid. But even locking the hinges between legs and feet, the robot can still move forward by
+optimizingtheotherhinges. Thisissimilartothatwhentheanklesarefixed,apersoncanstillwalk.
+FurtherStudies. Wefurtherperformsensitivityanalysisaboutthehyper-parametersofMCTS-VS,
+including the employed optimizer, “fill-in” strategy, C for calculating UCB in Eq. (1), number
+p
+2×N ×N ofsampleddataineachiteration,thresholdN forre-initializingatreeandN
+v s bad split
+forsplittingatreenode. PleaseseeAppendixD.WeconductadditionalexperimentsinAppendixE,
+includingexperimentsonsyntheticfunctionsdependingonasubsetofvariablestovariousextent
+andwithincreasingratioofvalidvariables,examinationofcombiningMCTS-VSwithSAASBO
+(whichcanbeviewedasahierarchicalvariableselectionmethod),andcomparisonwithothervariable
+selectionmethods(e.g.,LASSO).
+6 Conclusion
+In this paper, we propose the MCTS-VS method for variable selection in high-dimensional BO,
+whichusesMCTStorecursivelypartitionthevariablesintoimportantandunimportantones,and
+onlyoptimizesthoseimportantvariables. Theoreticalresultssuggestselectingasimportantvariables
+aspossible,whichmaybeofindependentinterestforvariableselection. Comprehensiveexperiments
+onsynthetic,NAS-benchandMuJoCoproblemsdemonstratetheeffectivenessofMCTS-VS.
+However,MCTS-VSreliesontheassumptionofloweffectivedimensionality,andmightnotwork
+wellifthepercentageofvalidvariablesishigh. Theamountofhyper-parametersmightbeanother
+limitation, though our sensitivity analysis has shown that the performance of MCTS-VS is not
+sensitivetomosthyper-parameters. Thecurrenttheoreticalanalysisisforgeneralvariableselection,
+whileitwillbeveryinterestingtoperformspecifictheoreticalanalysisforMCTS-VS.
+Acknowledgement
+Theauthorswouldliketothankreviewersfortheirhelpfulcommentsandsuggestions. Thiswork
+wassupportedbytheNSFC(62022039,62276124)andtheFundamentalResearchFundsforthe
+CentralUniversities(0221-14380014).
+10References
+[1] P.Auer,N.Cesa-Bianchi,andP.Fischer. Finite-timeanalysisofthemultiarmedbanditproblem.
+Machinelearning,47(2):235–256,2002.
+[2] M.BinoisandN.Wycoff. Asurveyonhigh-dimensionalGaussianprocessmodelingwithappli-
+cationtoBayesianoptimization.ACMTransactionsonEvolutionaryLearningandOptimization,
+2(2):1–26,2022.
+[3] M.Binois,D.Ginsbourger,andO.Roustant.AwarpedkernelimprovingrobustnessinBayesian
+optimizationviarandomembeddings. InProceedingsofthe9thInternationalConferenceon
+LearningandIntelligentOptimization(LION’15),pages281–286,Lille,France,2015.
+[4] M.Binois,D.Ginsbourger,andO.Roustant. Onthechoiceofthelow-dimensionaldomain
+forglobaloptimizationviarandomembeddings. JournalofGlobalOptimization,76(1):69–90,
+2020.
+[5] C. Browne, E. J. Powley, D. Whitehouse, S. M. M. Lucas, P. I. Cowling, P. Rohlfshagen,
+S.Tavener,D.P.Liebana,S.Samothrakis,andS.Colton. AsurveyofMonteCarlotreesearch
+methods. IEEETransactionsonComputationalIntelligenceandAIinGames,4(1):1–43,2012.
+[6] R.Calandra,A.Seyfarth,J.Peters,andM.P.Deisenroth. Bayesianoptimizationforlearning
+gaitsunderuncertainty. AnnalsofMathematicsandArtificialIntelligence,76(1):5–23,2015.
+[7] X.DongandY.Yang.NAS-Bench-201:Extendingthescopeofreproducibleneuralarchitecture
+search. In Proceedings of the 8th International Conference on Learning Representations
+(ICLR’20),AddisAbaba,Ethiopia,2020.
+[8] Y. Duan, X. Chen, H. Xu, Z. Chen, X. Liang, T. Zhang, and Z. Li. TransNAS-Bench-101:
+Improvingtransferabilityandgeneralizabilityofcross-taskneuralarchitecturesearch. CoRR
+abs/2105.11871,2021.
+[9] D. Eriksson and M. Jankowiak. High-dimensional Bayesian optimization with sparse axis-
+alignedsubspaces. InProceedingsofthe37thConferenceonUncertaintyinArtificialIntelli-
+gence(UAI’21),pages493–503,Virtual,2021.
+[10] D. Eriksson, M. Pearce, J. R. Gardner, R. D. Turner, and M. Poloczek. Scalable global
+optimizationvialocalBayesianoptimization. InAdvancesinNeuralInformationProcessing
+Systems32(NeurIPS’19),pages5497–5508,Vancouver,Canada,2019.
+[11] P.I.Frazier. AtutorialonBayesianoptimization. CoRRabs/1807.02811,2018.
+[12] R.Gómez-Bombarelli,D.K.Duvenaud,J.M.Hernández-Lobato,J.Aguilera-Iparraguirre,T.D.
+Hirzel,R.P.Adams,andA.Aspuru-Guzik. Automaticchemicaldesignusingadata-driven
+continuousrepresentationofmolecules. ACSCentralScience,4(2):268–276,2018.
+[13] E.Han,I.Arora,andJ.Scarlett. High-dimensionalBayesianoptimizationviatree-structured
+additive models. In Proceedings of the 35th Association for the Advancement of Artificial
+Intelligence(AAAI’21),pages7630–7638,Virtual,2021.
+[14] N.Hansen. TheCMAevolutionstrategy: Atutorial. CoRRabs/1604.00772,2016.
+[15] T. N. Hoang, Q. M. Hoang, R. Ouyang, and K. H. Low. Decentralized high-dimensional
+Bayesian optimization with factor graphs. In Proceedings of the 32nd Association for the
+AdvancementofArtificialIntelligence(AAAI’18),pages3231–3239,NewOrleans,LA,2018.
+[16] D.R.Jones,M.Schonlau,andW.J.Welch.Efficientglobaloptimizationofexpensiveblack-box
+functions. JournalofGlobalOptimization,13(4):455–492,1998.
+[17] K.Kandasamy,J.G.Schneider,andB.Póczos. HighdimensionalBayesianoptimisationand
+banditsviaadditivemodels. InProceedingsofthe32ndInternationalConferenceonMachine
+Learning(ICML’15),pages295–304,Lille,France,2015.
+[18] D.P.KingmaandM.Welling. Auto-encodingvariationalBayes. CoRRabs/1312.6114,2014.
+11[19] H.J.Kushner. Anewmethodoflocatingthemaximumpointofanarbitrarymultipeakcurvein
+thepresenceofnoise. JournalofBasicEngineering,86(1):97–106,1964.
+[20] B.Letham,R.Calandra,A.Rai,andE.Bakshy. Re-examininglinearembeddingsforhigh-
+dimensionalBayesianoptimization. InAdvancesinNeuralInformationProcessingSystems33
+(NeurIPS’20),pages1546–1558,Vancouver,Canada,2020.
+[21] C.Li,S.Gupta,S.Rana,V.Nguyen,S.Venkatesh,andA.Shilton. HighdimensionalBayesian
+optimization using dropout. In Proceedings of the 26th International Joint Conference on
+ArtificialIntelligence(IJCAI’17),pages2096–2102,Melbourne,Australia,2017.
+[22] X. Lu, J. I. González, Z. Dai, and N. D. Lawrence. Structured variationally auto-encoded
+optimization. In Proceedings of the 35th International Conference on Machine Learning
+(ICML’18),pages3306–3314,Stockholm,Sweden,2018.
+[23] M.Malu,G.Dasarathy,andA.Spanias. Bayesianoptimizationinhigh-dimensionalspaces: A
+briefsurvey. InProceedingsofthe12thInternationalConferenceonInformation,Intelligence,
+Systems&Applications(IISA’21),pages1–8,Virtual,2021.
+[24] M.D.McKay,R.J.Beckman,andW.J.Conover. Acomparisonofthreemethodsforselecting
+valuesofinputvariablesintheanalysisofoutputfromacomputercode. Technometrics,21(2):
+239–245,1979.
+[25] A. Mehrotra, A. G. C. P. Ramos, S. Bhattacharya, Ł. Dudziak, R. Vipperla, T. Chau, M. S.
+Abdelfattah,S.Ishtiaq,andN.D.Lane. NAS-Bench-ASR:Reproducibleneuralarchitecture
+searchforspeechrecognition. InProceedingsofthe9thInternationalConferenceonLearning
+Representations(ICLR’21),Virtual,2021.
+[26] M.MutnýandA.Krause. EfficienthighdimensionalBayesianoptimizationwithadditivity
+andquadratureFourierfeatures. InAdvancesinNeuralInformationProcessingSystems31
+(NeurIPS’18),pages9005–9016,Montreal,Canada,2018.
+[27] A.Nayebi,A.Munteanu,andM.Poloczek. AframeworkforBayesianoptimizationinem-
+beddedsubspaces. InProceedingsofthe36thInternationalConferenceonMachineLearninG
+(ICML’19),pages4752–4761,LongBeach,CA,2019.
+[28] J.NocedalandS.J.Wright. NumericalOptimization. Springer,NewYork,NY,secondedition
+edition,2006.
+[29] C.Qian,H.Xiong,andK.Xue. Bayesianoptimizationusingpseudo-points. InProceedingsof
+the29thInternationalJointConferenceonArtificialIntelligence(IJCAI’20),pages3044–3050,
+Yokohama,Japan,2020.
+[30] C.E.RasmussenandC.K.I.Williams. GaussianProcessesforMachineLearning. TheMIT
+Press,Cambridge,MA,2006.
+[31] P.Rolland,J.Scarlett,I.Bogunovic,andV.Cevher.High-dimensionalBayesianoptimizationvia
+additivemodelswithoverlappinggroups. InProceedingsofthe21stInternationalConference
+onArtificialIntelligenceandStatistics(AISTATS’18), pages298–307, PlayaBlanca, Spain,
+2018.
+[32] B.Shahriari,K.Swersky,Z.Wang,R.P.Adams,andN.DeFreitas. Takingthehumanoutof
+theloop: AreviewofBayesianoptimization. ProceedingsoftheIEEE,104(1):148–175,2015.
+[33] Y.ShenandC.Kingsford. Computationallyefficienthigh-dimensionalBayesianoptimization
+viavariableselection. CoRRabs/2109.09264,2021.
+[34] D.Silver,A.Huang,C.J.Maddison,A.Guez,L.Sifre,G.vandenDriessche,J.Schrittwieser,
+I.Antonoglou,V.Panneershelvam,M.Lanctot,S.Dieleman,D.Grewe,J.Nham,N.Kalch-
+brenner,I.Sutskever,T.P.Lillicrap,M.Leach,K.Kavukcuoglu,T.Graepel,andD.Hassabis.
+Mastering the game of Go with deep neural networks and tree search. Nature, 529(7587):
+484–489,2016.
+12[35] D.Silver,J.Schrittwieser,K.Simonyan,I.Antonoglou,A.Huang,A.Guez,T.Hubert,L.baker,
+M.Lai,A.Bolton,Y.Chen,T.P.Lillicrap,F.Hui,L.Sifre,G.vandenDriessche,T.Graepel,
+andD.Hassabis. MasteringthegameofGowithouthumanknowledge. Nature,550(7676):
+354–359,2017.
+[36] J.Snoek,O.Rippel,K.Swersky,R.Kiros,N.Satish,N.Sundaram,M.M.A.Patwary,Prabhat,
+andR.P.Adams. ScalableBayesianoptimizationusingdeepneuralnetworks. InProceedings
+ofthe32ndInternationalConferenceonMachineLearning(ICML’15),pages2171–2180,Lille,
+France,2015.
+[37] A. Spagnol, R. L. Riche, and S. D. Veiga. Bayesian optimization in effective dimensions
+viakernel-basedsensitivityindices. InProceedingsofthe13thInternationalConferenceon
+ApplicationsofStatisticsandProbabilityinCivilEngineering(ICASP’13),Seoul,Korea,2019.
+[38] N.Srinivas,A.Krause,S.M.Kakade,andM.W.Seeger. Information-theoreticregretbounds
+forGaussianprocessoptimizationinthebanditsetting. IEEETransactionsonInformation
+Theory,58(5):3250–3265,2012.
+[39] E. Todorov, E. Erez, and Y. Tassa. MuJoCo: A physics engine for model-based control.
+IEEE/RSJInternationalConferenceonIntelligentRobotsandSystems,pages5026–5033,2012.
+[40] L.Wang,R.Fonseca,andY.Tian. Learningsearchspacepartitionforblack-boxoptimization
+using Monte Carlo tree search. In Advances in Neural Information Processing Systems 33
+(NeurIPS’20),pages19511–19522,Vancouver,Canada,2020.
+[41] L.Wang,S.Xie,T.Li,R.Fonseca,andY.Tian. Sample-efficientneuralarchitecturesearch
+bylearningactionsforMonteCarlotreesearch. IEEETransactionsonPatternAnalysisand
+MachineIntelligence,2021.
+[42] Z.Wang,F.Hutter,M.Zoghi,D.Matheson,andN.deFeitas. Bayesianoptimizationinabillion
+dimensionsviarandomembeddings. JournalofArtificialIntelligenceResearch,55(1):361–387,
+2016.
+[43] Z.Wang,C.Gehring,P.Kohli,andS.Jegelka. Batchedlarge-scaleBayesianoptimizationin
+high-dimensionalspaces. InProceedingsofthe21stInternationalConferenceonArtificial
+IntelligenceandStatistics(AISTATS’18),pages745–754,PlayaBlanca,Spain,2018.
+[44] J.T.Wilson,R.Moriconi,F.Hutter,andM.P.Deisenroth. Thereparameterizationtrickfor
+acquisitionfunctions. CoRRabs/1712.00424,2017.
+[45] C.Ying,A.Klein,E.Christiansen,E.Real,K.Murphy,andF.Hutter.NAS-bench-101:Towards
+reproducibleneuralarchitecturesearch. InProceedingsofthe36thInternationalConferenceon
+MachineLearning(ICML’19),pages7105–7114,LongBeach,CA,2019.
+[46] A.Zela,J.Siems,andF.Hutter. NAS-Bench-1Shot1: Benchmarkinganddissectingone-shot
+neuralarchitecturesearch. InProceedingsofthe8thInternationalConferenceonLearning
+Representations(ICLR’20),AddisAbaba,Ethiopia,2020.
+Checklist
+1. Forallauthors...
+(a) Dothemainclaimsmadeintheabstractandintroductionaccuratelyreflectthepaper’s
+contributionsandscope? [Yes]
+(b) Didyoudescribethelimitationsofyourwork? [Yes]SeetheendofSection5.1and
+thelastparagraphofthepaper.
+(c) Didyoudiscussanypotentialnegativesocietalimpactsofyourwork? [N/A]
+(d) Haveyoureadtheethicsreviewguidelinesandensuredthatyourpaperconformsto
+them? [Yes]
+2. Ifyouareincludingtheoreticalresults...
+(a) Didyoustatethefullsetofassumptionsofalltheoreticalresults? [Yes]SeeSection4.
+13(b) Didyouincludecompleteproofsofalltheoreticalresults? [Yes]SeeAppendixB.
+3. Ifyouranexperiments...
+(a) Didyouincludethecode,data,andinstructionsneededtoreproducethemainexperi-
+mentalresults(eitherinthesupplementalmaterialorasaURL)?[Yes]SeeAppendixC,
+andthecodeisprovidedinGitHub.
+(b) Didyouspecifyallthetrainingdetails(e.g.,datasplits,hyperparameters,howthey
+werechosen)? [Yes]SeeAppendixC.
+(c) Didyoureporterrorbars(e.g.,withrespecttotherandomseedafterrunningexperi-
+mentsmultipletimes)? [Yes]Weshowerrorbarsbythelengthofverticalbarsinthe
+figures.
+(d) Didyouincludethetotalamountofcomputeandthetypeofresourcesused(e.g.,type
+ofGPUs,internalcluster,orcloudprovider)? [Yes]
+4. Ifyouareusingexistingassets(e.g.,code,data,models)orcurating/releasingnewassets...
+(a) Ifyourworkusesexistingassets,didyoucitethecreators? [Yes]
+(b) Didyoumentionthelicenseoftheassets? [Yes]
+(c) DidyouincludeanynewassetseitherinthesupplementalmaterialorasaURL?[Yes]
+(d) Didyoudiscusswhetherandhowconsentwasobtainedfrompeoplewhosedatayou’re
+using/curating? [Yes]
+(e) Didyoudiscusswhetherthedatayouareusing/curatingcontainspersonallyidentifiable
+informationoroffensivecontent? [N/A]
+5. Ifyouusedcrowdsourcingorconductedresearchwithhumansubjects...
+(a) Didyouincludethefulltextofinstructionsgiventoparticipantsandscreenshots,if
+applicable? [N/A]
+(b) Did you describe any potential participant risks, with links to Institutional Review
+Board(IRB)approvals,ifapplicable? [N/A]
+(c) Didyouincludetheestimatedhourlywagepaidtoparticipantsandthetotalamount
+spentonparticipantcompensation? [N/A]
+14A ExampleIllustrationofMCTS-VS
+Variable score 𝒔before Variable score 𝒔after
+optimizing the variables in B A optimizing the variables in B
+B C
+B
+D E
+D E
+𝑥 ,𝑥 ,𝑥 𝑥 ,𝑥
+4 7 8 1 2
+Figure5: ExampleillustrationofhowMCTS-VSbifurcatesaleafnode.
+Figure5givesanexampleofhowMCTS-VSbifurcatesaleafnode. Assumethatwearetooptimize
+a problem with dimension D = 9, and the variables are denoted as x ,x ,...,x . The Monte
+1 2 9
+Carlo tree shown in the middle of Figure 5 now has three nodes, i.e., A, B and C, denoted as
+the solid circles. The root A contains all the nine variables. The current variable score vector
+s = [8.5,8,5,7,3,3,7,10.7,4.5], which is represented by the bar graph as shown in the left of
+Figure5. Foreachi,thevalueofs representstheimportanceofthecorrespondingvariablex . The
+i i
+blueandgraybarsdenotetheimportantandunimportantvariables,respectively,whicharecontained
+bytheleafnodesBandC,respectively.Thatis,theleafBcontainsx ,x ,x ,x ,x ,andCcontains
+1 2 4 7 8
+theremainingx ,x ,x ,x . Thecurrentvvalues(i.e.,theaveragescoresofthecontainedvariables)
+3 5 6 9
+of the three nodes A, B and C are v = (8.5+8+5+7+3+3+7+10.7+4.5)/9 = 6.3,
+A
+v =(8.5+8+7+7+10.7)/5=8.24andv =(5+3+3+4.5)/4=3.875,respectively. For
+B C
+thenumberthattheyhavebeenvisited,wehaven =1,n =0andn =0.
+A B C
+MCTS-VSstartsfromtherootnodeAatoneiterationandrecursivelyselectsanodewithalarger
+UCBvalueuntilaleafnode. AccordingtothewayofcalculatingUCBinEq.(1),theUCBvaluesof
+theleafnodesB andC areboth∞asn =n =0. Inthiscase,MCTS-VSwillselectB andC
+B C
+randomly. AssumethatBisselected. Thevariables(i.e.,x ,x ,x ,x andx )containedbyBwill
+1 2 4 7 8
+thenbeoptimizedbyBOwithA ={1,2,4,7,8},asinlines13–23inAlgorithm1. Afterthat,the
+B
+variablescorevectorswillbere-calculated,whichisassumedtobe[9,8.5,5,11,3,3,11,11.2,4.5],
+as shown in the right of Figure 5. The average score of the five variables in B is denoted as the
+orangehorizontalline,calculatedby(9+8.5+11+11+11.2)/5 = 10.14. Wecanseethatthe
+variablesx ,x andx havescorelargerthantheaveragevalue10.14,whichareregardedasmore
+4 7 8
+importantvariablesinB. WeusetheleftchildDtorepresentthesevariables. Thescoresofvariables
+x andx aresmallerthantheaverage, whichareregardedaslessimportantvariablesinB. We
+1 2
+usetherightchildE torepresentthem. Thus,thenodeBhasbeenpartitionedintotwochildrenD
+andE, denotedasthedashedcirclesinFigure5. Thev valuesandthenumberofvisitsofthese
+twonewleafnodesarethencalculated. Thevvalueofanodeistheaveragescoreofthecontained
+variables. Thus,v istheaveragescoreofx ,x andx ,i.e.,(11+11+11.2)/3 = 11.067,and
+D 4 7 8
+v istheaveragescoreofx andx ,i.e.,(9+8.5)/2=8.75. Forthenumberofvisits,obviously
+E 1 2
+n = n = 0. Finally, back-propagationisperformedtoupdatethev valueandthenumberof
+D E
+visitsofthenodesalongthepathfromtherootAtothenodeB. v istheaveragescoreofallthe
+A
+variables,i.e.,(9+8.5+5+11+3+3+11+11.2+4.5)/9=7.356. v istheaveragescoreof
+B
+x ,x ,x ,x andx ,i.e.,(9+8.5+11+11+11.2)/5 = 10.14. Theirnumberofvisitswillbe
+1 2 4 7 8
+increasedby1. Thatis,n =2andn =1. Byfar,oneiterationofMCTS-VShasbeenfinished,
+A B
+andthisprocesswillbeperformediteratively.
+15B DetailsofTheoreticalAnalysis
+B.1 DetailedProofofTheorem4.2
+Theproofisinspiredby[38]. ToprovetheupperboundonthecumulativeregretR inTheorem4.2,
+T
+we analyze the instantaneous regret r = f(x∗) − f(xt ), i.e., the gap between the function
+t M
+t
+valuesoftheoptimalpointx∗ andthesampledpointxt atiterationt. NotethatR = (cid:80)T r .
+M t T t=1 t
+Let µ (·) and σ2 (·) denote the posterior mean and variance after running t − 1 iterations,
+t−1 t−1
+respectively. LemmaB.1givesaconfidenceboundonf(xt ),leadingtoalowerboundonf(xt ),
+M M
+t t
+i.e., f(xt ) ≥ µ (xt )−β1/2σ (xt ). Note that M denotes the sampled variable index
+subsetat
+M
+it
+t
+eration
+t
+t
+−
+,
+1
+and
+M |Mt
+|=
+t
+d .
+t−1 M t t
+t t
+Lemma B.1. ∀δ ∈ (0,1),∀t ≥ 1, let β = 2log(π /δ), where (cid:80) π−1 = 1,π > 0. Then,
+t t t≥1 t t
+∀t≥1,
+|f(xt )−µ (xt )|≤β1/2σ (xt )
+M t t−1 M t t t−1 M t
+holdswithprobabilityatleast1−δ,wherext isthepointobtainedatiterationt.
+M
+t
+Proof. At iteration t, f(xt M t ) ∼ N(µ t−1 (xt M t ),σ t 2 −1 (xt M t )), and thus, Y = f(xt M σ t t ) − − 1 µ (x t− t M 1 t ( ) xt Mt ) ∼
+N(0,1). Wehave
+(cid:16) (cid:17)
+P |f(xt )−µ (xt )|>β1/2σ (xt )
+M t t−1 M t t t−1 M t
+(cid:16) (cid:17) (cid:90) ∞ (cid:18) y2(cid:19)
+=P |Y|>β1/2 =2 (2π)(−1/2)exp − dy
+t β1/2 2
+t
+(cid:18) β (cid:19)(cid:90) ∞ (cid:32) (y−β1/2)2 (cid:33) (cid:16) (cid:17)
+=2exp − t (2π)(−1/2)exp − t exp −β1/2(y−β1/2) dy
+2 β1/2 2 t t
+t
+(cid:18) (cid:19) (cid:18) (cid:19)
+β β δ
+≤2exp − t P(Y >0)≤exp − t = .
+2 2 π
+t
+Usingtheunionboundforallt∈N,wehave
+P (cid:16) ∀t≥1:|f(xt )−µ (xt )|≤β1/2σ (xt ) (cid:17) ≥1− (cid:88) δ =1−δ,
+M t t−1 M t t t−1 M t π
+t
+t≥1
+wheretheequalityholdsby (cid:80) π−1 =1. Thus,thelemmaholds.
+t≥1 t
+Nextwearetoanalyzetheupperboundonf(x∗),whichcanberepresentedas(f(x∗)−f(x∗ ))+
+M
+f(x∗ ),wherex∗ denotesthepointobtainedbyprojectingx∗ ontoM . Thefirsttermf(x t ∗)−
+M M t
+t t
+f(x∗ )canbeupperboundedbyAssumption4.1. Toupperboundthesecondtermf(x∗ ), we
+M M
+t t
+need to discretize the decision space XM t at iteration t into X˜ M t , where |X˜ M t | = (τ t )dt, i.e., we
+divideeachvariableofXM
+t
+intoτ
+t
+partsequally. Letx˜∗
+M t
+denotethepointclosesttox∗
+M t
+inthe
+discretizedspaceX˜ M t . Then,wecanwritef(x∗ M t )as(f(x∗ M t )−f(x˜∗ M t ))+f(x˜∗ M t ). Thefirstterm
+f(x∗ )−f(x˜∗ )againcanbeupperboundedbyAssumption4.1. LemmaB.2givesaconfidence
+M M
+t t
+boundonf(x˜M t )foranydiscretizedpointx˜M t ∈X˜ M t ,leadingtoanupperboundonf(x˜∗ M t ),i.e.,
+f(x˜∗ )≤µ (x˜∗ )+β1/2σ (x˜∗ ).
+M t t−1 M t t t−1 M t
+LemmaB.2. ∀δ ∈(0,1),∀t≥1,letβ t =2log(|X˜ M t |π t /δ),where (cid:80) t≥1 π t −1 =1,π t >0. Then,
+∀t≥1,∀x˜M ∈X˜ M ,
+t t
+|f(x˜M
+t
+)−µ
+t−1
+(x˜M
+t
+)|≤β
+t
+1/2σ
+t−1
+(x˜M
+t
+)
+holdswithprobabilityatleast1−δ.
+16Proof. SimilartoLemmaB.1,wecanderive
+(cid:16) (cid:17) (cid:18) β (cid:19) δ
+P |f(x˜M
+t
+)−µ
+t−1
+(x˜M
+t
+)|>β
+t
+1/2σ
+t−1
+(x˜M
+t
+) ≤exp −
+2
+t =
+|X˜ M t |π t
+.
+Usingtheunionboundforallt∈Nandx˜M ∈X˜ M ,wehave
+t t
+(cid:16) (cid:17)
+P ∀t≥1,∀x˜M t ∈X˜ M t :|f(x˜M t )−µ t−1 (x˜M t )|≤β t 1/2σ t−1 (x˜M t )
+(cid:88) (cid:88) δ
+≥1− =1−δ.
+t≥1x˜Mt ∈X˜
+Mt
+|X˜ M t |π t
+Thus,thelemmaholds.
+Now,wecanupperboundf(x∗ )basedonAssumption4.1andLemmaB.2,asshowninLemmaB.3.
+M
+Notethatx∗ denotesthepointo t btainedbyprojectingx∗ontoM ,andx˜∗ denotesthepointclosest
+M t M
+t t
+tox∗ M t inX˜ M t .
+(cid:16) (cid:113) (cid:17)
+Lemma B.3. ∀δ ∈ (0,1),t ≥ 1, let β = 2log(2π /δ) + 2d log d t2br log2Da , where
+t t t t δ
+(cid:113) (cid:113)
+(cid:80) π−1 =1,π >0. Setτ =d t2br log2Da andL=b log2Da. Then,∀t≥1,
+t≥1 t t t t δ δ
+|f(x∗ )−µ (x˜∗ )|≤β1/2σ (x˜∗ )+ α max + (cid:88) α∗Lr
+M t t−1 M t t t−1 M t t2 i
+i∈[D]\M
+t
+holdswithprobabilityatleast1−δ.
+Proof. First,wehave
+|f(x∗ )−µ (x˜∗ )|=|f(x∗ )−f(x˜∗ )+f(x˜∗ )−µ (x˜∗ )|
+M t−1 M M M M t−1 M
+t t t t t t
+≤|f(x∗ )−f(x˜∗ )|+|f(x˜∗ )−µ (x˜∗ )|. (7)
+M M M t−1 M
+t t t t
+(cid:113)
+ByAssumption4.1withL = b log2Da, wehave∀x,y ∈ X, withprobabilityatleast1−D·
+δ
+ae−(L/b)2 =1−δ/2,
+D
+(cid:88)
+|f(x)−f(y)|≤ α∗L|x −y |
+i i i
+i=1
+(cid:88) (cid:88)
+≤ α∗L|x −y |+ α∗Lr
+i i i i
+i∈M
+t
+i∈[D]\M
+t
+(cid:88)
+≤α
+max
+L(cid:107)xM
+t
+−yM
+t
+(cid:107)
+1
++ α
+i
+∗Lr, (8)
+i∈[D]\M
+t
+where the second inequality holds by X ⊂ [0,r]D, and the last inequality holds by α =
+max
+max α∗. Thus,itholdswithprobabilityatleast1−δ/2that
+i∈[D] i
+(cid:88)
+|f(x∗ )−f(x˜∗ )|≤α L(cid:107)x∗ −x˜∗ (cid:107) + α∗Lr. (9)
+M t M t max M t M t 1 i
+i∈[D]\M
+t
+ByLemmaB.2withβ t = 2log(2(τ t )dtπ t /δ) = 2log(2|X˜ M t |π t /δ), wehave, withprobabilityat
+least1−δ/2,
+|f(x˜∗ )−µ (x˜∗ )|≤β1/2σ (x˜∗ ). (10)
+M t t−1 M t t t−1 M t
+ApplyingEqs.(9)and(10)toEq.(7),itholdswithprobabilityatleast1−δthat
+|f(x∗ )−µ (x˜∗ )|≤α L(cid:107)x∗ −x˜∗ (cid:107) + (cid:88) α∗Lr+β1/2σ (x˜∗ )
+M t t−1 M t max M t M t 1 i t t−1 M t
+i∈[D]\M
+t
+≤α L d t r + (cid:88) α∗Lr+β1/2σ (x˜∗ )
+max τ i t t−1 M t
+t i∈[D]\M
+t
+≤ α max + (cid:88) α∗Lr+β1/2σ (x˜∗ ),
+t2 i t t−1 M t
+i∈[D]\M
+t
+17wherethesecondinequalityholdsby|M |=d andthewayofdiscretization(i.e.,eachvariableis
+t t
+discretizedintoτ partsequally),andthelastinequalityholdsbythedefinitionofτ andL. Thus,the
+t t
+lemmaholds.
+Lemma B.3 implies an upper bound on f(x∗ ), i.e., f(x∗ ) ≤ µ (x˜∗ )+β1/2σ (x˜∗ )+
+α /t2+ (cid:80) α∗Lr. Combiningthis M up t perboundo M n t f(x∗ t ) − w 1 ith M f t (x∗)− t f(x t− ∗ 1 )(w M h t ich
+max i∈[D]\M t i M t M t
+can be upper bounded by Assumption 4.1), we can derive an upper bound on f(x∗). Together
+with the lower bound on f(xt ) given by Lemma B.1, we can derive an upper bound on the
+M
+t
+instantaneousregretr . Thus,wearenowreadytoprovetheupperboundonthecumulativeregret
+t
+R inTheorem4.2,whichisre-statedinTheoremB.4forclearness.
+T
+(cid:112)
+Theorem B.4. ∀δ ∈ (0,1), let β = 2log(4π /δ) + 2d log(d t2br log(4Da/δ)) and L =
+t t t t
+b (cid:112) log(4Da/δ), where {π } satisfies (cid:80) π−1 = 1 and π > 0. Let β∗ = max β .
+t t≥1 t≥1 t t T 1≤i≤T t
+AtiterationT,thecumulativeregret
+T
+R ≤ (cid:112) C Tβ∗γ +2α +2 (cid:88) (cid:88) α∗Lr
+T 1 T T max i
+t=1i∈[D]\M
+t
+holdswithprobabilityatleast1−δ,whereC >0isaconstant,γ =max I(y ,f ),I(·,·)
+1 T |D|=T D D
+denotestheinformationgain,andy andf arethenoisyandtrueobservationsofasetDofpoints,
+D D
+respectively.
+Proof. Forallt≥1,wehave
+r =f(x∗)−f(xt )=f(x∗)−f(x∗ )+f(x∗ )−f(xt ). (11)
+t M M M M
+t t t t
+ByEq.(8),wehave
+(cid:88) (cid:88)
+f(x∗)−f(x∗ )≤α L(cid:107)x∗ −x∗ (cid:107) + α∗Lr = α∗Lr. (12)
+M t max M t M t 1 i i
+i∈[D]\M
+t
+i∈[D]\M
+t
+(cid:112)
+NotethatL = b log(4Da/δ)here,andthusEq.(12)holdswithprobabilityatleast1−δ/4. By
+(cid:112) (cid:112)
+Lemma B.3 with β = 2log(4π /δ)+2d log(d t2br log(4Da/δ)) and L = b log(4Da/δ),
+t t t t
+(cid:112)
+settingτ =d t2br log(4Da/δ)leadstothat
+t t
+f(x∗ )≤µ (x˜∗ )+β1/2σ (x˜∗ )+ α max + (cid:88) α∗Lr (13)
+M t t−1 M t t t−1 M t t2 i
+i∈[D]\M
+t
+holds with probability at least 1 − δ/2. By Lemma B.1 with β = 2log(4π /δ) +
+t t
+(cid:112)
+2d log(d t2br log(4Da/δ))≥2log(4π /δ),itholdswithprobabilityatleast1−δ/4that
+t t t
+f(xt )≥µ (xt )−β1/2σ (xt ). (14)
+M t t−1 M t t t−1 M t
+ApplyingEqs.(12),(13)and(14)toEq.(11),itholdswithprobabilityatleast1−δthat∀t≥1,
+r ≤ (cid:88) α∗Lr+µ (x˜∗ )+β1/2σ (x˜∗ )+ α max + (cid:88) α∗Lr
+t i t−1 M t t t−1 M t t2 i
+i∈[D]\M
+t
+i∈[D]\M
+t
+−µ (xt )+β1/2σ (xt )
+t−1 M t t t−1 M t
+≤µ (xt )+β1/2σ (xt )+ α max +2 (cid:88) α∗Lr−µ (xt )+β1/2σ (xt )
+t−1 M t t t−1 M t t2 i t−1 M t t t−1 M t
+i∈[D]\M
+t
+=2β1/2σ (xt )+ α max +2 (cid:88) α∗Lr,
+t t−1 M t t2 i
+i∈[D]\M
+t
+where the second inequality holds because xt is generated by maximizing GP-UCB, and thus
+M
+t
+µ (x˜∗ )+β1/2σ (x˜∗ )≤µ (xt )+β1/2σ (xt ).
+t−1 M t t t−1 M t t−1 M t t t−1 M t
+18Bysummingupr fromt=1toT,wehavewithprobabilityatleast1−δthat,∀T ≥1,
+t
+T T T T
+R = (cid:88) r ≤ (cid:88) 2β1/2σ (xt )+ (cid:88)α max + (cid:88) 2 (cid:88) α∗Lr
+T t t t−1 M t t2 i
+t=1 t=1 t=1 t=1 i∈[D]\M
+t
+T T
+≤ (cid:88) 2β1/2σ (xt )+2α +2 (cid:88) (cid:88) α∗Lr, (15)
+t t−1 M t max i
+t=1 t=1i∈[D]\M
+t
+where the second inequality holds by (cid:80)T 1/t2 ≤ π2/6 ≤ 2. Furthermore, let
+t=1
+C = 8/log(1 + η−2), and Lemma 5.4 in [38] has shown that (cid:80)T 2β1/2σ (xt ) ≤
+(cid:113) 1 t=1 t t−1 M t
+C Tβ∗ (cid:80)T log(1+η−2σ2 (xt ))/2≤ (cid:112) C Tβ∗γ . Finally,byapplyingthisinequalityto
+1 T t=1 t−1 M t 1 T T
+Eq.(15),thetheoremholds.
+Wealsosummarizethemainideaoftheaboveproof. Theproofisinspiredby[38],i.e.,toderive
+theupperboundonthegapr =f(x∗)−f(xt )betweenthefunctionvaluesoftheoptimalpoint
+t M
+t
+x∗ andthesampledpointxt atiterationt. Letx∗ denotethepointobtainedbyprojectingx∗
+M M
+ontoM ,andx˜∗ denoteitsc t losestdiscretizedpoint t . Byutilizingtheposteriormeanµ (·)and
+t M t−1
+t
+varianceσ2 (·)off(xt )andf(x˜∗ ),wecanhavef(xt )≥µ (xt )−β1/2σ (xt )and
+f(x∗) = ( t f − ( 1 x∗)−f(x M ∗ t ))+(f(x M ∗ t )−f(x˜∗ ))+f( M x˜ t ∗ ) ≤ t− (cid:80) 1 M t α t ∗Lr t + −1 α M t /t2 +
+M t M t M t M t i∈[D]\M t i max
+(cid:80) α∗Lr+µ (x˜∗ )+β1/2σ (x˜∗ ),wheretheterms (cid:80) α∗Lrandα /t2
+i∈[D]\M t i t−1 M t t t−1 M t i∈[D]\M t i max
+areledbyvariableselectionanddiscretization,respectively. Asxt isgeneratedbymaximizing
+M
+t
+GP-UCB, we have µ (x˜∗ )+β1/2σ (x˜∗ ) ≤ µ (xt )+β1/2σ (xt ). Thus, r ≤
+t−1 M t t t−1 M t t−1 M t t t−1 M t t
+2β1/2σ (xt )+α /t2 +2 (cid:80) α∗Lr. Finally, summing up r from t = 1 to T and
+t t−1 M t max i∈[D]\M t i t
+usingLemma5.4in[38]canleadtoTheorem4.2.
+ThemaindifferencefromtheproofofGP-UCB[38]isthatvariableselectionbringssomeuncertainty
+introducedbytheunselectedvariables. BasedontheLipschitzconditioninAssumption4.1, the
+uncertaintybythei-thunselectedvariablecanbeupperboundedbyα∗Lr,leadingtotheadditional
+i
+regret2 (cid:80)T (cid:80) α∗LrinEq.(4).
+t=1 i∈[D]\M t i
+B.2 DetailsofComputationalComplexityAnalysis
+ThecomputationalcomplexityofoneiterationofBOdependsonthreecriticalcomponents: fittinga
+GPsurrogatemodel,maximizinganacquisitionfunctionandevaluatingasampledpoint. Assume
+thatthekernelfunctionissquaredexponentialkernel. Atiterationt,thenumberofselectedvariables
+isd . WhenfittingaGPmodel,wecalculatethemarginallikelihood[30]andgradientasfollows:
+t
+1 1 t
+logP(y |X ,θ)=− yT(K +η2I)−1y − log|K +η2I|− log(2π)
+t t 2 t t t 2 t 2
+1
+∇ logP(y |X ,θ)=− yT(K +η2I)−1∇ (K +η2I)(K +η2I)−1y
+θ t t 2 t t θ t t t
+− 1 tr (cid:0) (K +η2I)−1∇ (K +η2I) (cid:1)
+2 t θ t
+where y = [y1,...,yt]T, X = [x1,...,xt], θ are the kernel parameters, K is the covariance
+t t t
+matrix,|·|andtr(·)denotethedeterminantandtraceofamatrix,respectively. Then,wecanusethe
+gradient-basedmethodstooptimizethelikelihoodfunction. Therefore,thecomputationalcomplexity
+of calculating the kernel parameters is O(t3 +t2d ). Note that θ has been ignored, because its
+t
+dimensionismuchsmallerthand andt. Whencalculatingthemeanµ (x)andvarianceσ2(x),the
+t t t
+computationalcomplexityisO(t3+t2d ),duetothecalculationofthekernelmatrixanditsinverse.
+t
+Thus,thetotalcomputationalcomplexityoffittingtheGPmodelisO(t3+t2d ). Maximizingan
+t
+acquisitionfunctionisrelatedtotheoptimizationalgorithm. IfweusetheQuasi-Newtonmethodto
+optimizeGP-UCB,thecomputationalcomplexityisO(m(t2+td +d2))[28],wheremdenotes
+t t
+theQuasi-Newton’srunningrounds. WenotethatinBOsetting,twillnotgrowverylarge. The
+runningroundsm,however,willgrowwithd . Thus,thecomplexityofoptimizingtheacquisition
+t
+19functioncanbemuchlargerthanthesquareofd . Thecostofevaluatingasampledpointisfixed.
+t
+Thus,byselectingonlyasubsetofvariables,insteadofallvariables,tooptimize,thecomputational
+complexitycandecreasesignificantly.
+C MethodImplementationandExperimentalSetting
+Weusetheauthors’referenceimplementationsforTuRBO1,LA-MCTS2andSAASBO.3ForHeSBO
+andALEBO,theirimplementationsinAdaptiveExperimentationPlatform(Ax4)areused. Weuse
+thepycmalibraryforCMA-ES.5Theirhyper-parametersaresummarizedasfollows.
+• VanillaBO.WeusetheGPmodelinScikit-learn6andtheqExpectedImprovementacqui-
+sitionfunction[44]. Fortheoptimizationofacquisitionfunction,werandomlygenerate
+numerouspointsandselectsomeoneswiththemaximalexpectedimprovements,whichis
+similartotheimplementationinTuRBO[10],LA-MCTS[40],andHeSBO[27].
+• MCTS-VS.Forthe“fill-in”strategy,weusethebest-kstrategywithk = 20. Thehyper-
+parameter C for calculating UCB in Eq. (1) varies on different problems, as shown in
+p
+Table3. Wesetalltheotherparameterstobesameondifferentproblems,wherethebatch
+sizeN ofvariableindexsetis2, thesamplebatchsizeN = 3, thethresholdN for
+v s bad
+re-initializing a tree is 5, and the threshold N for splitting a node is 3. When using
+split
+TuRBOastheoptimizer,welimitthemaximalnumberofevaluationsinTuRBOto50.
+Table3: Settingofthehyper-parameterC forcalculatingUCBondifferentproblems.
+p
+LEVY HARTMANN NAS-BENCH MUJOCO
+C 10 0.1 0.1 50
+p
+• Dropout. Wesettheparameterdtothenumberofvaliddimensionsforsyntheticfunctions,
+andusethesame“fill-in”strategyasMCTS-VS.
+• TuRBO.Weusethedefaultparametersettingintheauthors’referenceimplementation.
+• LA-MCTS-TuRBO. We use the same TuRBO setting as MCTS-VS. The parameter C
+p
+is recommended between 1% and 10% of the optimum in LA-MCTS [40]. Because all
+our selected values of C for MCTS-VS have belonged to the recommended range for
+p
+LA-MCTS,weusethemdirectly. TheRBFkernelisusedforSVMclassification.
+• SAASBO.Weusethedefaultparametersettingintheauthors’referenceimplementation,
+but modify the acquisition function optimization to the same as other methods for fair
+comparison.
+• HeSBOandALEBO.Wesettheparameterdtothenumberofvaliddimensionsforsyn-
+theticfunctions. Forreal-worldproblems,wedonotknowthenumberofvaliddimensions,
+andthuswejustsetareasonablevalue,i.e.,d = 10forNAS-Bench,d = 10forHopper,
+andd=20forWalker2d.
+• CMA-ES. We only adjust the step-size parameter σ for different problems, because the
+defaultsettingσ =0.01leadstoextremelypoorperformance. Wesetσ =0.8forHartmann
+problems,σ =10forLevyproblems,σ =0.1forNAS-Bench,andσ =0.01forMuJoCo
+tasks. Wesetthepopulationsizeto20andmaintainalltheotherparameterstodefault.
+• VAE-BOusesVAEforembedding. Thatis,VAE-BOusestheencodertoembedtheoriginal
+high-dimensional space into a low-dimensional subspace, then optimizes via BO in the
+subspaceandusesthedecodertoprojectthenewsampledpointbackforevaluation. Weset
+thelearningrateto0.01andtheintervalofupdatingVAEto30.
+1https://github.com/uber-research/TuRBO
+2https://github.com/facebookresearch/LaMCTS
+3https://github.com/martinjankowiak/saasbo
+4https://github.com/facebook/Ax
+5https://github.com/CMA-ES/pycma
+6https://github.com/scikit-learn/scikit-learn
+20TheexperimentsofcomparingwallclocktimeareconductedonIntel(R)Core(TM)i7-10700CPU
+@2.90GHzandusesinglethread.
+D SensitivityAnalysisofHyper-parametersofMCTS-VS
+Weprovidefurtherstudiestoexaminetheinfluenceofthehyper-parametersofMCTS-VS,including
+theemployedoptimizationalgorithmforoptimizingtheselectedvariablesineachiteration,the“fill-
+in”strategy,thehyper-parameterkusedinthebest-kstrategy,thehyper-parameterC forcalculating
+p
+UCBinEq.(1),thenumber2×N ×N ofsampleddataineachiteration,thethresholdN for
+v s bad
+re-initializingatree,andthethresholdN forsplittingatreenode.
+split
+TheoptimizationalgorithmisemployedbyMCTS-VStooptimizetheselectedvariablesineach
+iteration. Wecomparethreedifferentoptimizationalgorithms,i.e.,randomsearch(RS),BOand
+TuRBO.First,weconductexperimentssimilarto“EffectivenessofVariableSelection”inSection5.1,
+toshowtheeffectivenessofMCTS-VSevenwhenequippedwithRS.Figure6showsthatMCTS-
+VS-RSisbetterthanDropout-RSandRS,revealingtheadvantageofMCTS-VS.
+RS Dropout-RS MCTS-VS-RS
+0.04
+3.0
+0.02
+2.5
+2.0
+0.00
+1.5
+0.02 1.0
+0.5
+0.04
+0 100 200 300 400 500
+0.050 0.025 0.000 0.025 0.0N5u0mber of evaluations
+eulaV
+Hartmann6_300
+3.0
+2.5
+2.0
+1.5
+1.0
+0.5
+0 100 200 300 400 500
+Number of evaluations
+eulaV
+Hartmann6_500
+Figure6: EffectivenessofMCTS-VSwhenequippedwithRS.
+NextwecomparetheperformanceofMCTS-VSequippedwithRS,BOandTuRBO,byexperiments
+on the Hartmann functions with increasing ratio of valid variables. Hartmann6_500 has 6 valid
+variables. Hartmann6_5_500isgeneratedbymixing5Hartmann6functionsasHartmann6(x )+
+1:6
+Hartmann6(x )+···+Hartmann6(x ),andappending470unrelateddimensions,wherex
+7:12 25:30 i:j
+denotesthei-thtoj-thvariables. Hartmann6_10_500isgeneratedalike. Thus,Hartmann6_5_500
+andHartmann6_10_500have30and60validvariables,respectively. TheresultsinFigure7show
+thatastheratioofvalidvariablesincreases,MCTS-VS-TuRBOgraduallysurpassesMCTS-VS-RS
+andMCTS-VS-BO,whileMCTS-VS-RSbecomesworseandworse. Thisisexpected. Iftheratioof
+validvariablesishigh,MCTS-VSismorelikelytoselectthevalidvariables,soitisworthtousethe
+expensiveoptimizationalgorithm,e.g.,TuRBO,tooptimizetheselectedvariables. Iftheratioislow,
+unrelatedvariablesaremorelikelytobeselectedmostofthetime,sousingacheapoptimization
+algorithmwouldbebetter. Theseobservationsalsogiveussomeguidanceonselectingoptimization
+algorithmsinpractice.
+“Fill-in”strategyisabasiccomponentofvariableselectionmethods,whichinfluencesthequality
+ofthevalueofunselectedvariables. Wecomparetheemployedbest-kstrategy(k = 20)withthe
+averagebest-k strategyandtherandomstrategy. Theaveragebest-k strategyusestheaverageof
+thebestkdatapointsfortheunselectedvariables,andtherandomstrategysamplesthevalueofan
+unselectedvariablefromitsdomainrandomly. AsshowninFigure8(a),therandomstrategyleads
+tothepoorperformanceofMCTS-VS-BO,whichmaybebecauseitdoesnotutilizethehistorical
+informationandleadstoover-exploration. Thebest-kstrategyutilizesthehistoricalpointsthathave
+highobjectivevaluestofillintheunselectedvariables,thusbehavingmuchbetter. Theperformance
+oftheaveragestrategyisbetweenthebest-kandrandomstrategies. Werecommendusingthebest-k
+strategyinpractice.
+The hyper-parameter k used in the best-k strategy controls the degree of exploitation for the
+unselectedvariables. AsshowninFigure8(b),asmallerkencouragesexploitation,whichresults
+in better performance in the early stage, but easily leads to premature convergence. A larger k
+21MCTS-VS-RS MCTS-VS-BO MCTS-VS-TuRBO
+0.04
+3.0
+0.02 2.5
+2.0
+0.00
+1.5
+0.02 1.0
+0.5
+0.04 0 100 200 300 400 500
+Number of evaluations
+0.050 0.025 0.000 0.025 0.050
+eulaV
+Hartmann6_500
+14
+12
+10
+8
+6
+4
+2
+0 100 200 300 400 500
+Number of evaluations
+eulaV
+Hartmann6_5_500
+20
+15
+10
+5
+0 100 200 300 400 500
+Number of evaluations
+eulaV
+Hartmann6_10_500
+Figure7: Sensitivityanalysisoftheoptimizationalgorithm.
+encouragesexplorationandbehavesworseintheearlystage,butmayconvergetoabettervalue. We
+recommendusingalargerkifallowingenoughevaluations.
+3.0
+2.5
+2.0
+1.5
+1.0
+0.5
+0 100 200 300 400 500
+Number of evaluations
+eulaV
+Hartmann6_300
+3.0
+2.5
+2.0
+1.5
+best-k 1.0
+average best-k
+0.5
+random
+0 100 200 300 400 500
+Number of evaluations
+(a) “Fill-in”strategy
+eulaV
+Hartmann6_300
+k=1
+k=5
+k=10
+k=15
+k=20
+(b) Hyper-parameterkofthebest-kstrategy
+Figure8: Sensitivityanalysisofthe“fill-in”strategyandthehyper-parameterkofthebest-kstrategy,
+usingMCTS-VS-BOonHartmann6_300.
+Thehyper-parameterC forcalculatingUCBinEq.(1)balancestheexplorationandexploitation
+p
+ofMCTS.AsshowninFigure9,atoosmallC leadstorelativelyworseperformance,highlighting
+p
+theimportanceofexploration. AtoolargeC mayalsoleadtoover-exploration. ButoverallMCTS-
+p
+VSisnotverysensitivetoC . WerecommendsettingC between1%and10%oftheoptimum(i.e.,
+p p
+maxf(x)),whichisconsistentwiththatforLA-MCTS[40].
+0
+10
+20
+30
+40
+0 100 200 300 400 500
+Number of evaluations
+eulaV
+Levy10_100
+0
+10
+20
+Cp=0.01 Cp=0.1 30 Cp=1
+C C p p = = 1 1 0 00 40
+0 100 200 300 400 500
+Number of evaluations
+eulaV
+Levy10_300
+3.0
+2.5
+2.0
+Cp=0.01 1.5 Cp=0.1 Cp=1 1.0
+C C p p = = 1 1 0 00 0.5
+0 100 200 300 400 500
+Number of evaluations
+eulaV
+Hartmann6_300
+3.0
+2.5
+2.0
+C C p p = = 0 0 . . 0 1 1 1.5 Cp=1 1.0
+Cp=10 Cp=100 0.5
+0 100 200 300 400 500
+Number of evaluations
+eulaV
+Hartmann6_500
+Cp=0.01 Cp=0.1 Cp=1
+Cp=10 Cp=100
+Figure 9: Sensitivity analysis of the hyper-parameter C for calculating UCB in Eq. (1), using
+p
+MCTS-VS-BOonLevyandHartmann.
+The number 2×N ×N of sampled data in each iteration depends on the batch size N of
+v s v
+variableindexsubsetandthesamplebatchsizeN ,andwillinfluencetheaccuracyofestimating
+s
+thevariablescorevectorinEq.(2). IfweincreaseN andN ,wecancalculatethevariablescore
+v s
+moreaccurately,butalsoneedmoreevaluations. Figure10(a)showsthatgiventhesamenumberof
+evaluations,MCTS-VS-BOachievesthebestperformancewhenN = 2andN = 3. Thus,this
+v s
+settingmaybeagoodchoicetobalancetheaccuracyofvariablescoreandthenumberofevaluations,
+whichisalsousedthroughouttheexperiments.
+ThethresholdN forre-initializingatreecontrolsthetoleranceofselectingbadtreenodes(i.e.,
+bad
+nodescontainingunimportantvariables). AsmallerN leadstofrequentre-initialization,which
+bad
+22canadjustquicklybutmaycauseunder-exploitationofthetree. AlargerN canmakefulluseof
+bad
+thetree,butmayoptimizetoomuchonunimportantvariables. Figure10(b)showsthatMCTS-VS
+achievesthebestperformancewhenN =5. Thus,werecommendtousethissetting,tobalance
+bad
+there-initializationandexploitationofthetree.
+ThethresholdN forsplittinganode. IfthenumberofvariablesinanodeislargerthanN ,
+split split
+thenodecanbefurtherpartitioned.Thatis,theparameterN controlstheleastnumberofvariables
+split
+inaleafnodeandthusaffectsthenumberofselectedvariables,whichhasadirectinfluenceonthe
+wallclocktime. NotethatMCTS-VSselectsaleafnodeandoptimizesthevariablescontainedby
+thisnodeineachiteration. ThesmallerN ,theshorterthetime. Figure10(c)showsthatN
+split split
+haslittleinfluenceontheperformanceofMCTS-VS-BO,andthuswerecommendtosetN =3
+split
+toreducethewallclocktime.
+3.0
+2.5
+2.0
+1.5
+1.0
+0.5
+0.0
+0 100 200 300 400 500
+Number of evaluations
+eulaV
+Hartmann6_300
+3.0
+2.5
+Nv=2,Ns=3 2.0
+Nv=2,Ns=5 1.5 Nv=2,Ns=10
+Nv=5,Ns=3 1.0
+N N v v = = 5 5 , , N N s s = = 5 10 0.5
+0 100 200 300 400 500
+Number of evaluations
+(a) Numberofsamples
+eulaV
+Hartmann6_300
+3.0
+2.5
+2.0
+Nbad=1 1.5 Nbad=5
+Nbad=10 1.0
+N N b b a a d d = = 1 2 5 0 0.5
+0 100 200 300 400 500
+Number of evaluations
+(b) N
+bad
+eulaV
+Hartmann6_300
+Nsplit=3 Nsplit=6
+Nsplit=10
+Nsplit=20 Nsplit=50
+(c) N
+split
+Figure 10: Sensitivity analysis of the number 2 × N × N of sampled data in each iteration,
+v s
+the threshold N for re-initializing a tree and the threshold N for splitting a node, using
+bad split
+MCTS-VS-BOonHartmann6_300.
+Influenceofthehyper-parametersontheruntimeofMCTS-VS.Wealsoprovidesomeintuitive
+explanationabouttheinfluenceofthehyper-parametersontheruntime. ThethresholdN for
+split
+splittinganodehasadirectimpactontheruntime,becauseitcontrolstheleastnumberofvariables
+to be optimized in a leaf node. That is, the runtime will increase with N . Other parameters
+split
+mayaffectthedepthofthetreeandthustheruntime. ForthethresholdN forre-initializinga
+bad
+tree, if it is set to a small value, MCTS-VS will re-build the tree frequently and the depth of the
+treeissmall. Theshallownodeshavemorevariables,leadingtomoreruntimetooptimize. Forthe
+hyper-parameterC forcalculatingUCB,ifitissettoalargevalue,theexplorationispreferredand
+p
+MCTS-VSwilltendtoselecttherightnode(regardedascontainingunimportantvariables). Thetree
+thuswillbere-builtfrequently,leadingtomoreruntime. Forthenumber2×N ×N ofsampled
+v s
+dataateachiteration,ifN andN aresettolargevalues,thedepthofthetreewillbesmallgiven
+v s
+thetotalnumberofevaluations,andthusleadtomoreruntime.
+E AdditionalExperiments
+DetailedresultsonNAS-Bench-101andNAS-Bench-201. Figure11showstheperformanceof
+thecomparedmethodsonthetaskofNAS-Bench-101andNAS-Bench-201whenusingthenumber
+ofevaluationsandwallclocktimeasthex-axis,respectively. Thoughmostoftheirperformance
+issimilarinthelefttwosubfigures, itcanbeclearlyobservedfromtherighttwosubfiguresthat
+MCTS-VS-BOusestheleasttimetoachievethebestaccuracy. Notethatweonlyshowthesubfigures
+withthewallclocktimeasthex-axisinthemainpaperduetothespacelimitation. Besides,wealso
+runalongertimehere(i.e.,intherighttwosubfigures)toprovideamorecompleteobservation.
+Experiments on more NAS-Bench problems. We also conduct experiments on NAS-Bench-
+1Shot1[46],TransNAS-Bench-101[8]andNAS-Bench-ASR[25]. NAS-Bench-1Shot1isaweight-
+sharingbenchmarkbasedonone-shotNASmethods,derivingfromthelargearchitecturespaceof
+NASBench-101. TransNAS-Bench-101 is a benchmark dataset containing network performance
+across seven vision tasks, e.g., object classification, scene classification and so on. We use the
+scene classification task with cell-level search space in our experiments. NAS-Bench-ASR is a
+benchmarkforAutomaticSpeechRecognition(ASR)andtrainedontheTIMITaudiodataset. For
+NAS-Bench-ASR,weusePhonemeErrorRate(PER)onthevalidationdatasetasthemetric. In
+the same way as [20], we create problems with D = 33, D = 24 and D = 30 for NAS-Bench-
+23MCTS-VS-BO MCTS-VS-TuRBO TuRBO LA-MCTS-TuRBO
+SAASBO HeSBO ALEBO CMA-ES VAE-BO
+0.04
+0.04 0.02
+0.94
+0.02 0.00 0.93
+0.00 0.92
+0.02
+0.91 0.02
+0.04 0.90
+0 50 100 150
+0.04 Number of evaluations
+0.050 0.025 0.000 0.025 0.050
+0.050 0.025 0.000 0.025 0.050
+ycaruccA
+NAS-Bench-101
+0.73
+0.72
+0.71
+0.70
+0.69
+0.68
+0 50 100 150
+Number of evaluations
+ycaruccA
+NAS-Bench-201 0.945
+0.940
+0.935
+0.930
+0.925
+0.920
+0 1000 2000
+Time (sec)
+ycaruccA
+NAS-Bench-101
+0.73
+0.72
+0.71
+0.70
+0.69
+0 1000 2000
+Time (sec)
+ycaruccA
+NAS-Bench-201
+Figure11: PerformancecomparisononNAS-Bench-101andNAS-Bench-201,usingthenumberof
+evaluationsandwallclocktimeasthex-axis,respectively.
+1Shot1,TransNAS-Bench-101andNAS-Bench-ASR,respectively. TheresultsinFigure12show
+thatMCTS-VS-BOstillusestheleasttimetoachievethebestperformance.
+MCTS-VS-BO MCTS-VS-TuRBO TuRBO LA-MCTS-TuRBO
+SAASBO HeSBO ALEBO CMA-ES VAE-BO
+0.04
+0.04 0.02 0.940
+0.02 0.935
+0.00
+0.00 0.930
+0.02
+0.02 0.925
+0.04 0.920
+0.04
+0.050 0.025 0.000 00.025 0.100050 200
+Time (sec)
+0.050 0.025 0.000 0.025 0.050
+ycaruccA
+NAS-Bench-1Shot1 0.550
+0.545
+0.540
+0.535
+0.530
+0.525 0 100 200
+Time (sec)
+ycaruccA
+TransNAS-Bench-101 0.95
+0.90
+0.85
+0.80
+0.75
+0.70
+0 100 200 300 400
+Time (sec)
+REP
+NAS-Bench-ASR
+Figure12: PerformancecomparisononmoreNAS-Benchproblems.
+Experimentsonextremelylowandhighdimensionalproblems. Wealsoevaluatethecompared
+methods for extremely low and high dimensional problems by testing on Hartmann6_100 and
+Hartmann6_1000. WeonlyrunMCTS-VS,TuRBO,LA-MCTS-TuRBOandHeSBOhere,because
+theybehavewellinthepreviousexperiments. Asexpected,therightsubfigureofFigure13shows
+thatMCTS-VS-BOhasaclearadvantageovertherestmethodsontheextremelyhighdimensional
+functionHartmann6_1000. TheleftsubfigureshowsthatonHartmann6_100,TuRBObehavesthe
+best and MCTS-VS is the runner-up, implying that MCTS-VS can also tackle low dimensional
+problemstosomedegree.
+Experiments on synthetic functions depending on a subset of variables to various extent. In
+the experiments, the synthetic functions are generated by adding unrelated variables directly.
+For example, Hartmann6_500 has the dimension D = 500, and is generated by appending
+494 unrelated dimensions to Hartmann with 6 variables. Here, we test the performance of
+MCTS-VS on a synthetic function whose dependence on a subset of variables is more vari-
+ous. For this purpose, we generate Hartmann6_5_500_v by mixing five Hartmann6 functions
+as0.50Hartmann6(x )+0.51×Hartmann6(x )+···+0.54Hartmann6(x ),andappending
+1:6 7:12 25:30
+470unrelateddimensions,wherex denotesthei-thtoj-thvariables,anddifferentcoefficients
+i:j
+representvariousdegreesofdependence. TheresultsinFigure14showthatMCTS-VS-BOperforms
+thebest.
+Experimentswithincreasingratioofvalidvariables.WealsoexaminetheperformanceofMCTS-
+VS when the ratio of valid variables increases. We use the synthetic function Hartmann6_500,
+and generate the variants with more valid variables by mixing multiple Hartmann6 functions
+as in Appendix D. For example, Hartmann6_5_500 is generated by mixing five Hartmann6
+functions as Hartmann6(x )+ Hartmann6(x ) + ···+ Hartmann6(x ), and appending
+1:6 7:12 25:30
+470 unrelated dimensions. We have compared MCTS-VS-TuRBO with LA-MCTS-TuRBO and
+TuRBOonHartmann6_500,Hartmann6_5_500,Hartmann6_10_500,...,Hartmann6_30_500,and
+Hartmann6_83_500, which has the largest number (i.e., 6×83 = 498) of valid variables. The
+resultsareshowninFigure15. ItcanbeobservedthatLA-MCTS-TuRBOperformstheworst. As
+expected,whenthepercentageofvalidvariablesislow(e.g.,inHartmann6_500,Hartmann6_5_500
+24MCTS-VS-BO MCTS-VS-TuRBO TuRBO LA-MCTS-TuRBO HeSBO
+0.04 3.0
+2.5
+0.02
+2.0
+0.00 1.5
+1.0
+0.02 0.5
+0.04 0 100 200 300 400 500
+Number of evaluations
+0.050 0.025 0.000 0.025 0.050
+eulaV
+Hartmann6_100
+3.0
+2.5
+2.0
+1.5
+1.0
+0.5
+0 100 200 300 400 500
+Number of evaluations
+eulaV
+Hartmann6_1000
+5
+4
+3
+2
+1
+0 0 100 200 300 400 500
+Number of evaluations
+Figure13: Performancecomparisononextremelylowandhigh
+dimensionalproblems.
+eulaV
+Hartmann6_5_500_v
+Figure14: Performancecompar-
+ison on synthetic functions de-
+pendingonasubsetofvariables
+tovariousextent.
+andHartmann6_10_500),MCTS-VS-TuRBOcanbebetterthanTuRBO;butasthepercentageof
+validvariablesincreases,TuRBObecomesbetter,becausealeafnodeofMCTScancontainonlya
+smallfractionofvalidvariables.
+MCTS-VS-TuRBO LA-MCTS-TuRBO TuRBO
+0.04 3.0 2.5
+0.02 2.0
+1.5
+0.00 1.0
+0.5
+0.02
+0 100 200 300 400 500
+Number of evaluations
+0.04
+0.050 0.025 0.000 0.025 0.050
+eulaV
+Hartmann6_500
+14 12
+10
+8 6
+4
+2
+0 100 200 300 400 500
+Number of evaluations
+eulaV
+Hartmann6_5_500 25
+20
+15
+10
+5
+0 100 200 300 400 500
+Number of evaluations
+eulaV
+Hartmann6_10_500 30
+25
+20
+15
+10
+5
+0 100 200 300 400 500
+Number of evaluations
+eulaV
+Hartmann6_15_500
+35
+30
+25
+20
+15
+10 5 0 100 200 300 400 500
+Number of evaluations
+eulaV
+Hartmann6_20_500
+35
+30
+25
+20
+15
+10 5 0 100 200 300 400 500
+Number of evaluations
+eulaV
+Hartmann6_25_500
+40
+35
+30
+25
+20
+15 10 0 100 200 300 400 500
+Number of evaluations
+eulaV
+Hartmann6_30_500
+80
+70
+60
+50
+40
+30 20 0 100 200 300 400 500
+Number of evaluations
+eulaV
+Hartmann6_83_500
+Figure15: Performancecomparisonwithincreasingratioofvalidvariables.
+Hierarchicalvariableselectionforextremelyhigh-dimensionalproblems. Weattempttocom-
+bineMCTS-VSandSAASBO(i.e.,MCTS-VS-SAASBO)tohandleextremelyhigh-dimensional
+problems. MCTS-VS-SAASBO can be viewed as a hierarchical variable selection method, i.e.,
+MCTS-VS first performs an efficient but rough variable selection to select some variables, and
+then SAASBO performs a time-consuming but precise variable selection under the relative low-
+dimensional space, to further select the important variables. We run MCTS-VS-SAASBO and
+SAASBOonHartmann6_500. TheresultsareshowninFigure16. TheperformanceofMCTS-VS-
+SAASBOandSAASBOissimilar. Butwhenconsideringtheruntime,thetimeof200iterationsof
+MCTS-VS-SAASBOisabout6000s,whilethetimeofSAASBOisabout45000s. Thatis,MCTS-
+VS-SAASBOcanachievemorethan7timesacceleration. Thecurvesofusingthewallclocktimeas
+thex-axisintherightsub-figureofFigure16clearlyshowtheadvantageofMCTS-VS-SAASBO
+overSAASBO.MCTS-VS-SAASBOselectsthevariablescontainingimportantonesbyMCTSand
+thenusesSAASBOtooptimizetheselectedvariables,whichreducesthedimensionandthuscosts
+muchlesstimethanusingSAASBOdirectly. ThecombinationofMCTS-VSandSAASBOmaybea
+potentialsolutionforBOtohandleextremelyhigh-dimensionaloptimizationproblems,whereitis
+difficulttoselectimportantvariablesdirectly.
+ComparisonwithLASSO-VS.Thereareothervariableselectionmethods(e.g.,LASSO),which
+are not designed for high dimensional BO but can be used directly. We have implemented the
+LASSO-basedvariableselectionmethod,namedLASSO-VS.WecompareMCTS-VS,LASSO-VS
+andDropoutonthesyntheticfunctionHartmann6_300. WhenusingLASSO-VS,thedvariables
+with the largest absolute values of the regression coefficients are selected at each iteration. The
+resultsareshowninFigure17. WhenequippedwitheitherBOorTuRBO,theproposedMCTS-VS
+25MCTS-VS-SAASBO SAASBO
+0.04 3.0
+2.5
+0.02
+2.0
+0.00 1.5
+1.0
+0.02
+0.5
+0.04 0.0
+0 50 100 150
+Number of evaluations
+0.050 0.025 0.000 0.025 0.050
+eulaV
+Hartmann6_500
+3.0
+2.8
+2.6
+2.4
+2.2
+2.0
+1.8
+1.6
+0 10000 20000 30000 40000
+Time (sec)
+eulaV
+Hartmann6_500
+Figure16: PerformancecomparisonamongMCTS-VS-SAASBOandSAASBOonthesynthetic
+functionHartmann6_500.
+alwaysperformsthebest. WecanalsoobservethatwhenequippedwithBO,LASSO-VScaneven
+be worse than Dropout. This may be because many of existing variable selection methods (e.g.,
+LASSO)usuallyrequirealargenumberofsamplestofitthelinearregressionmodelwell,whilein
+BOscenarios,onlyalimitednumberofsamplescanbeevaluated.
+Vanilla BO MCTS-VS-BO TuRBO MCTS-VS-TuRBO
+Dropout-BO LASSO-VS-BO Dropout-TuRBO LASSO-VS-TuRBO
+0.04 3.0
+0.02 2.5
+2.0
+0.00
+1.5
+0.02 1.0
+0.5
+0.04
+0 100 200 300 400 500
+0.050 0.025 0.000 0.025 0.050 Number of evaluations
+eulaV
+Hartmann6_300
+3.0
+2.5
+2.0
+1.5
+1.0
+0.5
+0 100 200 300 400 500
+Number of evaluations
+eulaV
+Hartmann6_300
+Figure17: PerformancecomparisonamongMCTS-VS,LASSO-VSandDropoutonthesynthetic
+functionHartmann6_300.
+Statisticaltests. Asmostofthepreviousworks,wehaveconductedexperimentsusing5random
+seeds (2021–2025). Here, we also conduct statistical tests on Hartmann and Levy functions by
+runningthemethodsfor50times(randomseeds2021–2070),tomakeamoreconfidentcomparison.
+ConsideringtheperformanceandruntimeofthemethodswehaveobservedinFigure2,weonly
+compare MCTS-VS with LA-MCTS-TuRBO and TuRBO, which achieve good performance in
+acceptabletime. TheresultsareshowninTable4. MCTS-VS-BOachievesthebestaverageobjective
+valueonallthesyntheticfunctionsexceptLevy10_100wherethedimensionisrelativelylowand
+TuRBOperformsthebest. BytheWilcoxonsigned-ranktestwithconfidencelevel0.05,MCTS-VS-
+TuRBOissignificantlybetterthanLA-MCTS-TuRBOonallthesyntheticfunctions,showingthe
+advantageofMCTS-VSoverLA-MCTSforvariableselection. ComparedwithTuRBO,MCTS-VS-
+TuRBOisonlysignificantlybetteronHartmannfunctions,whichmaybebecausetheratioofvalid
+variablesofHartmann6_300andHartmann6_500islowerthanthatofLevy10_100andLevy10_300,
+andthustheadvantageofperformingvariableselectionbyMCTS-VSismoreclear. Notethatthe
+observationsabouttheperformancerankofthecomparedmethodsareconsistentwiththatobserved
+inFigure2,whichplottheresultsofthecomparedmethodsbyrunningfivetimes.
+F EnlargementofSomeFiguresintheMainPaper
+Duetospacelimitation,Figures1and2inthemainpaperarealittlesmall. Here,wealsoprovide
+theirenlargedversions,i.e.,Figures18and19.
+26Table 4: Objective values obtained by MCTS-VS-BO, MCTS-VS-TuRBO, LA-MCTS-TuRBO
+andTuRBOonsyntheticfunctions. Eachresultconsistsofthemeanandstandarddeviationof50
+runs. Thebestmeanvalueoneachproblemisbolded. Thesymbols‘+’,‘−’and‘≈’indicatethat
+MCTS-VS-TuRBOissignificantlysuperiorto,inferiorto,andalmostequivalenttothecorresponding
+method,respectively,accordingtotheWilcoxonsigned-ranktestwithconfidencelevel0.05.
+Problem MCTS-VS-BO MCTS-VS-TuRBO LA-MCTS-TuRBO TuRBO
+Levy10_100 -2.620(1.757)+ -1.102(1.711) -2.444(1.708)+ -0.662(1.049)−
+Levy10_300 -1.506(0.854)≈ -1.765(1.811) -6.218(3.389)+ -1.855(2.038)≈
+Hartmann6_300 3.223(0.074)≈ 3.153(0.264) 2.892(1.147)+ 2.857(0.475)+
+Hartmann6_500 3.200(0.091)− 3.012(0.434) 2.619(0.672)+ 2.629(0.672)+
++/−/≈ 1/1/2 / 4/0/0 2/1/1
+Vanilla BO Dropout-BO MCTS-VS-BO
+0.04 3.0
+2.5
+0.02 2.0
+1.5
+0.00 1.0
+0.5
+0.02
+0 100 200 300 400 500
+Number of evaluations
+0.04
+0.050 0.025 0.000 0.025 0.050
+eulaV
+Hartmann6_300
+3.0
+2.5
+2.0
+1.5
+1.0
+0.5
+0 100 200 300 400 500
+Number of evaluations
+eulaV
+Hartmann6_500
+TuRBO Dropout-TuRBO MCTS-VS-TuRBO
+0.04 3.0
+2.5
+0.02 2.0
+1.5
+0.00
+1.0
+0.5
+0.02
+0 100 200 300 400 500
+Number of evaluations
+0.04
+0.050 0.025 0.000 0.025 0.050
+eulaV
+Hartmann6_300
+3.0
+2.5
+2.0
+1.5
+1.0
+0.5
+0 100 200 300 400 500
+Number of evaluations
+eulaV
+Hartmann6_500
+Figure18: Performancecomparisonamongthetwovariableselectionmethods(i.e.,MCTS-VSand
+Dropout)andtheBOmethods(i.e.,VanillaBOandTuRBO)ontwosyntheticfunctions.
+27MCTS-VS-BO MCTS-VS-TuRBO TuRBO LA-MCTS-TuRBO
+SAASBO HeSBO ALEBO CMA-ES VAE-BO
+0.04
+0
+0.04
+0.02 10
+0.02 20
+0.00
+30
+0.00
+0.02 40
+0.02
+50
+0.04
+0 100 200 300 400 500
+0.04 Number of evaluations
+0.050 0.025 0.000 0.025 0.050
+0.050 0.025 0.000 0.025 0.050
+eulaV
+Levy10_100
+0
+10
+20
+30
+40
+0 100 200 300 400 500
+Number of evaluations
+eulaV
+Levy10_300
+3.0
+2.5
+2.0
+1.5
+1.0
+0.5
+0.0
+0 100 200 300 400 500
+Number of evaluations
+eulaV
+Hartmann6_300
+3.0
+2.5
+2.0
+1.5
+1.0
+0.5
+0.0
+0 100 200 300 400 500
+Number of evaluations
+eulaV
+Hartmann6_500
+Figure19: ComparisonamongMCTS-VSandstate-of-the-artmethodsonsyntheticfunctions.
+28
