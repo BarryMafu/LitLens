@@ -1,3 +1,9 @@
+# ==== LitLens ====
+# main.py
+#  
+# author: Kai Wang (2025.7)
+# Copyright: (2025) Mizu Studio
+
 from dataclasses import dataclass
 from utils import *
 from model import LanguageModel

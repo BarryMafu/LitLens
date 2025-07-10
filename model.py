@@ -1,3 +1,9 @@
+# ==== LitLens ====
+# model.py
+#  
+# author: Kai Wang (2025.7)
+# Copyright: (2025) Mizu Studio
+
 from dotenv import load_dotenv
 load_dotenv("api_key.env")
 
