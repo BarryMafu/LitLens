@@ -1,0 +1,8 @@
+# for API call
+openai>=1.0.0
+
+# for making HTTP requests
+requests>=2.31.0
+
+# for XML parsing
+beautifulsoup4>=4.12.0
