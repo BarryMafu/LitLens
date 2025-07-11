@@ -225,22 +225,37 @@ def recommend_papers(arxiv_id, first_n, second_n, progress=gr.Progress()):
     # 格式化输出为美观的HTML
     output_md = ""
     for i, title in enumerate(recommendations):
-        arxiv_id = get_arxiv_id_by_title(title)
-        output_md += f"""
-### Recommendation #{i + 1}
-<div class="recommendation-card">
-<strong>Title</strong> {title}
+        try:
+            arxiv_id = get_arxiv_id_by_title(title)
+            if arxiv_id:
+                info = get_basic_info(arxiv_id)
+                output_md += f"""
+    ### Recommendation #{i + 1}
+    <div class="recommendation-card">
+    <strong>Title</strong> {info['title']}
 
-**ArXiv ID** [{arxiv_id}](https://arxiv.org/abs/{arxiv_id})
-</div>
-""" if arxiv_id else f"""
-### Recommendation #{i + 1}
-<div class="recommendation-card">
-<strong>Title</strong> {title}
+    **ArXiv ID** [{arxiv_id}](https://arxiv.org/abs/{arxiv_id})
+    </div>
+    """ 
+            else:
+                output_md += f"""
+    ### Recommendation #{i + 1}
+    <div class="recommendation-card">
+    <strong>Title</strong> {title}
 
-**ArXiv ID** Not found
-</div>
-"""
+    **ArXiv ID** Not found
+    </div>
+    """
+        except:
+            output_md += f"""
+    ### Recommendation #{i + 1}
+    <div class="recommendation-card">
+    <strong>Title</strong> {title}
+
+    **ArXiv ID** Not found
+    </div>
+    """
+    
     # output_html += "</div>"
     progress(1.0, desc="Recommendations generated successfully!")
     return output_md

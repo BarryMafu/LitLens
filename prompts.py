@@ -93,7 +93,7 @@ Transformers for Natural Language Processing
 Here is the list of papers with both title and abstract:
 {prompt_input}
 
-Now you need to select exactly {limit} papers from the above list based on the content provided, excluding the original paper. Ordering from high relevance to low relevance.
+Now you need to select EXACTLY {limit} papers from the above list based on the content provided, excluding the original paper. Ordering from high relevance to low relevance.
 """
         }
     ]
