@@ -1,0 +1,763 @@
+5202
+yaM
+82
+]hp-tnauq[
+1v51722.5052:viXra
+Routing-Aware Placement
+for Zoned Neutral Atom-based Quantum Computing
+Yannick Stade∗, Wan-Hsuan Lin§, Jason Cong§, and Robert Wille∗†‡
+∗Chair for Design Automation, Technical University of Munich, Munich, Germany
+†Munich Quantum Software Company GmbH, Garching near Munich, Germany
+‡Software Competence Center Hagenberg GmbH, Hagenberg, Austria
+§Computer Science Department, University of California, Los Angeles, USA
+yannick.stade@tum.de, wanhsuanlin@ucla.edu, cong@cs.ucla.edu, robert.wille@tum.de
+www.cda.cit.tum.de/research/quantum
+Abstract—Quantum computing promises to solve previously qubits[5]–[7], ion traps [8]–[10],etc.Incontrast,thesoftware
+intractableproblems,withneutralatomsemergingasapromising support for zoned neutral atom architectures [4], [11] remains
+technology. Zoned neutral atom architectures allow for immense rather limited.
+parallelism and higher coherence times by shielding idling atoms
+More precisely, the compilation is separated into several
+from interference with laser beams. However, in addition to
+hardware,successfulquantumcomputationrequiressophisticated stages—with placement and routing being particularly impor-
+software support, particularly compilers that optimize quantum tant as part of the layout synthesis. Their interplay decides
+algorithms for hardware execution. In the compilation flow for how efficiently the atoms are rearranged during the quantum
+zoned neutral atom architectures, the effective interplay of the
+computation. Obviously, the placement affects the subsequent
+placement and routing stages decides the overhead caused by
+routing: A bad placement leads to bad routing. Unfortunately,
+rearranging the atoms during the quantum computation. Sub-
+optimal placements can lead to unnecessary serialization of the all available compilers handle the placement and routing
+rearrangements in the subsequent routing stage. Despite this, all as two completely independent stages and purely focus on
+existing compilers treat placement and routing independently minimizing atoms’ travel distance—leaving substantial room
+thus far—focusing solely on minimizing travel distances. This
+for improvement (as motivated in more detail later in Sec. III).
+work introduces the first routing-aware placement method to
+This work addresses this problem by proposing the first
+address this shortcoming. It groups compatible movements into
+parallel rearrangement steps to minimize both rearrangement routing-aware placement method for zoned neutral atom
+steps and travel distances. The implementation utilizing the A* architectures to facilitate efficient routing. This method groups
+algorithm reduces the rearrangement time by 17% on average compatible movements that can be executed in parallel into
+and by 49% in the best case compared to the state-of-the-art.
+rearrangement steps. The objective of routing-aware placement
+The complete code is publicly available in open-source as part
+istominimizenotonlythetraveldistancesoftheatomsbutalso
+of the Munich Quantum Toolkit (MQT) at https://github.com/
+munich-quantum-toolkit/qmap. thenumberofrearrangementsteps.Giventhevastsearchspace
+Index Terms—quantum computing, compiler, neutral atoms, of possible placements, sophisticated exploration methods are
+zoned architecture, placement essential. Therefore, we propose a solution based on the A*
+algorithm [12], complemented by a dedicated data structure
+I. INTRODUCTION
+for efficient and accurate cost anticipation.
+Quantum computing promises to solve problems deemed The evaluation shows that the proposed routing-aware
+intractable before [1]. Many different technologies are being placement significantly reduces the number of rearrangement
+explored—with neutral atoms being a promising candidate [2]. steps,whicheventuallyreducesthetimerequiredtoperformthe
+Here, the state of the atoms—representing the qubits—is rearrangementsbyupto49%inthebestcaseand17%onaver-
+manipulated by laser beams. Those laser beams can illu- age. The implementation of the proposed approach is publicly
+minate many atoms simultaneously, allowing for immense available as part of the Munich Quantum Toolkit (MQT, [13])
+parallelism. In particular, zoned neutral atom architectures [2] at https://github.com/munich-quantum-toolkit/qmap.
+emerged as a promising candidate for quantum computing.
+Experiments on those architectures have demonstrated basic II. BACKGROUND
+quantum computations with up to 280 physical qubits [2]. Thissectionbrieflyrevisitsthefundamentalsofneutralatom-
+These zoned architectures allow the shielding of idling atoms based quantum computing to keep this paper self-contained.
+from interference with laser beams used to perform the Sec. II-A reviews zoned neutral atom architectures, and
+operations. Shielding the idling atoms leads to significantly Sec. II-B provides an overview of existing works on the
+higher coherence times than monolithic architectures [3], [4]. compilation for neutral atoms.
+However,justhavingthehardwareisnotsufficienttoperform
+A. Zoned Neutral Atom Architectures
+quantum computations. Software is key to exploiting the
+hardware’s full potential. In particular, compilers automate the In quantum computing based on neutral atoms [14], [15],
+translation of quantum algorithms into an optimized sequence qubits are encoded in the electronic states of individual
+of instructions that can be executed on the hardware. For neutral atoms such as Rubidium (Rb), Strontium (Sr), or
+other quantum technologies already a broad spectrum of com- Ytterbium (Yb). Those atoms are confined in optical tweezers
+piler methods have been proposed, e.g., for superconducting andcooledwithlaserstotheirmotionalgroundstate[16], [17].Consequently, the rearrangement of atoms in preparation of a
+Entanglement Global Rydberg
+Beam (CZ-Gates) layeroftwo-qubitoperationsmayincurmultiplerearrangement
+Zone
+01 steps. However, since the state of the atoms decoheres over
+Global Raman time [2], the duration of the quantum computation must be
+2
+Beam (RY-Gates) minimized to achieve high fidelity. Thus, the rearrangement
+Storage
+Zone constraints are central to the compilation and significantly
+3 Local Raman
+contribute to its complexity.
+Beam (RZ-Gates)
+B. Overview of Corresponding Compilers
+Figure1.Schematicofazonedneutralatomarchitectureillustratingglobal
+andlocaloperationsonatoms(blue). Compiling quantum circuits with many quantum gates to
+differentkindsofneutralatomarchitecturesisanactiveresearch
+One-qubit operations, such as rotational operations, are re-
+field. Early developments focused on an architecture with
+alized through state transitions driven by global and local
+individually addressable entangling gates and SWAP gates
+lasers [14], [18]. Two-qubit operations, such as CZ operations,
+toroutequbitsonagridofstatictraps[21]–[23].However,the
+are realized by global Rydberg beams [19], [20]. The Rydberg
+optical setup required for individually addressable entangling
+blockade mechanism ensures that only the qubits within the
+gates could not reach the same fidelity as zoned architectures
+interaction radius of each other interact in the current tech-
+yet (92.5% vs. 99.5% fidelity [19], [24]). A different line of
+nology. However, isolated atoms still experience an imperfect
+research focuses on architectures capable of rearranging atoms
+identity operation as they are still excited to the Rydberg state,
+with AODs but still with a monolithic design, i.e., one zone
+leading to Rydberg decay—a significant source of errors [19].
+with a global Rydberg beam [25]–[36]. So far, only a few
+To mitigate those errors, zoned architectures perform opera-
+compilers consider zoned architectures.
+tions in designated spatially separated zones [2], such as the
+In fact, NALAC just recently proposed in [11] initiated
+entanglement zone and the storage zone, as shown in Fig. 1.
+this line of research. It reduces the time-costly trap transfers
+The entanglement zone features spatially separated pairs of
+by keeping one set of atoms in AODs while sliding past the
+traps such that atoms in the same pair can interact with each
+other set of atoms and performing multiple CZ-gates in one
+other but not with atoms in other traps. The Rydberg beam
+go. The tool, proposed in [3], generates optimal schedules for
+only affects atoms in the entanglement zone, and multiple
+state preparation circuits used for quantum error correction. Its
+CZ operations can be performed in parallel. During two-qubit
+evaluation demonstrates clearly that shielding idling qubits in
+operations, atoms in the storage zone are shielded—leading
+thestoragezoneiscrucialtoachievinghighfidelity.Afactthat
+to significantly higher coherence times [2]. Without the need
+the tools ZAC [4] and ZAP [37] take advantage of. In addition,
+to keep a separation between atoms for unwanted interactions,
+they detect reuse opportunities, i.e., they keep qubits in the
+the storage zone offers many densely packed traps to store
+entanglementzoneiftheyareinvolvedinconsecutivetwo-qubit
+atoms. Each trap is realized as a static optical tweezer created,
+gates. Besides those general-purpose compilers, Artic [38] was
+e.g., by a Spatial Light Modulator (SLM, [14]) and holds up
+proposedtotackleonespecificarchitecture.Mantra[39]targets
+to one atom (aka qubit).
+the architecture, which can only execute one-qubit gates in
+The usual course of execution of two-qubit operations is to the storage zone. This tool defines rewrite rules to replace
+move qubits from the storage zone to the entanglement zone, common patterns in quantum circuits with ones better suited
+perform the operation, and move them back to the storage for neutral atom architectures. However, all these methods are
+zone. Those rearrangements are realized by an additional kind too specific for compiling general quantum circuits or generate
+of adjustable optical tweezers controlled by Acousto-Optic an unnecessary large rearrangement overhead.
+Deflectors (AODs, [14]). These AODs can pick up atoms from
+static traps, move them via stretching the AOD columns and III. MOTIVATION:
+rows, and drop them in other static traps, constituting one UNTAPPEDPOTENTIALINEXISTINGCOMPILERS
+rearrangement step. Transferring between traps may cause Following the established compilation flow, the compilation
+atom loss [2], which can be solved by atom reload in the of quantum computations for zoned neutral atom architectures
+future [16]. On the other hand, atom movement does not incur is divided into several stages. The fidelity of the resulting
+errors in the qubits if the speed is below a certain threshold.
+Multiple atom movements can be performed in parallel,
+referred to as one rearrangement. However, in doing so, the 0
+1
+following rearrangement constraints (as specified in [11] and 0 1 0 1
+illustrated in Fig. 2) must be obeyed: 1 0 1 0 1 0
+• Non-Crossing: During one rearrangement step, the rows (a)Non-crossingconstraint (b)Preservationconstraint
+and columns of AOD traps must not cross each other to
+prevent atom loss and heating [11], cf. Fig. 2a. 1 2 1 2 1 2
+Pick-up 0 Atom in SLM
+• Preservation: Additionally, qubits starting in the same
+0
+row or column must stay in the same row or column, 0 0 0 Atom in AOD
+respectively, cf. Fig. 2b. (c)Ghost-spotconstraint
+• Ghost-Spots: When transferring atoms from and to AOD
+Figure2.RearrangementConstraints:Themiddleframeofeachsub-figure
+traps, atoms at all grid points of the rows and columns shows the intended rearrangement, the left one a violation, and the right a
+are affected, cf. Fig. 2c. possibleworkaround.Input
+RZ
+RY
+RZ q c u z b i q t [ [ 0 4 ] ] , q q ; [1]; rz(π) q[0]; cz q[2], q[3];
+ry(π/2) q;
+cz q[0], q[3];
+cz q[1], q[2];
+rz(-π) q[1];
+{ "storage_zones": [
+{ "zone_id": 0,
+"slms":[ { "id":0,
+"r": 100,
+"c": 100,
+gniludehcS
+gnizylanA esueR
+tnemecalP
+gnituoR
+noitareneG
+edoC
+Output
+One-qubit
+Gate Layer t
+I RZ 0123 01 23 0 2 03 21
+RY 1 3
+RZ III V I II III IV
+atom [
+(0.0, 18.0) atom0
+(3.0, 18.0) atom1
+(6.0, 18.0) atom2 IV { }{ }{ } ] (9.0, 18.0) atom3
+01 23 1 3 1 @+ load [ IV 0123 1 3 1 a a t t o o m m 0 1zone_cz0
+II
+II { }
+Two-qubit 3
+Gate Layer Reuse 3
+Figure3.Thecommoncompilationflowforzonedneutralatomarchitectures.Ittakesaquantumcircuitandthezonedneutralatomarchitecturespecification
+asinputandgeneratesasequenceoftarget-specificinstructions.
+quantum computation depends mutually on the result of all placement, and the routing determined before and generates a
+stages. This section reviews those stages and then unveils sequenceoftarget-specificinstructions.Theoutputisaprogram
+substantial potential missed in available compilers. to be executed on a zoned neutral atom quantum computer.
+A. Compilation Flow B. Potential for Improvement
+A compiler receives (1) a quantum circuit to execute and As reviewed above, the placement significantly impacts
+(2) a zoned neutral atom architecture specification as input. It the routing stage during the compilation flow. It directly
+transformsthequantumcircuitintoasequenceoftarget-specific influences the level of parallelism one can achieve in the
+instructions that align with the constraints of the architecture. routing stage and, by this, the rearrangement time during the
+To this end, the flow is usually separated into several stages quantum computation. However, placement methods such as,
+as illustrated in Fig. 3 and briefly reviewed in the following: e.g., proposed in [4], [37], heavily rely their placement on
+minimizing the accumulated travel distance of atoms. While
+Scheduling: This stage schedules all gates of the input
+this, at first glance, seems like an appropriate heuristic, it may
+circuit into two types of layer: One-qubit gate and two-qubit
+make routing afterward considerably harder.
+gatelayers.Alltwo-qubitgatesinonelayermustbeexecutable
+in parallel, i.e., they must not share qubits. The resulting Example 1. Consider the scenario sketched in Fig. 4, where
+schedule consists of a sequence of alternating one-qubit one atom in the entanglement zone is reused from the previous
+and two-qubit gate layers—some one-qubit gate layers may two-qubit gate layer, and three other atoms initially located
+be empty, though. The default setting for this stage is an in the storage zone will be moved to the entanglement zone.
+as-soon-as-possible scheduling as, e.g., in [4] that puts every Mainly optimizing for accumulated movement distance yields
+gate in the earliest possible layer. the placement as shown in Fig. 4a. While atoms are indeed
+AnalyzingReuse: Thisstageisoptionalbutverybeneficial close, this placement prohibits the parallel movement of all
+and, e.g., used by compilers such as [4]. It detects reuse three atoms indicated by the grey arrows as this would
+opportunities: When an atom takes part in two consecutive violate the non-crossing constraint (cf. Sec. II-A). Hence, the
+two-qubit gate layers, it can remain in the entanglement zone, routing stage must split the movements into two rearrangement
+i.e., it can be reused without the need to move it back to the steps. In contrast, a placement that already considers such
+storage zone. This significantly improves the overall fidelity constraints could generate a solution as shown in Fig. 4b.
+because it reduces the number of necessary trap transfers. Here, all movements are compatible and it requires only one
+Placement: This stage determines the location of every rearrangement step.
+atom in each layer. It takes the set of independent two-qubit The example clearly demonstrates that the overall solution
+gates per two-qubit gate layer from the schedule. Based on can be improved by considering the rearrangement constraints
+this input, it produces the resulting placement as output. In duringtheplacementstage.Tothisend,weproposetheconcept
+every two-qubit gate layer, the atoms belonging to one gate of routing-aware placement.
+must be placed in a pair of traps in the entanglement zone, Routing-Aware Placement: While performing the place-
+cf. Sec. II-A. All remaining atoms should be placed in the ment stage reviewed in Sec. III-A, routing-aware placement
+storage zone to shield them from the Rydberg beam and avoid
+decoherence due to the Rydberg decay.
+Routing: The routing stage takes the placement and 0 1 2 3 2 3 0 1
+determines the necessary rearrangements of the atoms to
+Reused Atom
+transition from the placement of one layer to the next. The
+rearrangement constraints (cf. Sec. II-A) must be obeyed 2 3 1 2 3 1
+during this process. These constraints may necessitate multiple (a) (b)
+rearrangement steps to transition from one layer to the next.
+Figure4.Therouting-agnosticplacement(a)requirestwowhereastherouting
+Code Generation: The final stage combines the results aware-placement(b)requiresonlyonerearrangementstep.Theatoms’current
+from the previous stages. It incorporates the schedule, the locationsaredepictedingrey,andtheirnewlocationsinblue.reduces the number of rearrangement steps in the subsequent 0
+routingstageand,hence,reducestherearrangementtimeduring 1 0
+the resulting quantum computation. To this end, routing-aware 2 Reused Atom
+3
+placement groups placed atoms corresponding to compatible 1 2 3 4
+(a)4 (b)
+movements for each transition from one layer to the next.
+Figure5.Therearesituationswherereuseisdetrimentaltotheduration.
+Then, the main objective is to minimize the sum of the group’s
+rearrangement duration. Since all movements in each group
+Look-ahead Cost: There may be multiple choices with
+can be performed in parallel, this objective minimizes both the
+similar associated costs while placing atoms. However, some
+number of rearrangement steps and the atoms’ travel distances.
+can be more beneficial for upcoming two-qubit gate layers
+than others. When placing an atom closer to the atom’s next
+IV. PROPOSEDSOLUTION:UNLEASHINGTHEPOTENTIAL
+interaction partner, the resulting duration of the quantum
+WITHROUTING-AWAREPLACEMENT
+computation can be further reduced. Furthermore, look-ahead
+Theprevioussectionhasshownthatrouting-awareplacement allows us to detect situations where reuse is detrimental.
+couldtaphugepotential.However,thesearchspaceforpossible Example 2. Consider the circuit in Fig. 5a. The atom 0 can
+placementsisgigantic,andweneedefficientmethodstoexplore be reused for all four layers. However, this leads to very long
+it. This section proposes an approach to handle the resulting movements for the atoms 3 and 4, and not reusing the atom 0
+complexity and, by this, utilize the potential of routing-aware after the first two gates would be more beneficial.
+placement. With this basis, Sec. V provides its implementation
+Using look-ahead, the cost of moving the next interaction
+details before Sec. VI evaluates its effectiveness.
+partner of a reused atom can be considered when deciding
+whether to reuse that atom. Without the look-ahead, the future
+A. The Search Space
+cost of reusing an atom cannot be estimated.
+The placement of the atoms is determined sequentially for All considerations from above yield a gigantic number of
+every two-qubit gate layer and in between, resulting in two possible placements—more precisely, exponentially many in
+types of placements: the number of atoms. Overall, the objective is to find the best
+• Agateplacement,whereallatomsinvolvedinatwo-qubit one, i.e., the one with the lowest cost.
+gate are placed in paired traps in the entanglement zone Example 3. Assume a modest number of eight CZ-gates were
+whileallremainingatomsareshieldedinthestoragezone. performedinparallel.Afterward,16atomsintheentanglement
+• An intermediate placement, where all atoms not reused zone must be returned to the storage zone. Even if we limit
+in the following two-qubit gate layer, are placed back in the search to, e.g., the 36 nearest traps in the storage zone
+the storage zone. for each atom (cf. pruning strategies in Sec. V-D), this results
+To begin with, an initial (intermediate) placement of the atoms in 3616 ≈1.3×1024 possible placements.
+in the storage zone is determined. Then, each placement is Obviously, naively enumerating all these placements is
+constructed based on the previous one. infeasible for relevant circuit sizes. Hence, sophisticated
+As illustrated in Fig. 4, some placement solutions are methods are needed to consider as few as possible placements
+more favorable than others: A good placement corresponds until a (near-)optimal solution is found.
+to a fast transition from the previous placement, i.e., a few
+rearrangement steps and short distances for the atoms to travel. B. Taming the Search Space with A*
+We reflect this objective in the following cost function defined To tackle this complexity, we propose to use the A* algo-
+as the sum of two parts: (1) a proxy for the actual routing cost, rithm[12].Ithasalreadyprovedsuccessfulinsimilarscenarios
+and (2) a look-ahead part to achieve a better global solution. to cope with a huge search space, such as routing qubits
+ProxyforActualCost: Theexactdurationofthetransition on superconducting chips [40]. To this end, finding the best
+is determined later by the routing stage. As we cannot placementforeachlayerisencodedintoastate-spacesearchin
+generateanexactroutingsolutionforeachplacementcandidate the following manner. First, all atoms that must be rearranged
+considering its complexity [4], an efficiently computable yet are identified: For a gate placement, these are the atoms
+accurate proxy for the routing cost is essential. To this end, the involved in a gate but not reused from the previous layer;
+atom movements corresponding to the placement are grouped conversely, for an intermediate placement, these are the atoms
+greedily into groups of compatible movements. Movements in the entanglement zone that are not reused in the next layer.
+are compatible if performed in parallel without violating the Second, the placement is determined following a gate-by-gate
+rearrangement constraints reviewed in Sec. II-A. strategy for gate placements and an atom-by-atom strategy for
+Moreprecisely,letd max (𝐺) bethemaximumtraveldistance intermediate placements. Note that the placement of a gate is
+of an atom in group 𝐺. Then, the cost of a placement 𝑝 is the mapping of the respective atoms to the paired traps in the
+calculated as entanglement zone. The location of the remaining atoms is
+cost(𝑝) := ∑︁ √︁ d (𝐺) . (1) copied from the previous placement.
+max
+Starting from a start node corresponding to the state where
+𝐺∈groups(𝑝)
+noneoftheatomstobemovedareplacedyet,A*findsthepath
+Note that the square root is used because the movement tothegoalnoderepresentingthecheapestplacementconcerning
+duration is proportional to the square root of the travel the cost function from Sec. IV-A. On that path, the nodes
+distance[14].Thisfavorsfewergroupswithshortermovements. between the start and goal nodes represent intermediate partial0 0 1 2 3 4 5 heuristic, A* goes a lot more into breadth instead of depth—
+1 0 6 7 8 9 slowing down the search. Thus, we add an accelerating part to
+7.4 8.5 8.9
+2 the heuristic to guide the search more aggressively—accepting
+3 8.1 7.6 7.8 1 0 1 2 3 4 5 that the resulting heuristic may not be admissible anymore.
+4
+5 The accelerating part estimates how likely conflicts arise when
+6 7.9 7.6 0 6 7 an intermediate node’s partial placement is extended to a
+7 full placement. It, then, favors partial placement with fewer
+8 1 0 1 2 8 3 4 5 9 anticipated conflicts. To this end, we follow the following
+(a9) (b) (c)
+0 1 2 3 4 5 6 7 rationale: Rearrangements that retain existing gaps from the
+Figure6.(a)alayeroffiveCZgates.(b)thesearchtreefortheplacementof previous placement are more straightforward to extend with
+fiveCZgateswiththeassociatedcostineachnode.(c)theplacementofthe new placements.
+atomsofthefirstfourCZgates(blue)andtheonesofthelast(lightblue).
+Example 5. Consider the situation shown in Fig. 7, where the
+placements. More precisely, a node inherits its predecessor’s previous location of all atoms in the upper zone is depicted in
+placement and adds one additional atom or gate. grey. Figure 7a depicts a placement of the atoms 0 to 3 where
+Since we follow an atom-by-atom or gate-by-gate strategy, the vertical gap between them is preserved. Consequently, the
+theneighborsofthestartnoderepresentthepossibleplacements atoms 4 and 5 can be placed in the gap without causing a
+of the first atom or gate, respectively. In turn, their neighbors conflict. Conversely, Fig. 7b shows a placement of the atoms 0
+correspond to the possible placements of the first two atoms to 3 where the gap is not preserved. Thus, any placement of
+or gates. This goes on until all atoms or gates are placed. This the atoms 4 and 5 causes a conflict.
+eventually results in a representation of the search space as a
+To favor placements like the one in Fig. 7a, the heuristic
+tree.
+analyzes the partial placement, such as the one of the atoms 0
+Example 4. Consider the two-qubit gate layer in Fig. 6a with to 3 in Ex. 5 and assigns a lower estimate of the additional
+five gates. The rectangular nodes in the first level of Fig. 6b cost to those with a similar spacing between the placed atoms
+represent the various options to place the first gate involving as in the previous placement.
+atom 0 and 1 together with their estimated cost inscribed in Look-ahead Part: After the look-ahead cost from
+the nodes. In the second level, some placement options for the Sec. IV-A is added to the actual cost, its value increases and
+secondgateareshown,extendingthefirstplacementoptionfor outweighs the present heuristic cost, so the heuristic cost fails
+thefirstgate.Finally,thetwonodesinthelastlevelcorrespond to accelerate the search. In particular, this effect diminishes the
+to the placement options of the fifth gate. All other nodes are indented acceleration by the accelerating part of the heuristic.
+omitted. Figure 6c shows the placement represented by the Thus, we also design a heuristic cost for the look-ahead part
+light blue node in Fig. 6b, where the atoms 8 and 9 are placed to recover the acceleration. To this end, we add the average
+in the middle of the top row. Since it is a node of the last level, look-ahead cost of all options of each unplaced atom or gate.
+the location of the atoms 0 to 7 is already fixed.
+The evaluation in Sec. VI shows that the proposed heuristic
+The A* algorithm explores the search space from the start manages to guide the search towards a solution with few
+node until it finds a goal node. To this end, it extends the rearrangement steps. At the same time, the increase in the
+well-known Dijkstra’s algorithm [41] by using a heuristic placement time remains moderate because of the strategy
+function to guide the search faster towards some goal. For proposed above and its following efficient implementation.
+every new node it encounters, it calculates the cost of the
+currentnodeandaddsanestimateoftheremainingcostforthe
+V. IMPLEMENTATION
+goal node. The next node expanded is the one with the lowest
+estimated overall cost. A heuristic that never overestimates
+Using the concepts introduced in Sec. IV, their efficient
+the cost to reach the goal is called admissible. Only with an
+implementation is key to the success of the proposed approach.
+admissible heuristic A* is guaranteed to find the optimal path.
+In fact, to implement the proposed approach we employ a
+C. The Heuristic Guiding the Search dedicated data structure to enable efficient computation of
+the cost and heuristic function. Moreover, we also incorporate
+The sheer size of the search space quickly renders an
+pruningstrategiestofurtherreduceplacementtime.Thissection
+unguided search infeasible. Hence, we need a good heuristic to
+provides details on their implementation.
+guide the search faster toward a goal. The proposed heuristic
+is defined as the sum of three parts: (1) an admissible part,
+(2) an accelerating part, and (3) a look-ahead part.
+0 0 1 0 1
+Admissible Part: The admissible part of the heuristic is
+equaltothelowerboundofthecost’sincreaseuntilagoalnode 1 4 5 4 5
+is reached. For the lower bound, we assume that all remaining
+2 2 3 2 3
+movements can be added to existing groups of compatible
+movements. Hence, the number of groups does not change; 0 0 1 0 1 4 5
+only the maximum distance per group may increase. 1 4 5 2 3
+Accelerating Part: Using only the admissible part of the 2 (a) 2 3 (b)
+heuristic does not sufficiently accelerate the search. Whenever Figure 7. (a) placement requiring one rearrangement step. (b) placement
+the actual cost is significantly higher than the estimate by the requiringtworearrangementsteps.A. Dedicated Data-Structure of gate 𝑔 is reused in the next layer by gate 𝑔 acting on
+1 2
+Tofacilitateperformance,eachnodestoresthecorresponding atom 𝑎 2 and the reused atom 𝑎 1 , then the look-ahead cost is
+groups of compatible movements in a dedicated data structure the cost to move the atom 𝑎 2 from its current location next to
+that allows for an efficient check of whether a new movement the reused atom 𝑎 1 . Let cost l (𝑔) be that cost for any gate 𝑔
+is compatible with the existing groups. To relate the relative acting on a reused atom and 0 otherwise.
+location of the atoms in the source and target area, the source For intermediate placements, if, in the next layer, gate 𝑔 1
+locations of the atoms are rearranged, and the target traps are involves atoms 𝑎 1 and 𝑎 2 , atom 𝑎 1 might be identified as
+discretized among all the atoms to be moved. reusable, cf. Sec. III-A. Then, the reuse of atom 𝑎 1 is treated
+as another option, just like every other placement of atom 𝑎 .
+Example 6. The source location of the (grey) atom 0 in the 1
+Hence, two cases must be distinguished: If atom 𝑎 is reused,
+lower left of Fig. 6 is not identified by the actual row and 1
+it remains at its location in the entanglement zone, and the
+columnofthezonebutbytherow1¯ andcolumn0¯,whichisthe
+look-ahead cost is the cost to move atom 𝑎 from its current
+discrete row and column among all atoms that are rearranged. 2
+location next to the reused atom 𝑎 . In this case, we subtract a
+1
+Two mappings can express every atom’s movement: Its constant 𝛾 from the look-ahead cost of atom 𝑎 corresponding
+1
+source row and column to its target row and column, respec- tothegainedfidelitybysavingtwotraptransferswhenreusing
+tively.Eachgroupstorestherowandcolumnoftheatomswith the atom. This cost is denoted by cost (𝑎) for any atom 𝑎.
+r
+compatible moves in separate binary trees, where the entries Conversely, if atom 𝑎 is not reused or not reusable in the first
+1
+are sorted by their source row or column, respectively. place, it is moved to the storage zone and the look-ahead cost
+Example 7. Figure 8 shows the binary search trees containing is equal to the cost to move atom 𝑎 from its current location
+2
+the row and column mappings of the placement of the atoms to the new location of atom 𝑎 . Let this cost be denoted by
+1
+belonging to the first four CZ-gates in Fig. 6c. cost (𝑎) for any atom 𝑎 if in the next layer a gate acts on
+l
+A new placement is compatible with an existing group if atom 𝑎 and it is not reused; otherwise, cost l (𝑎) is 0.
+the new row and column mappings are compatible with the In the following formal definition of the final cost function
+existing ones in the respective trees. A new mapping 𝑘 ↦→𝑣 ofa(partial)placement 𝑝,theuser-definedparameter𝛼 adjusts
+is compatible if and only if either of the following holds: theinfluenceofthelook-ahead.Thecostforreusinganatomis
+(1) The key 𝑘 is already contained in the tree and maps to purposefully not affected by 𝛼 because it represents the actual
+the same value 𝑣. costofthemovementofitsinteractionpartnerinthenextlayer
+(2) If the key 𝑘 is not contained, let 𝑘 ,𝑘 be the next rather than being an estimate for future costs. Overall, this
+lower upper
+lowerandupperkeymappingto𝑣 ,𝑣 ,respectively. yields
+lower upper ∑︁ ∑︁
+Then the new mapping is compatible if and only if cost∗(𝑝) :=cost(𝑝)+ cost (𝑎)+𝛼· cost (𝑎) . (2)
+r l
+𝑣 lower < 𝑣 < 𝑣 upper . 𝑎∈ (cid:110)placedreused(cid:111) 𝑎∈ (cid:110) placed (cid:111)
+The condition (1) ensures that all atoms in the same row atoms gates/atoms
+or column remain during a rearrangement in the same row or C. The Heuristic
+column,respectively.Thecondition(2)ensuresthattherelative
+As stated in Sec. IV-C, the admissible part only covers the
+order of the atoms is preserved and that no rows or columns
+additionalcostforthegoalnodeintheoptimalcase,i.e.,when
+are merged during a rearrangement.
+all future placements are compatible with existing ones. In this
+Example8. Theplacementofatom8inFig.6isnotcompatible
+case, the number of summands in Eq. (1) remains fixed, and
+with the existing placements in two ways: First, when the key
+the cost may only increase when the maximum distance of a
+0¯ is looked up in the row mappings depicted in Fig. 8a, the
+group increases. The maximum distance of any group is bound
+mapping0¯ ↦→0isfoundand0=1isnotsatisfied;Second,the
+from below by the maximum distance of an unplaced atom to
+column mappings shown in Fig. 8b do not contain the key 3¯.
+its nearest free trap. The increase of the cost function, which
+Hence, the next lower and upper keys are retrieved, which
+uses the square root of the distance, is then bound from below
+correspond to the mappings 2¯ ↦→2 and 4¯ ↦→3. The inequality
+by the following difference defining the admissible part of the
+2<2<3 obviously does not hold.
+heuristic
+Whenexpandinganewnodeduringthesearch,therespective h(𝑝) := max √︁ d (𝐺) − max √︁ d (𝑎) . (3)
+movement of the newly placed atom is either put into an 𝐺∈ max 𝑎∈ min
+groups(𝑝) {unplacedatoms}
+existing group of compatible movements or if no such group
+exists, a new group is created with the new movement. To return an estimate of the likelihood of conflicts, the
+heuristic’s accelerating part first calculates the difference
+B. The Look-Ahead
+between every value and key in each binary tree. Then, it
+The look-ahead cost introduced in Sec. IV-A differs for gate computes the standard deviation of these differences per binary
+and intermediate placements. For gate placements, if atom 𝑎 1 tree representing the groups of compatible movements. Those
+standard deviations are then summed up and multiplied by the
+Row Mappings 0 ? = 0 0 ↦ 1 C M o a l p u p m in n gs 2 ↦ 2 L B o o w un e d r 3 ↦ 2 ? n d u ev m ia b t e io r n of is at m om or s e t p h r a o t b s l t e i m ll a n t e ic ed w t h o en be m p o la re ce a d to b m ec s a m us u e st a s h ti i l g l h b e e r
+0 ↦ 0 1 ↦ 1 5 ↦ 4 2 < 3
+0 ≠ 1 placed. Before the multiplication, a constant 𝛽 is added to the
+(a) 1 ↦ 1 (b) 0 ↦ 0 4 ↦ 3 6 ↦ 5 U Bo p u p n e d r 2 < 2 sum to prioritize nodes further down in the tree. The result is
+Figure8.Binarysearchtreecontainingtherowandcolumnmappingsofthe multiplied by a user-defined factor 𝛿 to adjust the influence of
+placementoftheatomsbelongingtothefirstfourCZ-gatesinFig.6c. this factor and added to the previous heuristic, leading to∑︁ (cid:12)(cid:110) (cid:111)(cid:12)
+h(𝑝) :=h(𝑝)+𝛿·(cid:169)𝛽+ SD(𝐺)(cid:170)·(cid:12) unplaced (cid:12) , (4) (cid:173) (cid:174) (cid:12) gates/atoms (cid:12) 1430
+𝐺∈groups(𝑝)
+(cid:171) (cid:172)
+1410
+whereSDisthestandarddeviationofthekey-valuedifferences.
+1390
+To handle significant discrepancies in column and row count
+between the discrete source and target locations, the key is 40 60
+Ø Placement Time [ms]
+multiplied with a scaling factor before subtracting it from the
+value. This factor is determined such that a rearrangement
+with a standard deviation close to 0 corresponds to a more or
+less parallel movement of atoms without changing the spacing
+between them.
+Example 9. Figure 9a shows a placement that the heuristic
+would favor without the scaling factor because all key-value
+differences are equal and the standard deviation is zero. By
+multiplying the key with the scaling factor 2 (8 target cols.
+divided by 4 source cols.), the heuristic prefers the better
+placement in Fig. 9b instead. Here, the standard deviation
+of the differences [0,−1,0,−1] including the scaling is 0.5
+compared to, e.g., 1.1 for the placement in Fig. 9a.
+As mentioned in Sec. IV-C, the heuristic’s look-ahead part
+addstheaveragelook-aheadcostsacrossalloptionstokeepthe
+accelerating effect. Formally, the variable cost (𝑎) represents l
+the average look-ahead across all placement options of atom
+or gate 𝑎 (this includes the full costs for reused atoms and
+the with 𝛼 scaled look-ahead costs). This results in the final
+heuristic function
+∑︁
+h∗(𝑝) :=h(𝑝)+ cost (𝑎) . (5)
+l
+𝑎∈ (cid:110) unplaced (cid:111)
+gates/atoms
+D. Pruning Strategies
+Only the most likely target traps are considered during the
+search to reduce the number of potential nodes in the search
+space. To this end, an adjustable-size window is employed
+and centered around the nearest target trap for each atom.
+All target traps within this window are considered placement
+optionsduringthesearch.Shouldthecasearisethatthewindow
+is too small in the sense that it contains too few free traps, the
+window is expanded automatically.
+VI. EVALUATION
+The proposed method constitutes the first routing-aware
+placement for zoned neutral atom architectures. To evaluate
+its effectiveness, all methods and data structures have been
+implemented and, afterward, compared to the state-of-the-art
+routing-agnostic placement method. This section summarizes
+the correspondingly obtained results. To this end, we first
+describe the setup and results of a parameter study before the
+results of this comparison are provided and discussed.
+0 1 2 3 0 1 2 3
+0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7
+0 1 2 3 0 1 2 3
+(a) (b)
+0 1 2 3 0 1 2 3
+Figure9.Byscalingkeysbeforecalculatingthestandarddeviationtheheuristic
+favorsparallelmovements,cf.Ex.9.
+spetS
+tnemegnarraeR
+Σ
+170
+169
+168
+167
+166
+(a) 40 60
+Ø Placement Time [ms]
+]sm[
+emiT
+tnemegnarraeR
+Σ
+Setting
+Default α = 0.2, β = 0.2, δ = 0.6
+No Look-ahead
+α = 0.0, β = 0.6, δ = 0.6
+Quick
+α = 0.2, β = 0.6, δ = 0.6
+Quicker
+α = 0.2, β = 0.6, δ = 0.8
+Quickest
+α = 0.2, β = 1.2, δ = 0.8
+(b)
+Figure10.Trade-offbetweenplacementtimeandresultquality.
+A. Experimental Setup and Parameter Study
+We implemented the proposed method in C++. To demon-
+strate its effectiveness, we afterward compared it against the
+state-of-the-art compiler ZAC [4]. For a fair runtime compari-
+son, we re-implemented ZAC, including the routing-agnostic
+placement in C++. The complete code is publicly avail-
+able in open-source as part of the MQT [13] under https:
+//github.com/munich-quantum-toolkit/qmap. All experiments
+were conducted on an Apple M3 with 16GB of RAM.
+As benchmark circuits, we used the ones considered
+originally for the evaluation of ZAC [4] (taken from
+QASMBench [42]). This set is complemented with additional
+circuits of larger sizes (taken from MQT Bench [43]).
+The routing-aware placement proposed above offers several
+parameters to tune its performance. We conducted a parameter
+study to find suitable parameter combinations for each of the
+two benchmark sets. To this end, we varied the parameters 𝛼,
+𝛽, 𝛾, and 𝛿 and collected the number of rearrangement steps,
+the rearrangement time, and the time for the placement stage.
+This allows us to determine proper parameter settings.
+As an example, Fig. 10 shows the results of this parameter
+study for the QASMBench benchmark set.1 More precisely,
+Fig. 10a shows the sum of the rearrangement steps overall
+benchmarks in the QASMBench set against the average
+time for the placement stage for five different parameter
+combinations. Figure 10b, then, shows the corresponding
+accumulated rearrangement time. Since the goal is to minimize
+the rearrangement steps and time, the parameter combination
+corresponding to the lowest values in the plots yields the
+highest-quality solutions. In particular, it shows that the
+look-ahead is crucial in improving the quality of results.
+Based on that, we derived that the parameter combination
+𝛼 =0.2, 𝛽=0.2, 𝛾 =5, and 𝛿 =0.6 is best for the benchmark
+set from QASMBench. Analogously, the larger circuits from
+MQT Bench, the parameter combination 𝛼 = 0.2, 𝛽 = 0.8,
+𝛾 =5, and 𝛿 =0.9 led to the best results.
+B. Comparison to the State-of-the-Art
+Using the setup described above, we eventually com-
+pared the performance of the proposed approach against the
+state-of-the-art, i.e., the approach proposed in [4]. To this end,
+we considered the following metrics:
+• Placementtime:Thetimerequiredbytheplacementstage.
+• Routing time: The time required by the routing stage.
+• Rearrangement steps: The number of rearrangement steps
+requiredduringtheexecutionofthequantumcomputation
+based on the compilation result.
+1Duetospacelimitations,weskippedlistingcorrespondingresultsforthe
+MQTBenchbenchmarkset.TableI.ROUTING-AGNOSTICVS.ROUTING-AWAREPLACEMENT
+Benchmark Max. Routing-Agnostic(State-of-the-Art) Routing-Aware(ProposedSolution)
+Num. Num. Num. 2Q-Gates Time[ms] Num.R. Rearr. Time[ms] Num.Rearr. Rearr.
+Qubits 2Q-Gates Layers inLayer Place. Rout. Steps T.[ms] Place. Rout. Steps Time[ms]
+graphstate1 60 60 4 22 3.3 0.15 56 8.5 27.4 0.13 37(–34%) 6.9(–19%)
+100 100 6 37 10.4 0.27 88 17.3 1860.5 0.30 62(–30%) 11.9(–31%)
+wstate1 200 398 201 2 21.6 0.23 643 83.5 98.4 0.21 493(–23%) 57.4(–31%)
+qft1 200 9350 794 13 374.0 6.32 4300 619.9 1309.3 4.75 3534(–18%) 546.8(–12%)
+500 24350 1994 13 1138.4 15.61 10391 1635.7 3060.8 14.10 9911( –5%) 1554.9( –5%)
+qpeexact1 200 9697 1187 13 489.6 5.64 4766 692.8 1482.7 5.13 4306(–10%) 651.8( –6%)
+ising2 42 82 4 21 2.4 0.07 22 3.1 451.2 0.05 9(–59%) 1.6(–49%)
+98 194 4 49 16.9 0.23 23 3.2 417.9 0.16 12(–48%) 1.9(–43%)
+qft2 18 306 66 9 8.7 0.13 185 21.9 32.7 0.10 148(–20%) 20.3( –8%)
+29 680 110 9 18.6 0.36 434 57.6 64.4 0.21 284(–35%) 40.5(–30%)
+bv2 30 18 18 1 1.1 0.01 37 4.3 5.4 0.01 36( –3%) 4.1( –3%)
+70 36 36 1 3.3 0.01 73 11.0 11.4 0.01 76( +4%) 8.5(–23%)
+wstate2 27 52 28 2 2.4 0.02 73 8.3 11.1 0.02 62(–15%) 6.7(–19%)
+seca2 11 80 37 3 3.0 0.03 112 12.2 13.2 0.02 81(–28%) 9.9(–18%)
+ghz2 40 39 39 1 2.1 0.01 78 9.6 12.4 0.01 79( +1%) 8.7(–10%)
+78 77 77 1 6.0 0.03 154 20.9 23.5 0.03 157( +2%) 17.4(–17%)
+multiply2 13 40 23 3 1.6 0.02 68 7.6 8.1 0.02 54(–21%) 6.5(–15%)
+cat2 22 21 21 1 0.9 0.01 43 4.6 6.5 0.01 42( –2%) 4.5( –2%)
+35 34 34 1 1.9 0.01 69 8.2 10.4 0.01 69( ±0%) 7.5( –8%)
+swaptest2 25 84 62 12 4.3 0.05 127 13.4 27.3 0.05 121( –5%) 12.3( –8%)
+knn2 31 105 77 15 5.4 0.08 158 16.7 63.1 0.06 149( –6%) 15.5( –7%)
+∅ 100.8 1.40 155 1042.9 428.5 1.21 143(–17%) 939.1(–17%)
+• Rearrangement time: the total time required to rearrange required rearrangement steps on most of the benchmarks,
+the atoms during the quantum computation based on the especially, those exhibiting a large degree of parallelism. For
+compilation result. This time time is calculated based on example, the rearrangement steps were almost halved for the
+the relation 𝑡 = (𝑑/2750 m)1/2 and 15µs for every trap ising benchmark with 98 qubits. On average, the number of
+s2
+transfer [14]. rearrangement steps is reduced by 17% across all benchmarks.
+This substantially reduces the corresponding rearrangement
+The obtained results are summarized in Table I. The first
+times (one main metric affecting the fidelity of the quantum
+section of Table I lists the benchmarks and summarizes key
+computation). In fact, these times are consistently lower for
+statistics relevant to the placement and routing, namely, the
+all benchmarks also for the cases where the rearrangement
+number of qubits, two-qubit gates, and layers. Hereby, a layer
+steps slightly increased. This is because the additional rear-
+corresponds to a set of independent two-qubit gates part of the
+rangement steps reduce the travel distance and, consequently,
+sequencereturnedbythescheduler,cf.Sec.III-A.Additionally,
+the rearrangement time. Overall, the routing-aware placement
+we list the maximum number of two-qubit gates in a layer
+reduces the rearrangement time by up to 49% in the best case
+as this determines the size of the search space, cf. Sec. IV-A.
+and 17% on average across all benchmarks.
+Benchmarks stemming from MQT Bench are marked with 1
+and those from QASMBench with 2. VII. CONCLUSIONS
+Thesecondandthirdsectionssummarizetheobtainedresults In this work, we presented the first routing-aware place-
+of the routing-agnostic placement (i.e., the state-of-the-art ment for zoned neutral atom architectures. In contrast to
+method proposed in [4]) and the routing-aware placement existing compilers, the proposed approach considers rear-
+(proposed in this work), respectively. For both approaches, rangement constraints during the placement stage. Evalua-
+the metrics mentioned above, i.e., placement time, routing tions demonstrated that this approach effectively reduces the
+time, number of rearrangement steps, and rearrangement time, number of rearrangement steps in the subsequent routing
+are listed. Animations of the resulting atom’s rearrangements stage. Especially on benchmarks exhibiting a large degree
+for selected benchmarks are available under https://doi.org/10. of parallelism, the proposed method can almost halve the
+5281/zenodo.15236196. number of rearrangement steps. Its implementation is pub-
+First, the results show that the time for the placement licly available in open-source as part of the MQT under
+increases due to the gigantic search space. This was expected https://github.com/munich-quantum-toolkit/qmap.
+(see also discussion in Sec. IV-A and Ex. 3), but, using
+Acknowledgements
+the proposed approach and its efficient implementation, the
+WethankLudwigSchmidandLukasBurgholzerforthefruitfuldiscussion
+overhead remains moderate. In fact, all benchmarks (the small on the heuristic function. This work received funding from the European
+ones previously considered in [4] but also the larger instances) ResearchCouncil(ERC)undertheEuropeanUnion’sHorizon2020research
+can be placed in a few seconds or even a fraction of it. andinnovationprogram(grantagreementNo.101001318),waspartofthe
+MunichQuantumValley,whichtheBavarianstategovernmentsupportswith
+At the same time, the results clearly show that the funds from the Hightech Agenda Bayern Plus, and has been supported by
+routing-aware approach (and, hence, the consideration of the theBMWKbasedonadecisionbytheGermanBundestagthroughproject
+QuaST,aswellasbytheBMK,BMDW,andtheStateofUpperAustriain
+largersearchspace)isabsolutelyworthit:Infact,theproposed
+theframeoftheCOMETprogram(managedbytheFFG).Furthermore,the
+routing-aware approach significantly reduces the number of workwasfundedbyNSFgrantCCF-2313083.REFERENCES ofNeutralAtomQuantumComputers,”inDesignAutomationConf.,
+[1] JohnPreskill,“QuantumComputingintheNISQeraandbeyond,” ACM,2024.DOI:10.1145/3649329.3655959.
+Quantum,2018.DOI:10.22331/q-2018-08-06-79. [24] T.M.Grahametal.,“Multi-qubitentanglementandalgorithmsona
+[2] DolevBluvsteinetal.,“Logicalquantumprocessorbasedonreconfig- neutral-atomquantumcomputer,”Nature,2022.DOI:10.1038/s41586-
+urableatomarrays,”Nature,2023.DOI:10.1038/s41586-023-06927-3. 022-04603-6.
+[3] YannickStade,LudwigSchmid,LukasBurgholzer,andRobertWille, [25] NathanConstantinidesetal.“OptimalRoutingProtocolsforReconfig-
+“OptimalStatePreparationforLogicalArraysonZonedNeutralAtom urableAtomArrays.”arXiv:2411.05061.(2024),[Online].Available:
+Quantum Computers,” in Design, Automation and Test in Europe, http://arxiv.org/abs/2411.05061(visitedon11/11/2024).
+2024.DOI:10.48550/ARXIV.2411.09738. [26] Yunqi Huang, Dingchao Gao, Shenggang Ying, and Sanjiang Li.
+[4] Wan-Hsuan Lin, Daniel Bochen Tan, and Jason Cong, “Reuse- “DasAtom:ADivide-and-ShuttleAtomApproachtoQuantumCircuit
+Aware Compilation for Zoned Quantum Architectures Based on Transformation.”arXiv:2409.03185.(2024),[Online].Available:http:
+NeutralAtoms,”inIEEEInt’lSymp.onHigh-PerformanceComputer //arxiv.org/abs/2409.03185(visitedon09/14/2024).
+Architecture,2025.arXiv:2411.11784. [27] JasonLudmirandTirthakPatel,“PARALLAX:ACompilerforNeutral
+[5] LukasBurgholzer,SarahSchneider,andRobertWille,“Limitingthe AtomQuantumComputersunderHardwareConstraints,”inInt’lConf.
+SearchSpaceinOptimalQuantumCircuitMapping,”inAsiaandSouth forHighPerformanceComputing,Networking,StorageandAnalysis,
+Pacific Design Automation Conf., IEEE, 2022. DOI: 10.1109/ASP- IEEE,2024.DOI:10.1109/SC41406.2024.00079.
+DAC52403.2022.9712555. [28] Natalia Nottingham et al., “Decomposing and Routing Quantum
+[6] HaoFuetal.,“EffectiveandEfficientQubitMapper,”inInt’lConf. CircuitsUnderConstraintsforNeutralAtomArchitectures,”inInt’l
+onCAD,IEEE,2023.DOI:10.1109/ICCAD57390.2023.10323857. Conf.onQuantumComputingandEngineering,2024.arXiv:2307.
+[7] IrfanshaShaikandJacoVanDePol,“OptimalLayoutSynthesisfor 14996.[Online].Available:http://arxiv.org/abs/2307.14996(visitedon
+QuantumCircuitsasClassicalPlanning,”inInt’lConf.onCAD,IEEE, 01/12/2024).
+2023.DOI:10.1109/ICCAD57390.2023.10323924. [29] TirthakPatel,DanielSilver,andDeveshTiwari,“GRAPHINE:En-
+[8] Tobias Schmale et al., “Backend compiler phases for trapped-ion hancedNeutralAtomQuantumComputingusingApplication-Specific
+quantumcomputers,”inInt’lConf.onQuantumSoftware,IEEE,2022. Rydberg Atom Arrangement,” in Int’l Conf. for High Performance
+DOI:10.1109/QSW55613.2022.00020. Computing, Networking, Storage and Analysis, ACM, 2023. DOI:
+[9] Fabian Kreppel et al., “Quantum Circuit Compiler for a Shuttling- 10.1145/3581784.3607032.
+Based Trapped-Ion Quantum Computer,” Quantum, 2023. DOI: 10. [30] Daniel Silver, Tirthak Patel, and Devesh Tiwari. “Qompose: A
+22331/q-2023-11-08-1176. TechniquetoSelectOptimalAlgorithm-SpecificLayoutforNeutral
+[10] DanielSchoenberger,StefanHillmich,MatthiasBrandl,andRobert AtomQuantumArchitectures.”arXiv:2409.19820.(2024),[Online].
+Wille, “Towards Cycle-based Shuttling for Trapped-Ion Quantum Available:http://arxiv.org/abs/2409.19820(visitedon10/09/2024).
+Computers,”inDesign,AutomationandTestinEurope,IEEE,2024. [31] DanielBochenTan,Wan-HsuanLin,andJasonCong,“Compilation
+DOI:10.23919/DATE58400.2024.10546506. forDynamicallyField-ProgrammableQubitArrayswithEfficientand
+[11] YannickStade,LudwigSchmid,LukasBurgholzer,andRobertWille, ProvablyNear-OptimalScheduling,”inAsiaandSouthPacificDesign
+“AnAbstractModelandEfficientRoutingforLogicalEntanglingGates AutomationConf.,ACM,2025.DOI:10.1145/3658617.3697778.
+on Zoned Neutral Atom Architectures,” in Int’l Conf. on Quantum [32] Daniel Bochen Tan, Dolev Bluvstein, Mikhail D. Lukin, and Ja-
+ComputingandEngineering,IEEE,2024.DOI:10.1109/QCE60285. son Cong, “Compiling Quantum Circuits for Dynamically Field-
+2024.00098. Programmable Neutral Atoms Array Processors,” Quantum, 2024.
+[12] PeterHart,NilsNilsson,andBertramRaphael,“AFormalBasisfor DOI:10.22331/q-2024-03-14-1281.
+the Heuristic Determination of Minimum Cost Paths,” IEEE Trans. [33] DanielBochenTan,ShuohaoPing,andJasonCong,“Depth-Optimal
+onSystems,Man,andCybernetics,1968.DOI:10.1109/TSSC.1968. Addressingof2DQubitArraywith1DControlsBasedonExactBinary
+300136. MatrixFactorization,”inDesign,AutomationandTestinEurope,IEEE,
+[13] Robert Wille et al., “The MQT Handbook: A Summary of Design 2024.DOI:10.23919/DATE58400.2024.10546763.
+Automation Tools and Software for Quantum Computing,” in Int’l [34] Bochen Tan, Dolev Bluvstein, Mikhail D. Lukin, and Jason Cong,
+Conf.onQuantumSoftware,2024.arXiv:2405.17543,Aliveversion “QubitMappingforReconfigurableAtomArrays,”inInt’lConf.on
+ofthisdocumentisavailableathttps://mqt.readthedocs.io. CAD,ACM,2022.DOI:10.1145/3508352.3549331.
+[14] Dolev Bluvstein et al., “A quantum processor based on coherent [35] Hanrui Wang et al., “Atomique: A Quantum Compiler for Recon-
+transport of entangled atom arrays,” Nature, 2022. DOI: 10.1038/ figurable Neutral Atom Arrays,” in Int’l Symposium on Computer
+s41586-022-04592-6. Architecture,IEEE,2024.DOI:10.1109/ISCA59077.2024.00030.
+[15] Ludwig Schmid et al., “Computational capabilities and compiler [36] Hanrui Wang et al., “Q-Pilot: Field Programmable Qubit Array
+developmentforneutralatomquantumprocessors—connectingtool CompilationwithFlyingAncillas,”inDesignAutomationConf.,ACM,
+developersandhardwareexperts,”QuantumScienceandTechnology, 2024.DOI:10.1145/3649329.3658470.
+2024.DOI:10.1088/2058-9565/ad33ac. [37] Chen Huang et al. “ZAP: Zoned Architecture and Parallelizable
+[16] FlavienGygeretal.,“Continuousoperationoflarge-scaleatomarrays CompilerforFieldProgrammableAtomArray.”arXiv:2411.14037.
+inopticallattices,”PhysicalReviewResearch,2024. DOI:10.1103/ (2024).
+PhysRevResearch.6.033104. [38] EthanDecker.“Arctic:AFieldProgrammableQuantumArraySchedul-
+[17] Daniel Barredo, Sylvain de Léséleuc, Vincent Lienhard, Thierry ingTechnique.”arXiv:2405.06183.(2024),[Online].Available:http:
+Lahaye, and Antoine Browaeys, “An atom-by-atom assembler of //arxiv.org/abs/2405.06183(visitedon05/13/2024).
+defect-freearbitrarytwo-dimensionalatomicarrays,”Science,2016. [39] EnhyeokJangetal.,“QubitMovement-OptimizedProgramGeneration
+DOI:10.1126/science.aah3778. onZonedNeutralAtomProcessors,”inInt’lSymp.onCodeGeneration
+[18] MarkSaffman,“Quantumcomputingwithneutralatoms,”National andOptimization,ACM,2025.DOI:10.1145/3696443.3708937.
+ScienceReview,2019.DOI:10.1093/nsr/nwy088. [40] Alwin Zulehner, Alexandru Paler, and Robert Wille, “An Efficient
+[19] SimonJ.Everedetal.,“High-fidelityparallelentanglinggatesona MethodologyforMappingQuantumCircuitstotheIBMQXArchi-
+neutralatomquantumcomputer,”Nature,2023.DOI:10.1038/s41586- tectures,” IEEE Trans. on CAD ofIntegratedCircuits and Systems,
+023-06481-y. 2019.DOI:10.1109/TCAD.2018.2846658.
+[20] GiulianoGiudici,StefanoVeroni,GiacomoGiudice,HannesPichler, [41] ThomasH.Cormen,CharlesEricLeiserson,RonaldLinnRivest,and
+and Johannes Zeiher. “Fast entangling gates for Rydberg atoms CliffordStein,IntroductiontoAlgorithms,Fourthedition.TheMIT
+via resonant dipole-dipole interaction.” arXiv: 2411.05073. (2024), Press,2022,1p.
+[Online]. Available: http://arxiv.org/abs/2411.05073 (visited on [42] Ang Li, Samuel Stein, Sriram Krishnamoorthy, and James Ang,
+11/11/2024). “QASMBench: A low-level quantum benchmark suite for NISQ
+[21] JonathanM.Bakeretal.,“ExploitingLong-DistanceInteractionsand evaluationandsimulation,”ACMTransactionsonQuantumComputing,
+ToleratingAtomLossinNeutralAtomQuantumArchitectures,”in 2023.
+Int’lSymposiumonComputerArchitecture,IEEE,2021.DOI:10.1109/ [43] NilsQuetschlich,LukasBurgholzer,andRobertWille,“MQTBench:
+ISCA52012.2021.00069. BenchmarkingSoftwareandDesignAutomationToolsforQuantum
+[22] TirthakPatel,DanielSilver,andDeveshTiwari,“Geyser:Acompila- Computing,”Quantum,2023,MQTBenchisavailableathttps://www.
+tionframeworkforquantumcomputingwithneutralatoms,”inInt’l cda.cit.tum.de/mqtbench/.DOI:10.22331/q-2023-07-20-1062.
+Symposium on Computer Architecture, ACM, 2022. DOI: 10.1145/
+3470496.3527428.
+[23] Ludwig Schmid, Sunghye Park, and Robert Wille, “Hybrid Circuit
+Mapping:LeveragingtheFullSpectrumofComputationalCapabilities

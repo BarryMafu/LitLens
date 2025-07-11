@@ -1,0 +1,1087 @@
+ZAP: Zoned Architecture and Parallelizable
+Compiler for Field Programmable Atom Array
+Chen Huang†,1,5, Xi Zhao†,1,6, Hongze Xu†,1, Weifeng Zhuang1,
+Meng-Jun Hu1, a, Dong E. Liu1, 2, 3, 4, b, Jingbo Wang1, c
+1Beijing Academy of Quantum Information Sciences, Beijing 100193, China
+2State Key Laboratory of Low Dimensional Quantum Physics,
+Department of Physics, Tsinghua University, Beijing 100084, China
+3Frontier Science Center for Quantum Information, Beijing 100184, China
+4Hefei National Laboratory, Hefei 230088, China
+5Blackett Laboratory, Imperial College London, London SW7 2AZ, United Kingdom
+6CAS Key Laboratory of Quantum Information, University of Science and Technology of China, Hefei 230026, China
+†These authors contributed equally to this work.
+Email: ahumj@baqis.ac.cn, bdongeliu@mail.tsinghua.edu.cn, cwangjb@baqis.ac.cn
+Abstract—Neutral atom quantum computing platforms have
+gained significant attention due to their potential scalability and
+flexibility in qubit arrangement. In this work, we present a novel
+zoned architecture for neutral atom quantum compilation, which
+divides the system into distinct zones: a storage zone and an
+interaction zone. This architecture optimizes atom placement
+and interaction scheduling, effectively reducing the operation
+depth and improving parallelism during compilation. Through a
+tailored algorithmic approach, we significantly enhance the com-
+pilation efficiency and scalability compared to existing methods.
+Compared to the state-of-the-art Enola platform, our method
+achieves a 5.4x increase in fidelity when the system need 100
+qubits, marking a pivotal advancement in neutral atom quantum
+computing. Our approach provides a robust framework for future
+large-scale quantum computations, ensuring both high fidelity
+and efficient execution.
+I. INTRODUCTION
+In recent years, quantum computing has made significant
+progress in both algorithm design and experimental hard-
+ware [1]. These advancements have not only enhanced the
+computational power of quantum computing but have also
+demonstrated potential applications across various fields [2].
+For instance, improved quantum algorithms can significantly
+accelerate the solution process of complex problems [3], while
+more stable and efficient quantum hardware makes practical
+applications more feasible [4]–[10]. As technology continues
+to mature, quantum computing is poised to further bring solu-
+tion in areas such as chemical simulation [11], [12], cryptogra-
+phy [13], [14], and optimization problems [15], [16]. Among
+several quantum computing platforms, advances in laser tech-
+nology have propelled the rapid development of neutral atom
+quantum computing platforms in last few years [7]–[10], [17],
+[18]. However, to successfully run quantum algorithms on
+quantum platforms, high-level algorithmic descriptions must
+be translated into executable hardware operations through a
+compilation process, and the compilation work for neutral
+atom quantum computing is still in the early exploratory
+stages.
+Neutral atom quantum computing uses atoms trapped in
+optical tweezer arrays as qubits, offering high qubit lifetimes,
+high-fidelity single-qubit gates and two-qubit gates, and high
+parallelism [19]. Additionally, the neutral atom platform is
+highly scalable, currently supporting arrays with tens of thou-
+sands of optical tweezers and effectively trapping around 6000
+qubits [20]. Moreover, the setting of optical devices and the
+placement of optical tweezers allow us to partition atoms,
+thereby enabling the exploration of computational architec-
+tures. The large number of particles, high-fidelity gate opera-
+tions, and design flexibility of the architecture provide ample
+opportunities for the development of quantum computing.
+Unlike superconducting quantum computing platforms, neu-
+tral atom quantum computing systems can coherently move
+the positions of atoms trapped in optical tweezers, allowing
+real-time changes in qubit connectivity during computation
+while satisfying the constraints of the optical tweezer ar-
+ray [21]–[23]. This dynamic connectivity, combined with the
+large number of qubits, architecture design introduces new
+possibilities and design challenges for quantum computing
+compilation. Rapidly completing the compilation process and
+fully leveraging the unique features of neutral atom quantum
+computing systems is a critical and practically significant task.
+In our work, we propose a zoned compilation approach
+that divides the operational regions for neutral atom quan-
+tum platforms into distinct zones. Based on the hardware
+characteristics of the neutral atom platform, the system is
+divided into two primary zones: the storage zone, and the
+entanglement zone. Two-qubit gates being performed only in
+the entanglement zone, when we move atom between these
+zones, we can reuse the atom in the entanglement zone to
+reduce the atom movement. When atoms are positioned within
+this zone, any pair of atoms with a separation smaller than the
+Rydberg blockade radius will undergo simultaneous two-qubit
+gate operations. This high degree of parallelism necessitates
+the design of an efficient compilation scheme that partitions
+the quantum circuit into optimal modules, aiming to minimize
+arXiv:2411.14037v1  [quant-ph]  21 Nov 2024
+the number of times atoms need to be placed. To achieve this,
+we introduce a hybrid compilation algorithm that combines
+an ASAP (As Soon As Possible) scheduling strategy with a
+Simulated Annealing (SA) optimization process. The ASAP
+algorithm improves circuit fidelity by prioritizing operations
+for early execution, while the SA algorithm refines the atom
+placement strategy to further optimize resource usage and
+reduce movement overhead. Compared to previous work, our
+approach demonstrates a significant enhancement in circuit
+fidelity, which becomes increasingly pronounced as the num-
+ber of qubits grows. Specifically, achieved 1.7x improvement
+when qubit number nqubit = 30 and 5.4x improvement when
+nqubit = 100.
+Our main contributions are summarized as follows:
+• We introduce a zoned architecture for the compilation
+problem in neutral atom platforms, which offers improved
+scalability and is feasible with current hardware. This
+zoned architecture has been experimentally implemented
+by the Lukin group, with detailed results available in [10].
+Compared to monolithic architectures, this approach sig-
+nificantly reduces crosstalk errors.
+• We make full use of the feature that atoms can be reused
+in the entanglement zone, carry out targeted algorithm
+design, reduce the number of moves in the routing process
+of quantum circuits, and improve the efficiency and
+accuracy of circuit execution.
+• We incorporate an optimization strategy for intermedi-
+ate atom placement within the partitioned neutral atom
+platform, reducing atom movement during routing and
+enabling the execution of single-qubit gates at these
+intermediate placements.
+• We design the corresponding compilation scheme for
+the neutral atom platform of partition structure, which
+reduces the crosstalk operation of idle qubits in the
+entangle zone.
+• Our scheme does not require quantum gates in quantum
+circuits to have commutative properties, which is a great
+improvement over the previous Enola scheme.
+The structure of our paper is organized as follows: In Sec-
+tion II, we provide a brief introduction to quantum computing
+and neutral atom quantum platforms. Section III describes the
+hardware limitations and introduces the compilation problem
+in neutral atom quantum systems, along with the design of our
+compilation method tailored specifically to the characteristics
+of the neutral atom platform. In Section IV, we present the
+performance evaluation of fidelity in neutral atom quantum
+computing, highlighting key directions for improving compi-
+lation algorithms. Section V introduces the Zap compilation
+framework, detailing the practices and optimizations employed
+in our scheme. In Section VI, we demonstrate the improve-
+ments achieved by our framework across various quantum
+algorithms compared to previous work, providing explanations
+for these advancements. Section VII provides an overview
+of related research that is relevant to our work. Finally,
+in Section VIII, we summarize the key contributions and
+innovations of our research, and discuss potential directions
+for future enhancements based on our findings.
+II. BACKGROUND
+A. Quantum computing
+Quantum computing is built upon the encoding of quantum
+bits (qubits), the fundamental units of quantum information. A
+qubit can be represented in a superposition of two basis states
+|0⟩and |1⟩as
+|ψ⟩= α |0⟩+ β |1⟩,
+(1)
+where α and β are complex probability amplitudes such that
+|α|2 + |β|2 = 1. Quantum gates are used to manipulate
+qubit states. Single-qubit gates, such as the Hadamard gate H,
+adjust the superposition state of individual qubits, while two-
+qubit gates, such as the CNOT gate, allow for the creation of
+entanglement between qubits.
+The universality of quantum gates is guaranteed by the
+Solovay-Kitaev theorem, which ensures that any quantum
+operation can be approximated with arbitrary precision using
+a combination of single- and two-qubit gates. This property
+enables the construction of complex quantum circuits through
+basic gate operations.
+This universal gate set, combined with the inherent paral-
+lelism and entanglement in quantum systems, allows quantum
+computers to execute certain tasks much more efficiently
+than classical counterparts, particularly in applications like
+factoring and searching.
+B. Neutral atom quantum platform
+In neutral atom quantum computing, qubits are typically
+defined by two stable internal states of a single atom. For dig-
+ital quantum computation, two hyperfine-split ground states of
+the atom are selected to represent the qubit states |0⟩and |1⟩.
+This choice leverages the fundamental principles of quantum
+mechanics, enabling precise control of qubit operations via
+laser pulses.
+Single-qubit gate operations are realized by inducing oscil-
+lations between these two hyperfine states using laser pulses.
+By carefully tuning the pulse duration and phase, arbitrary
+single-qubit operations can be implemented. These gates are
+mathematically represented by unitary matrices of the form:
+Usingle =
+
+cos θ
+−ieiϕ sin θ
+−ie−iϕ sin θ
+cos θ
+
+,
+(2)
+where θ and ϕ are parameters determined by the laser pulse’s
+duration and phase. The high fidelity of such operations has
+been extensively validated on neutral atom platforms, demon-
+strating their efficiency and reliability in quantum computing.
+However, the implementation of two-qubit gates remains
+one of the core challenges in neutral atom quantum computing,
+where the Rydberg blockade effect plays a crucial role. The
+Rydberg blockade effect refers to the phenomenon where, if
+one atom is excited to a Rydberg state, its strong dipole-dipole
+interaction suppresses the possibility of a neighboring atom
+being excited to the Rydberg state. It is this effect that enables
+2
+the implementation of high-fidelity two-qubit gate operations
+on the neutral atom platform.
+Specifically, consider two adjacent atoms, A and B; if A
+is already excited to a Rydberg state, the laser pulse will be
+unable to excite B to the Rydberg state. This means that the
+quantum operation of one atom can be controlled by the state
+of another atom, thereby enabling the implementation of two-
+qubit gates, such as the controlled-Z (CZ) gate. The CZ gate
+resulting from the Rydberg blockade effect can be represented
+by the matrix:
+UCZ =
+
+
+
+
+1
+0
+0
+0
+0
+1
+0
+0
+0
+0
+1
+0
+0
+0
+0
+−1
+
+
+
+.
+(3)
+The CZ gate can be converted into a controlled-NOT (CNOT)
+gate by applying Hadamard gates to the target qubit before
+and after the CZ gate: UCNOT = (I ⊗H) · UCZ · (I ⊗H),
+where I is the identity operator on the control qubit. This
+transformation leverages the relationship between CZ and
+CNOT gates, allowing for flexible implementation of two-
+qubit operations. This mechanism has been widely adopted
+in neutral atom quantum computing, and its fidelity is contin-
+uously being optimized [18], laying the groundwork for high-
+precision quantum computing.
+III. HARDWARE RESTRICTION IN NEUTRAL ATOM
+PLATFORM
+In the previous sections, we discussed the fundamental prin-
+ciples of quantum computing using neutral atoms. However,
+when it comes to hardware implementation, limitations in con-
+trol technologies necessitate mapping physical operations to
+logical operations while considering fundamental constraints.
+In the following sections, we will provide a detailed discussion
+of the basic physical control equipment used in neutral atom
+quantum computing, as well as their limitations. Based on
+these constraints, we will then explore how to address the
+compilation problem on the neutral atom quantum platform.
+A. SLM and AOD
+As show in Figure 1, in neutral atom quantum computing
+platforms, qubits are encoded in single atoms trapped by
+optical tweezers, with the atom’s positions controlled by
+moving the tweezers in space. To better manipulate the spatial
+arrangement of atoms, two key optical devices are employed:
+the Spatial Light Modulator (SLM) and the Acousto-Optic
+Deflector (AOD). While both are capable of trapping atoms,
+they serve distinct purposes. The SLM generates a fixed 2D
+optical lattice of potential wells, where atoms are loaded into
+predefined positions in space, with each lattice site capable
+of holding a single atom. The potential wells created by the
+SLM are relatively deep, ensuring stable atom trapping and
+preventing atom loss during operations.
+The AOD, in contrast, creates a flexible 2D array that can
+dynamically adjust its spacing, though with certain movement
+constraints. Specifically, the AOD’s row and column spacing
+can expand or contract like a web, but atoms trapped in AOD
+wells can only move within their assigned row or column,
+without crossing between rows or columns. Moreover, each
+row or column must move as a unit and we choose the area size
+of unit. During compilation, we modulate the AOD’s row and
+column spacing to align the atoms with those fixed in the SLM,
+and then move the qubits via the AOD to their target positions.
+In our approach, the SLM array serves as a storage zone for
+qubits, while the region where Rydberg laser excitation occurs
+functions as the entanglement zone. In this entanglement zone,
+any pair of atoms within the Rydberg blockade radius will
+simultaneously execute a CZ gate. The AOD facilitates qubit
+movement from the storage zone to the entanglement zone,
+thereby enabling universal quantum computation.
+AOD
+AOD
+Movement
+SLM atom
+AOD atom
+Atom pairs within the Rydberg range
+Fig. 1: The schematic diagram illustrates the arrangement and
+manipulation of atoms in a neutral atom quantum computing
+platform. Atoms modulated by the SLM are represented by
+blue dots, while atoms in the AOD traps are marked with
+red dots. Dashed lines indicate the AOD tweezers, enabling
+dynamic positioning of atoms for quantum operations.
+B. Compile problem in neutral atom platform
+The native quantum gates in neutral atom quantum com-
+puting include single-qubit rotation gates and multi-qubit
+operations such as CZ and CCZ gates, which rely on the
+Rydberg blockade effect that only becomes effective when
+atoms are sufficiently close. Consequently, the compilation
+system must pay special attention to the physical arrangement
+of qubits. During compilation, it is essential to accurately map
+logical qubits in the quantum circuit to physical qubits and
+adjust the positions of atoms using optical tweezers so they
+are close enough to perform multi-qubit gate operations effec-
+tively. This process requires complex optimization algorithms
+to ensure optimal paths and timing of atomic movements,
+minimizing coherence loss in quantum states and optimizing
+overall runtime. Additionally, the compilation system must
+fully exploit the parallelism of quantum gates. While single-
+qubit gates can be independently and concurrently executed,
+handling two-qubit gates significantly increases compilation
+complexity. Although the neutral atom platform allows parallel
+application of two-qubit gates to different pairs of atoms, this
+is feasible only if there is no interference between pairs and
+each pair is correctly positioned to ensure the effectiveness
+of the Rydberg blockade effect. Therefore, the compilation
+3
+system must organize the sequence of gate operations at the
+logical level and precisely control the physical arrangement
+of atoms and the timing of laser pulses at the hardware
+level. Optimizing this parallelism is crucial for enhancing the
+execution efficiency of quantum circuits, especially in large-
+scale quantum computing, where the compilation system must
+ensure that as many two-qubit gates as possible are executed
+simultaneously to minimize overall runtime.
+Furthermore, the compilation system must address the con-
+nectivity between qubits. The physical layout of the neutral
+atom platform typically consists of two- or three-dimensional
+arrays of atoms, which may not perfectly align with the
+connectivity requirements of the quantum circuit. Therefore,
+the compilation system must resolve connectivity issues by
+adjusting the arrangement of atoms or devising efficient move-
+ment strategies to align the physical qubit layout with the
+circuit’s requirements. This connectivity mapping not only
+affects the success rate and fidelity of quantum gate operations
+but also directly impacts the circuit’s runtime. If two logical
+qubits requiring a two-qubit gate operation are physically far
+apart, the compilation system must find an efficient way to
+bring them together, minimizing unnecessary delays. More-
+over, optimizing the overall runtime involves balancing the
+need to minimize atom movement time with maintaining high
+gate fidelity. This often requires trade-offs between movement
+paths, the timing of laser pulses, and the sequence of gate
+operations to find an optimal solution. The compilation system
+must also account for the coherence of quantum states, ensur-
+ing they remain intact throughout the execution of the quantum
+circuit despite potential disruptions from environmental noise
+or operational errors. These optimization challenges place high
+demands on compilation algorithms, which must be tailored
+to the specific characteristics and physical constraints of the
+hardware platform to achieve efficient and reliable quantum
+computation.
+C. DAG in neutral atom platform
+An effective approach to manage gate dependencies and
+optimize execution is through the use of directed acyclic
+graphs (DAGs). A DAG is a graph structure consisting of
+nodes and directed edges with no cycles, where each node
+represents a quantum gate and each edge indicates a de-
+pendency between gates. By modeling the quantum circuit
+as a DAG, the compiler can analyze these dependencies to
+determine the optimal scheduling of operations. This allows
+for the identification of gates that can be executed in parallel
+and helps minimize the critical path length of the circuit.
+Utilizing DAGs enables precise planning of gate sequences
+and efficient allocation of resources, which is essential for
+maximizing the parallelism inherent in quantum computations.
+Incorporating DAGs into the compilation process also aids
+in addressing the connectivity challenges between qubits on
+the neutral atom platform. The DAG clearly represents which
+qubits need to interact, allowing the compiler to plan efficient
+atom movements and adjust their physical arrangement ac-
+cordingly. This strategy not only reduces unnecessary delays
+caused by distant qubits but also minimizes coherence loss
+by optimizing the paths and timing of atom movements.
+Consequently, DAG-based methods are instrumental in en-
+hancing the execution efficiency of quantum circuits, balancing
+the trade-offs between atom movement, gate fidelity, and
+overall runtime. By tailoring the compilation algorithms to
+leverage DAG representations, we can achieve more efficient
+and reliable quantum computation that aligns with both the
+logical requirements of the quantum circuit and the physical
+constraints of the hardware platform.
+IV. FIDELITY ANALYSIS
+In neutral atom platforms, the fidelity of quantum circuit
+execution is influenced by various factors. In addition to the
+inherent fidelity of single- and two-qubit gates, which directly
+impacts the success rate of circuit operations, the finite lifetime
+of qubits imposes constraints on gate execution times, further
+affecting overall fidelity. Moreover, since atoms must be trans-
+ferred between different operational zones, the accumulated
+heating during movement and the additional time required for
+these transfers introduce further degradation to the circuit’s
+fidelity. These factors collectively contribute to the complexity
+of maintaining high-fidelity quantum computations. Under
+certain approximations, the overall fidelity of a quantum circuit
+can be estimated using the following expression:
+f = (f1)g1·(f2)g2·(fexc)Nres·(ftrans)Ntrans·
+Y
+q∈Q
+
+1 −t + Ttrans
+T2
+
+(4)
+where f1 and f2 represent the fidelities of single- and two-
+qubit gates, respectively, and g1 and g2 denote the number
+of single- and two-qubit gates in the quantum circuit. Due
+to the laser beam waist being on the order of micrometers,
+controlling atoms in the entanglement zone may inadvertently
+affect neighboring atoms, leading to crosstalk noise. The
+parameter fexc denotes the fidelity of atom pairs that are not
+targeted by the laser but are affected by crosstalk, and Nres is
+the total number of crosstalk operations that occur. The term
+ftrans represents the fidelity of atom transfer operations, and
+Ntrans refers to the total number of such transfers during the
+quantum circuit.
+Additionally, T2 is the qubit decoherence time, Ttrans is the
+time required for atom transfers, and t is the gate execution
+time. These factors collectively contribute to the overall circuit
+fidelity as described by Equation 4.
+In a given quantum circuit, the number of single- and two-
+qubit gates is fixed. On a neutral atom platform, assuming
+the beam waist of the laser is negligible, the fidelity of
+single- and two-qubit gates can be maintained as constant,
+unaffected by scalability. Therefore, in Equation 4, the first
+two terms remain unmodifiable; their contribution to fidelity
+is fixed and cannot be optimized. The primary objective of our
+compilation strategy is to optimize the number of Nexc and
+shuttle operations Ntrans as well as the total execution time
+t + Ttrans of the quantum circuit, all of which are crucial for
+enhancing overall circuit fidelity.
+4
+q0
+q1
+q2
+q3
+q4
+q5
+q6
+g0
+g1
+g2
+g3
+g4
+g5
+g6
+g7
+g8
+g9
+Stage 0 Stage 1 Stage 2 Stage 3 Stage 4
+q0
+q1
+q2
+q3
+q4
+q5
+q6
+g0
+g1
+g2
+g3
+g4
+g5
+g7
+g6
+g9
+g8
+Fig. 2: The diagram illustrates the ASAP partitioning method. For a given quantum circuit, we disregard single-qubit gates
+and focus solely on two-qubit gates. Using a forward-partitioning approach, we arrange the two-qubit gates in the sequence
+they appear within the circuit, attempting to place as many independent two-qubit gates as possible within each stage. This
+grouping continues until the addition of the next two-qubit gate causes a conflict within the current stage.As shown in the
+diagram, we first assign g0, g1, and g2 to Stage 0. When g3 cannot be accommodated within Stage 0, we start a new stage
+(Stage 1) beginning with g3. This continues until g5 cannot be assigned to Stage 1, at which point we initiate a subsequent
+stage. This process iteratively yields an effective stage partitioning strategy.
+q0
+q1
+q2
+q3
+q4
+q5
+q6
+g0
+g1
+g2
+g3 g4
+t
+Layer 0
+(Initial Placement)
+Stage 0
+Layer 1
+Stage 1
+Fig. 3: Qubit placement and movement across stages in the Zap compiler. The top portion represents the first two stages of
+Figure 2 after applying the ASAP scheduling, illustrating the quantum circuit with two-qubit gates g0 to g4 applied to qubits
+q0 to q6. The lower portion shows the transitions of qubits between the storage zone and the entanglement zone across distinct
+layers and stages. In Layer 0 (initial placement), all qubits start in the storage zone. During Stage 0 and Stage 1, qubits are
+shuttled to the entanglement zone based on the circuit requirements, with some qubits (e.g., q0, q5) remaining in the same
+position across stages to optimize movement and execution.
+V. ZAP COMPILER
+Building on the characteristics of the neutral atom quan-
+tum computing platform and fidelity estimation analysis, we
+propose a new framework named Zap (Zoned Architecture
+and Parallelizable Compiler for Field Programmable Atom
+Array). Zap aims to provide an improved compilation scheme
+for neutral atom platforms, enhancing their practicality and
+scalability in current quantum computing implementations.
+A. Qubit mapping and placing
+As shown in Figure 2, leveraging the highly parallelizable
+nature of neutral atoms, we employ an ASAP scheduling
+strategy, dividing the target quantum circuit into distinct stages
+where all two-qubit gates within each stage can execute in
+parallel. This implies that, for any given quantum circuit, the
+number of parallel two-qubit gate executions corresponds to
+the number of stages, making ASAP an effective method for
+segmenting quantum circuits.
+In our approach, we have partitioned the operational zones
+based on the characteristics of the neutral atom platform into a
+storage zone and an entanglement zone. Qubits in the storage
+zone are not engaged in two-qubit gate operations, whereas
+qubits moved to the entanglement zone are brought into
+proximity to enable parallel execution of two-qubit gates. Each
+5
+stage of the circuit thus corresponds to one operation in the
+entanglement zone. For this, we use an AOD to shuttle qubits
+from the storage zone to the entanglement zone, positioning
+qubits requiring two-qubit gates close to each other. After the
+operations, if a qubit does not participate in the next stage, it
+is returned to the storage zone.
+When executing different stages, some qubits are shared.
+For instance, as shown in Figure 2, qubits q0, q1, q5, and
+q6 appear in both Stage 0 and Stage 1. In such cases, it is
+unnecessary to return q0, q1, q5, and q6 to the storage zone
+after Stage 0; only qubits q2 and q3 are returned. For the next
+stage, we simply reposition q0 near q5 and q1 near q6 in the
+entanglement zone to perform the required operations. This
+process is depicted in Figure 3. This approach significantly
+reduces the number of atom transfers between zones, decreas-
+ing the overall circuit execution time and the number of shuttle
+operations, both of which enhance the circuit’s overall fidelity.
+As illustrated in Algorithm 1, we employ an optimized sim-
+ulated annealing algorithm to determine the qubit placements
+within our Zap framework. In our design, qubit placement
+cycles through three distinct states: the initial state (layer 0),
+the stage state, and the layer state, each tailored to optimize
+qubit movement and gate execution:
+• Initial Placement (layer 0): All qubits begin in the
+storage zone.
+• Stage Placement: During quantum gate execution, qubits
+involved in the operations are relocated to the entangle-
+ment zone, while all others remain in the storage zone.
+• Layer Placement: This intermediate state captures the
+position of qubits needed in consecutive stages; these
+remain in the entanglement zone, while other qubits are
+returned to the storage zone after each stage.
+To optimize placement, we initialize parameters for the simu-
+lated annealing algorithm, including the starting temperature,
+initial qubit mapping, and a cost function based on the current
+mapping. At each temperature level, we randomly swap qubit
+positions and recalculate the cost, defined as the weighted sum
+of distances between qubits involved in the operations. If the
+new cost improves, we accept the solution and proceed to the
+next iteration. If not, we allow for the possibility of accept-
+ing the solution, though it is generally rejected, to balance
+exploration and solution quality. Given the limitations of the
+AOD, where rows and columns must move while maintaining
+their relative order, qubits cannot be relocated simultaneously.
+To address this, we maximize parallelization between stage
+and layer placements, accepting only solutions that minimize
+movement time, reduce decoherence, and improve fidelity. We
+repeat this procedure until the algorithm reaches a set frozen
+temperature, indicating convergence on an optimal solution.
+B. Atom routing and scheduling
+The scheduling strategy in this work follows an ASAP ap-
+proach, as previously discussed. During scheduling, qubits are
+assigned to specific stages to optimize parallel execution. The
+subsequent compilation process, illustrated in Figure 3, begins
+with the layer 0 (initial) placement and stage 0 placement,
+Algorithm 1: Zap Compiler Qubit Placement via Sim-
+ulated Annealing
+Input: Quantum circuit structure, Initial placement of
+qubits in the storage zone, AOD constraints
+(rows/columns can only move in order),
+Parameters: initial temperature T, cost
+function, max iterations
+Output: Optimized qubit placement that minimizes
+movement time and decoherence
+Initialize:
+Set temperature T to initial temperature
+Generate initial mapping of qubits
+Compute initial cost based on current mapping
+Set iteration count to 0
+while T > frozen_temperature do
+for each iteration do
+Randomly swap positions of selected qubits
+within allowed regions
+Compute new cost based on the current
+mapping
+Calculate the number of parallel movements for
+the new configuration
+if new_cost < current_cost and new parallel
+movements ≤current parallel movements
+then
+Accept new placement
+else
+Calculate probability of acceptance for
+worse solutions if random() < probability
+then
+Accept new placement with penalty
+Revert to previous placement
+Reduce temperature T according to cooling
+schedule
+Output optimized placement with minimized total
+movement time and enhanced fidelity
+establishing the starting positions of qubits. Routing is then
+performed to transition qubits from the initial placement to
+their positions for stage 0 operations. This sequence continues
+iteratively: each subsequent layer placement is followed by
+routing to position qubits for the next stage, progressing
+through stage 1, layer 1, and so forth.
+In the routing process, atomic movements are defined us-
+ing a four-dimensional vector (startx, endx, starty, endy). This
+vector specifies the starting and ending coordinates in both
+the x and y directions, fully capturing each atom’s movement
+path. According to the AOD movement constraints, different
+columns and rows must not overlap during movement. In other
+words, the movement vectors of qubits that are allowed to
+move simultaneously cannot intersect in space. To satisfy these
+constraints, we employ a DAG to determine the movement
+sequence of qubits. Additionally, to prevent potential collisions
+on the two-dimensional platform, each qubit is shifted slightly
+6
+Storage Zone
+6 µm
+6 µm
+Entanglement Zone
+4 µm
+6 µm
+12 µm
+Fig. 4: The diagram of the Zap platform. The Storage Zone
+(bottom) consists of atoms spaced 6 µm apart in x-direction
+and 6 µm apart in y-direction, where qubits are held when
+not engaged in two-qubit gate operations. The Entanglement
+Zone (top) contains atoms arranged in pairs with an intra-pair
+spacing of 4 µm and a minimum inter-pair spacing of 6 µm,
+enabling controlled interactions for quantum entanglement
+operations.
+Fig. 5: Fidelity analysis of the Zap platform’s quantum oper-
+ations. The bar chart presents different fidelity contributions.
+The dashed purple line with markers shows the overall fidelity
+across number of qubits.
+before its main movement, ensuring it does not collide with
+SLM-positioned qubits during transit.
+VI. NUMERICAL WORK
+In our simulations, we employed state-of-the-art parameters
+to evaluate the performance of our proposed scheme and
+compared it with the existing Enola scheme. All simulations
+and computations in this work were conducted on a macOS
+system with a 2.4 GHz Quad-Core Intel Core i5 processor,
+16 GB of 2133 MHz LPDDR3 memory, and an integrated
+Intel Iris Plus Graphics 655 GPU with 1536 MB of dedicated
+memory. This configuration provided sufficient computational
+resources for the execution of our algorithms and analyses.
+For Rb atoms, the Rydberg blockade radius is approximately
+5 µm. Accordingly, as shown in Figure 4, we set the spacing in
+both the x and y directions of the atomic array in the storage
+zone to 6 µm. This ensures that even if the atoms in the
+storage zone are in the Rydberg state, they will not influence
+their neighbors. Furthermore, this spacing enables each atom
+to execute single-qubit gates within the storage zone without
+interference. In the entanglement zone, the spacing between
+atoms at the same site along the x-direction is set to 4 µm,
+while atoms at different sites maintain a minimum spacing of
+6 µm. The y-direction spacing remains at 6 µm. This implies
+that we achieve entanglement using paired atoms along the x-
+direction, with all atom pairs that are within a 4 µm distance in
+the x-direction performing CZ gates in parallel. The distance
+between the storage and entanglement zones is set to 12 µm
+to ensure that the laser systems in these two zones do not
+interfere with each other.
+With the above parameter settings, we performed numer-
+ical calculations to evaluate the fidelity of our approach
+for different qubit scales. We also analyzed in detail the
+reduction in fidelity due to two-qubit gate operations, atomic
+movement, and atomic decoherence during operations, as
+shown in Figure 5. In our Zap scheme, the zoned architec-
+ture structure allows atoms in the entanglement zone to be
+reused, which significantly reduces the fidelity loss caused
+by atomic movement. Additionally, the parallel movement
+capability provided by the AOD ensures that even with a qubit
+count as large as 100, the need for global atomic movement
+remains minimal, thereby preventing a steep drop in fidelity
+as the qubit scale increases. The parallel operation also helps
+maintain the fidelity of two-qubit gates. Furthermore, a key
+advantage of the zoned architecture structure is its ability
+to effectively prevent crosstalk, which otherwise significantly
+impacts fidelity. For example, when quantum gates and qubit
+placement occur in the same area, executing two-qubit gates
+with a global laser beam could inadvertently affect qubits not
+involved in the gate operation. In contrast, the Zap scheme’s
+partitioned structure prevents this by isolating gate-executing
+qubits, avoiding unintended interactions with non-participating
+qubits.
+In our simulations, the main source of fidelity loss is the
+limited coherence time of the atoms. The atomic movement
+introduces additional execution time, which accumulates de-
+coherence errors due to the finite lifetime of the energy levels.
+However, with the continued advancement of neutral atom
+technology, more vacuum-purified and electromagnetically
+isolated environments can be achieved, which will effectively
+enhance the lifetime of atomic energy levels. Furthermore,
+research into different atomic species as qubits is ongoing,
+and by selecting optimal atomic energy levels, it is possible
+to extend T1 and T2 times to the hour scale [24]. This would
+ensure that the millisecond-scale time introduced by atomic
+movement has negligible impact on decoherence, thereby
+7
+Fig. 6: Fidelity comparison of different quantum algorithms
+between the Zap and Enola compilation methods. Benchmark
+such as Adder, Shor, QAOA, QFT, BV, Ising, and Cat are
+evaluated for their performance fidelity. The Zap framework
+generally shows higher fidelity across most algorithms, espe-
+cially notable in the BV and Cat algorithms.
+significantly improving the overall fidelity of our scheme.
+To further illustrate the efficiency gains of our approach,
+we evaluated the performance of various quantum algorithms
+on Zap and compared them with previous results, as shown
+in Figure 6. Our approach shows significant improvements for
+commonly used algorithms such as QAOA, QFT, BV, Adder,
+Cat state preparation, Ising model and Shor, with an especially
+notable 16.2x improvement in cat state preparation. This sub-
+stantial improvement is attributed to the characteristics of the
+cat state algorithm, where each stage involves a relatively small
+number of participating atoms, leaving many atoms idle. In
+contrast to the Enola scheme, our protocol eliminates crosstalk
+errors for idle atoms, resulting in significantly higher fidelity
+and efficiency during cat state preparation. This indicates that
+our approach is largely generalizable, providing substantial
+optimization for most algorithms. The only exception is the
+Ising model, where our scheme performs slightly worse. This
+is due to the predominantly serial nature of the Ising model’s
+gate execution, where most qubits participate at every stage
+of the quantum circuits. This high level of involvement limits
+the advantages of dividing atoms into separate zones, thereby
+increasing decoherence due to extended movement times. The
+specific parameters used in these simulations are detailed in
+Table I.
+Furthermore, to validate the effectiveness of our scheme,
+we conducted tests on random quantum circuits. Specifically,
+for an N-qubit system, we generated random DAG quantum
+circuits using a random regular graph, and for each fixed qubit
+count, we performed 10 random tests, calculating the average
+fidelity and corresponding error bars. As depicted in Figure 7,
+our scheme shows an order-of-magnitude improvement in
+Fig. 7: Comparison of overall fidelity between Zap and Enola
+platforms as the number of qubits increases. Quantum circuits
+are generated using nx.random_regular_graph, and for
+each qubit count, 10 random circuits are tested. The scatter
+points represent the fidelity results of each run, while the
+dashed lines indicate the mean fidelity for each platform.
+fidelity compared to previous work, especially as the qubit
+count increases. Additionally, it is worth noting that the error
+bars in our scheme are significantly smaller compared to
+previous approaches, particularly Enola. This improvement
+stems from our scheme’s effective prevention of crosstalk,
+which is the primary source of uncertainty in Enola.
+TABLE I: Benchmark algorithms used for testing and compar-
+ing ZAP and Enola performance. Each algorithm represents
+varying circuit characteristics: circuit width (defined as the
+number of qubits) spanning small (2-10), medium (11-27),
+and large (28 or more) scales; circuit depth, represented by
+the number of stages; and gate density.
+Benchmark
+Qubits
+2Q Gates
+Stage
+Adder
+4
+10
+6
+Shor
+5
+30
+30
+QAOA
+6
+54
+33
+QFT
+10
+105
+37
+BV
+14
+13
+13
+Ising
+26
+50
+4
+Cat
+35
+34
+34
+VII. RELATED WORK
+Compilation strategies must be tailored to specific quan-
+tum hardware platforms due to significant differences in the
+characteristics of these platforms, such as the types of native
+quantum gates supported and the topology of the quantum
+chips. In the superconducting quantum computing platform,
+methods such as the SABRE algorithm, which is based on
+optimizing SWAP gates [25], and randomized circuit compi-
+lation have been developed [26]. Furthermore, reinforcement
+learning and artificial intelligence-based techniques have also
+been utilized to enhance the compilation process [27]. For
+8
+ion trap platforms, various compilation approaches have been
+proposed that leverage the shuttling of ions within the chip. For
+instance, TILT has been introduced for linear ion traps [28],
+while a range of methods have been developed for QCCD
+architectures [29], [30], primarily focusing on improving the
+efficiency of ion shuttling and mitigating the effects of de-
+creasing atom numbers as the number of qubits in a single
+trap increases.
+In the case of neutral atom platforms, the ability to move
+qubits in parallel, combined with global laser operations,
+allows for the exploitation of the platform’s high connectivity
+and
+high
+parallelism,
+enabling
+the
+design
+of
+effective
+compilation schemes tailored to its unique characteristics.
+OLSQ-DPQA [31] presents an early approach to compiling
+for dynamically field-programmable qubit arrays (DPQA),
+focusing on optimal layout synthesis through a satisfiability
+modulo theories (SMT) solver. Enola [32] improves upon
+OLSQ-DPQA by formulating the scheduling problem as a
+graph edge coloring, achieving near-optimal gate staging,
+with a 3.7x stage reduction and up to 5.9x improvement in
+fidelity over prior work. NALAC [33] introduces a zoned
+architecture model, abstracting neutral atom layouts into
+distinct regions for entangling, storage, and measurement.
+This model enhances fault-tolerant quantum computing by
+efficiently routing logical gates within a zoned configuration.
+Arctic [34] focuses on optimizing neutral atom movement
+schedules in zoned architectures, achieving reduced pulse
+counts by up to 5x and a fidelity increase of 7x by addressing
+movement constraints with a three-phase scheduling process
+that maximizes one-dimensional atom trajectories. FPQA-
+C [35] and Geyser [36] extend compilation techniques to
+support the flexible architecture of field-programmable qubit
+arrays. FPQA-C employs hierarchical qubit mapping and a
+parallelism-focused router, achieving significant reductions
+in circuit depth and execution time. Q-Pilot [37] utilizes
+flying ancilla qubits for dynamic routing in FPQA, enhancing
+parallelism
+and
+reducing
+circuit
+depth
+across
+various
+applications, including quantum simulation and the QAOA.
+Qompose [38] offers a learning-based approach to optimize
+atom
+layout
+by
+selecting
+algorithm-specific
+topologies,
+balancing execution length and fidelity. By adapting layout to
+the unique demands of each algorithm.
+These frameworks collectively contribute to advancing neu-
+tral atom quantum computing by addressing the compilation
+and scheduling constraints imposed by reconfigurable archi-
+tectures, establishing foundational methods that enhance scal-
+ability, fidelity, and execution efficiency. Our work primarily
+focuses on comparing with Enola. We developed a parti-
+tioned architecture and successfully addressed the limitation in
+Enola’s [32] design regarding the commutativity requirement
+for gate operations. Our approach demonstrates significant
+improvements in minimizing parallel atomic movement and
+enhancing overall fidelity.
+VIII. CONCLUSION
+In this work, we introduced Zap, a novel partitioned com-
+pilation strategy tailored for neutral atom quantum computing
+platforms. By leveraging a zoned architecture that separates
+computational tasks into storage and entanglement regions,
+our approach effectively minimizes atom movements, reduces
+crosstalk, and enhances overall circuit fidelity. The integration
+of an ASAP scheduling strategy with a simulated annealing-
+based qubit intermediate placement algorithm ensures optimal
+resource utilization. Additionally, the reuse of atoms in the
+entanglement zone significantly improves the efficiency of
+quantum circuit compilation in the neutral atom platform.
+Compared to prior methods such as Enola, Zap achieves
+substantial gains in fidelity across a variety of quantum algo-
+rithms, demonstrating its versatility and robustness for large-
+scale quantum systems. Notably, our strategy’s ability to mit-
+igate decoherence and optimize atomic movement establishes
+Zap as a transformative advancement in neutral atom quantum
+computing.
+Future directions for us will focus on refining coherence
+times, further reducing atom transfer overhead, and exploring
+hybrid architectures that integrate machine learning for
+dynamic
+routing.
+Such
+enhancements
+could
+push
+the
+boundaries
+of
+quantum
+computational
+performance,
+positioning neutral atom platforms as a cornerstone of
+scalable and practical quantum computing.
+Note added: While completing this work, we became aware
+of a preprint appearing on arXiv recently by Cong group [39],
+introduced ZAC, a reuse-aware compiler for zoned quantum
+architectures, which also gain a great fidelity improvement
+over monolithic designs through optimized qubit reuse and
+load-balancing scheduling. Both their work and ours discuss
+partitioned structures and highlight the importance of reusing
+neutral atoms within entanglement zones.
+ACKNOWLEDGEMENTS
+We sincerely thank Chenghong Zhu, Xudan Chai, and
+Yanwu Gu for their invaluable discussions. This work is sup-
+ported by the Beijing Natural Science Foundation (Grant No.
+Z220002), the National Natural Science Foundation of China
+(Grant No. 92365111), and the Innovation Program for Quan-
+tum Science and Technology (Grant No. 2021ZD0302400).
+Meng-Jun Hu is supported by the National Natural Science
+Foundation of China (Grant No.92365206).
+REFERENCES
+[1] J. Preskill, “Quantum computing in the nisq era and beyond,” Quantum,
+vol. 2, p. 79, 2018.
+[2] A. Montanaro, “Quantum algorithms: an overview,” npj Quantum Infor-
+mation, vol. 2, no. 1, pp. 1–8, 2016.
+[3] A. W. Harrow, A. Hassidim, and S. Lloyd, “Quantum algorithm for
+linear systems of equations,” Physical review letters, vol. 103, no. 15,
+p. 150502, 2009.
+[4] M. Kjaergaard, M. E. Schwartz, J. Braumüller, P. Krantz, J. I.-J. Wang,
+S. Gustavsson, and W. D. Oliver, “Superconducting qubits: Current state
+of play,” Annual Review of Condensed Matter Physics, vol. 11, no. 1,
+pp. 369–395, 2020.
+9
+[5] C. D. Bruzewicz, J. Chiaverini, R. McConnell, and J. M. Sage, “Trapped-
+ion quantum computing: Progress and challenges,” Applied Physics
+Reviews, vol. 6, no. 2, 2019.
+[6] B. Lekitsch, S. Weidt, A. G. Fowler, K. Mølmer, S. J. Devitt, C. Wun-
+derlich, and W. K. Hensinger, “Blueprint for a microwave trapped ion
+quantum computer,” Science Advances, vol. 3, no. 2, p. e1601540, 2017.
+[7] L. Henriet, L. Beguin, A. Signoles, T. Lahaye, A. Browaeys, G.-O.
+Reymond, and C. Jurczak, “Quantum computing with neutral atoms,”
+Quantum, vol. 4, p. 327, 2020.
+[8] K. Wintersperger, F. Dommert, T. Ehmer, A. Hoursanov, J. Klepsch,
+W. Mauerer, G. Reuber, T. Strohm, M. Yin, and S. Luber, “Neutral atom
+quantum computing hardware: performance and end-user perspective,”
+EPJ Quantum Technology, vol. 10, no. 1, p. 32, 2023.
+[9] I. Cong, H. Levine, A. Keesling, D. Bluvstein, S.-T. Wang, and M. D.
+Lukin, “Hardware-efficient, fault-tolerant quantum computation with
+rydberg atoms,” Physical Review X, vol. 12, no. 2, p. 021049, 2022.
+[10] D. Bluvstein, S. J. Evered, A. A. Geim, S. H. Li, H. Zhou, T. Manovitz,
+S. Ebadi, M. Cain, M. Kalinowski, D. Hangleiter et al., “Logical
+quantum processor based on reconfigurable atom arrays,” Nature, vol.
+626, no. 7997, pp. 58–65, 2024.
+[11] S. McArdle, S. Endo, A. Aspuru-Guzik, S. C. Benjamin, and X. Yuan,
+“Quantum computational chemistry,” Reviews of Modern Physics,
+vol. 92, no. 1, p. 015003, 2020.
+[12] Y. Cao, J. Romero, J. P. Olson, M. Degroote, P. D. Johnson, M. Kiefer-
+ová, I. D. Kivlichan, T. Menke, B. Peropadre, N. P. Sawaya et al.,
+“Quantum chemistry in the age of quantum computing,” Chemical
+reviews, vol. 119, no. 19, pp. 10 856–10 915, 2019.
+[13] J.-P. Aumasson, “The impact of quantum computing on cryptography,”
+Computer Fraud & Security, vol. 2017, no. 6, pp. 8–11, 2017.
+[14] T. M. Fernandez-Carames and P. Fraga-Lamas, “Towards post-quantum
+blockchain: A review on blockchain cryptography resistant to quantum
+computing attacks,” IEEE access, vol. 8, pp. 21 091–21 116, 2020.
+[15] A. Ajagekar and F. You, “Quantum computing for energy systems
+optimization: Challenges and opportunities,” Energy, vol. 179, pp. 76–
+89, 2019.
+[16] J. Choi and J. Kim, “A tutorial on quantum approximate optimization
+algorithm (qaoa): Fundamentals and applications,” in 2019 international
+conference on information and communication technology convergence
+(ICTC).
+IEEE, 2019, pp. 138–142.
+[17] T. Graham, Y. Song, J. Scott, C. Poole, L. Phuttitarn, K. Jooya, P. Eichler,
+X. Jiang, A. Marra, B. Grinkemeyer et al., “Multi-qubit entanglement
+and algorithms on a neutral-atom quantum computer,” Nature, vol. 604,
+no. 7906, pp. 457–462, 2022.
+[18] S. J. Evered, D. Bluvstein, M. Kalinowski, S. Ebadi, T. Manovitz,
+H. Zhou, S. H. Li, A. A. Geim, T. T. Wang, N. Maskara et al., “High-
+fidelity parallel entangling gates on a neutral-atom quantum computer,”
+Nature, vol. 622, no. 7982, pp. 268–272, 2023.
+[19] L. Henriet, L. Beguin, A. Signoles, T. Lahaye, A. Browaeys, G.-O.
+Reymond, and C. Jurczak, “Quantum computing with neutral atoms,”
+Quantum, vol. 4, p. 327, Sep. 2020.
+[20] H. J. Manetsch, G. Nomura, E. Bataille, K. H. Leung, X. Lv, and
+M. Endres, “A tweezer array with 6100 highly coherent atomic qubits,”
+arXiv preprint arXiv:2403.12021, 2024.
+[21] M. Schlosser, J. Kruse, C. Gierl, S. Teichmann, S. Tichelmann, and
+G. Birkl, “Fast transport, atom sample splitting and single-atom qubit
+supply in two-dimensional arrays of optical microtraps,” New Journal
+of Physics, vol. 14, no. 12, p. 123034, 2012.
+[22] D. Bluvstein, H. Levine, G. Semeghini, T. T. Wang, S. Ebadi, M. Kali-
+nowski, A. Keesling, N. Maskara, H. Pichler, M. Greiner et al., “A
+quantum processor based on coherent transport of entangled atom
+arrays,” Nature, vol. 604, no. 7906, pp. 451–456, 2022.
+[23] H. J. Levine, “Quantum information processing and quantum simulation
+with programmable rydberg atom arrays,” Ph.D. dissertation, Harvard
+University, 2021.
+[24] P. Wang, C.-Y. Luan, M. Qiao, M. Um, J. Zhang, Y. Wang, X. Yuan,
+M. Gu, J. Zhang, and K. Kim, “Single ion-qubit exceeding one hour
+coherence time,” arXiv preprint arXiv:2008.00251, 2020.
+[25] G. Li, Y. Ding, and Y. Xie, “Tackling the qubit mapping problem for
+nisq-era quantum devices,” in Proceedings of the twenty-fourth interna-
+tional conference on architectural support for programming languages
+and operating systems, 2019, pp. 1001–1014.
+[26] A. Hashim, R. K. Naik, A. Morvan, J.-L. Ville, B. Mitchell, J. M.
+Kreikebaum, M. Davis, E. Smith, C. Iancu, K. P. O’Brien et al.,
+“Randomized compiling for scalable quantum computing on a noisy
+superconducting quantum processor,” arXiv preprint arXiv:2010.00215,
+2020.
+[27] Z. Wang, Q. Chen, Y. Du, Z. Yang, X. Cai, K. Huang, J. Zhang, K. Xu,
+J. Du, Y. Li et al., “Quantum compiling with reinforcement learning on
+a superconducting processor,” arXiv preprint arXiv:2406.12195, 2024.
+[28] X.-C. Wu, D. M. Debroy, Y. Ding, J. M. Baker, Y. Alexeev, K. R. Brown,
+and F. T. Chong, “Tilt: Achieving higher fidelity on a trapped-ion linear-
+tape quantum computing architecture,” in 2021 IEEE International Sym-
+posium on High-Performance Computer Architecture (HPCA).
+IEEE,
+2021, pp. 153–166.
+[29] K. E. Stevens, J. M. Amini, S. C. Doret, G. Mohler, C. Volin, and
+A. W. Harter, “Automating quantum experiment control: From circuit
+compilation to ion routing,” Quantum Information Processing, vol. 16,
+pp. 1–20, 2017.
+[30] X.-C. Wu, Y. Ding, Y. Shi, Y. Alexeev, H. Finkel, K. Kim, and F. T.
+Chong, “Ilp-based scheduling for linear-tape model trapped-ion quantum
+computers,” in the Proceedings of The International Conference for High
+Performance Computing, Networking, Storage, and Analysis, Denver Co,
+2019.
+[31] D. B. Tan, D. Bluvstein, M. D. Lukin, and J. Cong, “Compiling
+quantum circuits for dynamically field-programmable neutral atoms
+array processors,” Quantum, vol. 8, p. 1281, 2024.
+[32] D. B. Tan, W.-H. Lin, and J. Cong, “Compilation for dynamically field-
+programmable qubit arrays with efficient and provably near-optimal
+scheduling,” arXiv preprint arXiv:2405.15095, 2024.
+[33] Y. Stade, L. Schmid, L. Burgholzer, and R. Wille, “An abstract model
+and efficient routing for logical entangling gates on zoned neutral atom
+architectures,” arXiv preprint arXiv:2405.08068, 2024.
+[34] E. Decker, “Arctic: A field programmable quantum array scheduling
+technique,” arXiv preprint arXiv:2405.06183, 2024.
+[35] H. Wang, P. Liu, B. Tan, Y. Liu, J. Gu, D. Z. Pan, J. Cong, U. Acar,
+and S. Han, “Fpqa-c: a compilation framework for field programmable
+qubit array,” arXiv preprint arXiv:2311.15123, 2023.
+[36] T. Patel, D. Silver, and D. Tiwari, “Geyser: a compilation framework
+for quantum computing with neutral atoms,” in Proceedings of the 49th
+Annual International Symposium on Computer Architecture, 2022, pp.
+383–395.
+[37] H. Wang, B. Tan, P. Liu, Y. Liu, J. Gu, J. Cong, and S. Han, “Q-pilot:
+field programmable quantum array compilation with flying ancillas,”
+arXiv preprint arXiv:2311.16190, 2023.
+[38] D. Silver, T. Patel, and D. Tiwari, “Qompose: A technique to select op-
+timal algorithm-specific layout for neutral atom quantum architectures,”
+arXiv preprint arXiv:2409.19820, 2024.
+[39] W.-H. Lin, D. B. Tan, and J. Cong, “Reuse-aware compilation for
+zoned quantum architectures based on neutral atoms,” arXiv preprint
+arXiv:2411.11784, 2024.
+10

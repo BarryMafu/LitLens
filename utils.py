@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup
 import os
 import tarfile
 import pdfplumber
+import fitz  # PyMuPDF
 
 RESPONSE_CODE_OK = 200
 
@@ -49,7 +50,7 @@ def search_arxiv(query: str, max_results: int = 10):
         'max_results': max_results
     }
     response = requests.get(url, params=params)
-    print(response.text)
+    print(response.content)
     
     # Check if the request was successful
     if response.status_code != RESPONSE_CODE_OK:
@@ -150,10 +151,10 @@ def get_content_pdf(arxiv_id: str):
         for chunk in response.iter_content(chunk_size=8192):
             file.write(chunk)
 
-    with pdfplumber.open(pdf_path) as pdf:
+    with fitz.open(pdf_path) as pdf:
         text = ""
-        for page in pdf.pages:
-            text += page.extract_text()
+        for page in pdf:
+            text += page.get_text()
     
     txt_path = os.path.join(cwd, f"src/txt/{arxiv_id}.txt")
     with open(txt_path, 'w', encoding='utf-8') as file:
