@@ -144,6 +144,10 @@ def get_content_pdf(arxiv_id: str):
     # Create directory
     cwd = os.getcwd()
     pdf_path = os.path.join(cwd, f"src/pdf/{arxiv_id}.pdf")
+    txt_path = os.path.join(cwd, f"src/txt/{arxiv_id}.txt")
+    # ignore if exist txt_path
+    if os.path.exists(txt_path):
+        return txt_path
     
     # Save PDF file
     with open(pdf_path, 'wb') as file:
@@ -155,13 +159,13 @@ def get_content_pdf(arxiv_id: str):
         for page in pdf.pages:
             text += page.extract_text()
     
-    txt_path = os.path.join(cwd, f"src/txt/{arxiv_id}.txt")
+    
     with open(txt_path, 'w', encoding='utf-8') as file:
         file.write(text)
     return txt_path
 
 if __name__ == "__main__":
-    search_word = "quantum circuit routing, reinforcement learning, Monte Carlo tree search"
+    search_word = "qubit mapping, SABRE"
     results = search_arxiv(search_word, max_results=10)
     for paper in results:
         print(paper)

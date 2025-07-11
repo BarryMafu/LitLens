@@ -58,6 +58,8 @@ Here is the list of paper titles, which consist of 3 parts:
 {reference_papers}
 3. Search papers: 
 {search_papers}
+
+Now you need to select exactly {limit} papers from the above list based on the content provided, excluding the original paper. Ordering from high relevance to low relevance.
 """
         }
     ]
@@ -90,6 +92,8 @@ Transformers for Natural Language Processing
             "content": f"""
 Here is the list of papers with both title and abstract:
 {prompt_input}
+
+Now you need to select exactly {limit} papers from the above list based on the content provided, excluding the original paper. Ordering from high relevance to low relevance.
 """
         }
     ]

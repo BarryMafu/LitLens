@@ -192,7 +192,7 @@ h2 {
     padding: 20px !important;
     margin-bottom: 20px !important;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05) !important;
-    border-left: 4px solid #1e88e5 !important;
+    border-left: 4px solid #4727fc !important;
 }
 
 /* 标题统一使用Markdown样式 */
@@ -242,6 +242,7 @@ def recommend_papers(arxiv_id, first_n, second_n, progress=gr.Progress()):
 </div>
 """
     # output_html += "</div>"
+    progress(1.0, desc="Recommendations generated successfully!")
     return output_md
 
 def show_info(arxiv_id):

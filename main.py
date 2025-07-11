@@ -114,16 +114,21 @@ class LitLens:
     
     def get_recommendations(self, arxiv_id: str, progress: gr.Progress)-> str:
         print(f"arXiv:{arxiv_id}: ", get_basic_info(arxiv_id)['title'])
+        progress(0.01, desc="Fetching paper content...")
         paper_content = self.get_paper_content(arxiv_id)
+        progress(0.15, desc="Fetching related papers...")
         titles_r0 = self.get_all_papers(arxiv_id, paper_content)
         print("$ Cited Count: ", len(titles_r0['cited']))
         print("$ Reference Count: ", len(titles_r0['reference']))
         print("$ Search Count: ", len(titles_r0['search']))
+        progress(0.25, desc=f"Fetching complete C/R/S = {len(titles_r0['cited'])}/{len(titles_r0['reference'])}/{len(titles_r0['search'])}, first round...")
         # print(titles_r0)
         titles_r1 = self.first_round(titles_r0, paper_content)
         print("First Round Papers: ", len(titles_r1))
+        progress(0.6, desc=f"First round complete, selected {len(titles_r1)} papers, second round...")
         titles_r2 = self.second_round(titles_r1, paper_content)
         print("Second Round Papers: ", len(titles_r2))
+        progress(0.95, desc=f"Second round complete, selected {len(titles_r2)} papers, generating recommendations...")
         return titles_r2
         
 if __name__ == "__main__":
