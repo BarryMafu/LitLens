@@ -1,0 +1,957 @@
+Scaling the Automated Discovery of Quantum Circuits
+via Reinforcement Learning with Gadgets
+Jan Olle,1 Oleg M. Yevtushenko,2 and Florian Marquardt1,2
+1Max Planck Institute for the Science of Light, Erlangen, Germany
+2Friedrich-Alexander-Universita¨t Erlangen-Nu¨rnberg, Germany
+(Dated: March 17, 2025)
+Reinforcement Learning (RL) has established itself as a powerful tool for designing quantum
+circuits, which are essential for processing quantum information. RL applications have typically
+focused on circuits of small to intermediate complexity, as computation times tend to increase
+exponentially with growing circuit complexity. This computational explosion severely limits the
+scalability of RL and casts significant doubt on its broader applicability. In this paper, we propose
+a principled approach based on the systematic discovery and introduction of composite gates –
+gadgets, that enables RL scalability, thereby expanding its potential applications. As a case study,
+we explore the discovery of Clifford encoders for Quantum Error Correction. We demonstrate that
+incorporating gadgets in the form of composite Clifford gates, in addition to standard CNOT and
+Hadamard gates, significantly enhances the efficiency of RL agents. Specifically, the computation
+speed increases (by one or even two orders of magnitude), enabling RL to discover highly complex
+quantumcodeswithoutpreviousknowledge. WeillustratethisadvancementwithexamplesofQEC
+code discovery with parameters [[n,1,d]] for d≤7 and [[n,k,6]] for k ≤7. We note that the most
+complicated circuits of these classes were not previously found. We highlight the advantages and
+limitations of the gadget-based approach. Our method paves the way for scaling the RL-based
+automaticdiscoveryofcomplicatedquantumcircuitsforvarioustasks,whichmayincludedesigning
+logical operations between logical qubits or discovering quantum algorithms.
+I. INTRODUCTION RL agent’s strategy for producing quantum entangled
+states are identified, yet the goal was the interpretabil-
+ity of those actions. In [17], predetermined gadgets were
+As the field of quantum technology matures, the num-
+given to RL agents to optimize quantum circuits, but no
+berofqubitsthathavetobecontrolledandorchestrated
+newgadgetswerediscovered. Morerecently,theiterative
+is growing [1–3]. To extract useful value from them,
+discovery and use of gadgets for quantum ground state
+quantum circuits have to be designed with different spe-
+preparation has been developed [15] following develop-
+cific purposes. This essential task, commonly known as
+ments in program synthesis for quantum circuit synthe-
+quantumcircuitsynthesis,consistsofthefollowing: given
+sis[13]. Adifferent,yetrelatedapproachiscalledprojec-
+a target abstract quantum operation (which can be ei-
+tive simulation [22], an alternative version of RL, where
+therpreparingaquantumstate, preparingadesireduni-
+an agent simulates potential future scenarios through taryoperation,orimplementinganentirequantumalgo-
+random walks in a network of memory clips before tak-
+rithm), the task is to find a sequence of gates that can
+ing action and where new clips can be generated. This
+run natively in the quantum processor and that produce
+hasbeenapplied, forexample, tolong-distancequantum
+the desired quantum operation with high success rate.
+communication problems [23].
+Techniquesfrommachinelearninghavebeenidentified
+as powerful tools to tackle the quantum circuit synthesis Whilethegeneralideaofemployinggadgetsinitselfis
+task[4–17]. Fromthese,reinforcementlearning(RL)[18] not novel, there is no unique way of systematically con-
+is particularly well suited for solving sequential decision- structing and using them. In the quantum domain, the
+making tasks where an optimal solution is a priori not iterativeuseofdiscoveredgadgetstosolvemorecomplex
+known. However, as the complexity of the task increases tasks has only been mildly successful – only scaled to a
+(typically scaling either the number of qubits or the cir- handfulofqubits[15]. Incontrast,wewillpresentacon-
+cuitsize),RLfacesseriouschallengesandcaneveneven- crete RL-based implementation of this idea that is able
+tually fail. toscaletomultipledozensofqubits. Thechosendomain
+of application, both due to its importance and its viabil-
+Two strategies have been explored in order to ease
+ity, is the automated discovery of encoding circuits for
+the scalability of RL approaches for the quantum circuit
+Quantum Error Correction (QEC).
+synthesis task. The first one is curriculum RL [19, 20].
+There,anagentlearnstosolvethecomplextaskbygrad- Withtheongoingracetowardsshowingscalableexper-
+ually solving tasks of increasing difficulty, transferring imental demonstrations of QEC [2, 24–29], it is of par-
+the knowledge throughout the different stages. An al- ticularinteresttodesignQECprotocols-whichcanalso
+ternative strategy is to identify frequent and compact beunderstoodasaquantumcircuitsynthesistask-with
+subroutines used by the agent, which are commonly re- scalablealgorithmicmethods. Operatingasavirtualsci-
+ferred to as gadgets (a term originating in complexity entist, an RL agent can systematically explore the space
+theory in computer science). In [21], gadgets from an ofpossiblecodesthroughtrialanderror,withtheadvan-
+5202
+raM
+41
+]hp-tnauq[
+1v83611.3052:viXra2
+Gadget inspection Generalization (guess)
+HH
+HH Scalability to larger
+HH code distances
+Data Preprocessing
+Reinforcement Learning
+QEC Code Discovery
+Actions
+Trainingsteps
+nruteR
+Gadget inspection
+RL QEC Code Discovery
+with gadgets
+m
+H
+H m-1
+m-1
+m-1
+DCX(2m)
+H m-1
+Target: d≥6
+Data Preprocessing DCX(8)
+with gadgets
+Reinforcement Learning
+QEC Code Discovery DCX(4)
+no gadgets
+Actions
+DCX
+FIG.1. Conceptual scheme of our workflow. TheprocessbeginswithbasicCNOTgatesasactionsforthereinforcement
+learning (RL) agent. After finding many encoding circuits, these are preprocessed (explained in more detail in Figure. 2) and
+furtherinspectedinordertovisuallyidentifyrecurringpatterns,whichwecallgadgets. Thesegadgetsarethengivenasfurther
+actionstoanewgenerationofRLagents,andtheprocessgetsrepeated. Eventually,wenoticearecursivepatternandidentify
+a rule to generalize gadget construction. Finally, thanks to these powerful gadgets, we are able to scale the RL strategy to
+discoverQECcodeswithlargercodedistancesthanwhatweareabletofindwhenonlysingleCNOTsareavailableasactions.
+(a) (b)
+Reinforcement Learning Data Preprocessing
+QEC Code Discovery
+RL agent Raw dataset Filter same Normalized dataset
+Observation Action canonical
+tableaus
+H
+Tableau Apply gate H
+H
+X 1 X 2,X 3 X 4,X 5 X 6 Reward Normalize H H H
+Z 1 Z 2,Z 3 Z 4,Z 5 Z 6 Environment DCX(1,0) H circuits H H H
+H
+H
+H H
+H
+FIG.2. Scheme of the reinforcement learning and data preprocessing modules. (a)QECcodeandencoderdiscovery
+withreinforcementlearning. TheRLagent’staskistobuildacircuitthatisabletocorrectatargetlistoferrors,whichenter
+through the reward. To train the agent, we use PPO, which is an actor-critic method with two neural networks. They both
+receiveasobservationabinaryrepresentationofthetableauofthecircuitatthatgivenpointintime. Theactionsarediscrete
+and correspond to applying either a single CNOT gate or more complex gates built from multiple CNOTs, whose possible
+control and target qubits are determined by the available qubit connectivity. (b) The data preprocessing module. It consists
+oftwosteps: afiltering stepwherewe onlystoreonecircuit per uniquecanonicaltableau, andanormalizationstep wherethe
+remaining circuits are brought to a normalized form (for more details see the main text). This procedure is crucial to remove
+redundancy and complexity from our dataset and enables a more tractable visual gadget recognition process.
+tage of allowing the human to have precise control over scaling these approaches to more complex scenarios has
+which structural constraints to enforce or relax. This proved challenging, suggesting that vanilla RL strate-
+data-driven approach enables the investigation of more gies may not be sufficient for discovering higher-distance
+creative QEC strategies that might elude conventional codes.
+analytical methods. In this work, we present a scalable approach to QEC
+RecentadvanceshavedemonstratedtheviabilityofRL code discovery using RL with gadgets: frequently occur-
+for QEC tasks [4, 30–43]. Specifically, in the important ring subroutines that can be abstracted as single actions
+domainofstabilizercodes,recentpromisingstate-of-the- forahigher-levelRLagent. Byidentifyingandleveraging
+art results have illustrated the discovery of codes and thesecomputationalmotifs, wedemonstratethesuccess-
+their encoding circuits up to distance 5 [39]. However, fuldiscoveryofdistance-7codesfromscratch, markinga3
+significant advancement in automated QEC code design. [44]. We follow standard notation and denote quantum
+Thisachievementsuggestsapromisingpathtowardscal- codes of distance d that encode k logical qubits into n
+ingthediscoveryofQECcodestothedistancesrequired physical qubits as [[n,k,d]].
+for practical quantum computing applications with RL. CSS codes [48, 49], named after A. R. Calderbank, P.
+This paper is organized as follows: in Section II we Shor, and A. Steane, are a subclass of stabilizer codes
+providethetheoreticalbackgroundforstabilizerandCSS with very useful properties. By definition, they are gen-
+codes and reinforcement learning. In Section III we de- erated by Pauli strings containing either only X’s or
+scribe our approach to discover and use gadgets in the only Z’s (apart from I). We refer to the X-type gen-
+taskofQECencoderdiscovery. Ourresultsarepresented erators of a CSS code as G and the Z-type ones as
+X
+in Section IV, and we provide a discussion and conclu- G . For instance, Steane’s [[7,1,3]] code has genera-
+Z
+sions in Section V. torsG = IIIXXXX, IXXIIXX, XIXIXIX and
+X
+{ }
+G = IIIZZZZ, IZZIIZZ, ZIZIZIZ . Surface
+Z
+{ }
+codes are also CSS codes.
+II. BACKGROUND Byconstruction,CSScodesdetectX-typeandZ-type
+errorsindependently. ThisimpliesthatY-typeerrorsare
+identifiedwhenXandZ-typestabilizermeasurementsfire
+A. Stabilizer and CSS codes
+simultaneously. In practice, when evaluating a code’s
+error correction capabilities, it suffices to verify which
+The stabilizer formalism [44] provides a resource-
+X-type and Z-type Pauli strings can be detected. For
+efficient description of quantum states which is partic-
+instance, a code of distance d can detect all such Pauli
+ularly useful for QEC. The central idea is to describe a
+strings of up to weight d 1. There are
+quantumstatebylistingthesetofoperatorsthatstabilize −
+it, i.e. of which that state is an eigenvector with eigen-
+d−1(cid:18) (cid:19)
+value+1. Whenworkingwithqubits,theusefulsetofop- num( E )= (cid:88) n (1)
+eratorstoconsiderarePaulistrings: Kroneckerproducts { µ } w
+w=0
+ofthePaulimatricesI,X,Y,Z overallqubits. Withthis
+choice, givennqubits, aquantumstatecanbedescribed such Pauli strings of X-type and an equal number of Z-
+by listing n Pauli strings. Importantly, Pauli strings can type.
+be represented as binary arrays of size 2n [45], meaning
+that 2n2 bits suffice to represent a quantum state. The
+weight of a Pauli string is its non-trivial support in the B. Reinforcement Learning
+space of qubits.
+The stabilizer formalism also allows to efficiently de- Reinforcement Learning (RL) [18, 50] provides a
+scribe the time evolution of stabilizer states. However, frameworkforidentifyingoptimalactionsequencesinse-
+it must be restricted to unitaries that map Pauli strings quential decision-making tasks. The task to solve is en-
+to Pauli strings in the Heisenberg picture. By definition, codedbyascalarquantitycalledthereward r,whichhas
+these Pauli-preserving unitaries are called Clifford gates tobecarefullychosentoguidethealgorithmtowardsthe
+and can be generated by the Hadamard H, the Phase S goalthatweareinterestedinachieving. Theentitymak-
+and the CNOT gates [45]. ing these decisions is called the agent, and in our work is
+The stabilizer formalism can also describe subspaces realized with a neural network. The agent interacts with
+(called codes) and their time evolution. A code that an environment, which is the physical system of interest
+encodes k logical qubits into n physical qubits is a 2k- or a simulation of it. In each time step t, the environ-
+dimensional subspace (the code space ) of the full 2n- ment’s state s is observed. Based on this observation,
+t
+C
+dimensional Hilbert space. It is completely specified by the agent takes an action a which affects the state of
+t
+a set g of n k Pauli strings that stabilize it. In the environment and yields a reward signal r . Common
+i t
+{ } −
+fact, these n k Pauli strings generate a group denoted to all RL algorithms is the objective of maximizing the
+by S = g , − g ,...,g , which is called the stabilizer expectedcumulativereward(calledthereturn),E[ (cid:80) r ]
+C ⟨ 1 2 n−k ⟩ t t
+group of . In order to describe such codes, one needs over a trajectory. A trajectory is a sequence of state, ac-
+C
+2n(n k) bits. tion and reward triples that the agent experiences from
+−
+Quantum codes are classified according to how many an initial state (t=0) to a terminal state (t=T).
+errors they can detect/correct, according to the Knill- There are many different methods in RL to do this
+Laflammeconditions[46,47]. Thestandardclassification optimization. Some of the most successful ones are un-
+isconstructedbydecomposingarbitraryerrorsintoPauli der the umbrella of policy gradient algorithms [50]. A
+strings and checking the smallest weight that cannot be policy is a function π = π (a s ) that defines the strat-
+θ t t
+|
+detected. Explicitly, a quantum code that can detect all egy of the RL agent and that is mathematically defined
+Paulistringsofuptoweightd 1butthatfailstodetect as a probability distribution of choosing action a given
+t
+−
+at least one Pauli string of weight d is called a distance observation s , according to the neural network with pa-
+t
+d code. This results in a code of distance d being able to rameters θ. Policy gradient algorithms optimize the pol-
+correct all errors up to a weight t such that d = 2t+1 icy π by maximizing the expected return with respect
+θ4
+to the parameters θ with gradient ascent. Within pol- III. METHOD: RL WITH GADGETS
+icygradientmethods, actor-criticalgorithms[51]arethe
+most commonly used ones. The idea is to have two neu- A. Motivation
+ralnetworksthataretrainedsimultaneously: oneforthe
+policy(actornetwork),andasecondonecalledthecritic
+Afundamentalchallengeindiscoveringquantumerror
+networkthatmeasureshowgoodtheactionfromthepol-
+correction codes is the exponential growth in the search
+icy network was. In this paper, we use a state-of-the-art
+spaceaswescalethetargetcodeparameters[[n,k,d]]. In
+policy-gradient actor-critic method called Proximal Pol-
+the context of RL-guided discovery of encoding circuits,
+icy Optimization (PPO) [52], which is particularly well-
+it was argued in [39] that a region of opportunity exists
+suited for problems with discrete actions. for code parameters in the range of 25 ≲ n ≲ 60 and
+Wecloselyfollowtheimplementationof[39]withsome 6 d 8. However, when starting to probe this regime,
+minor differences. The reward function is based on the we ≤ fou ≤ nd na¨ıve RL training runs for n ≳ 25, d 6 to
+Knill-Laflamme error correction conditions [46, 47], but be completely unfruitful. We attribute this to two ≥ main
+we take the difference in Knill-Laflamme conditions be- factors:
+tween two consecutive timesteps as an instantaneous re-
+ward instead of their current value. Explicitly, we define 1. Hierarchy of error operators and likelihoods: the
+the Knill-Laflamme sum Σ as number of errors increases exponentially (see
+KL
+Eq. (1)), but their likelihood decreases exponen-
+(cid:88) tially (pd), giving very weak reward signals for er-
+Σ = λ K , (2)
+KL µ µ rors with higher weight.
+µ
+2. More complex encoding circuits are needed, mean-
+where µ is an index that runs over the number of error ing many more gates. This leads to the so-called
+operatorsthatshouldbedetected(seeEq.(1)),K µ isei- long horizon problem in RL: the idea that the
+ther0or1dependingonwhetherthecorrespondingerror search space of trajectories grows as (n )T with
+A
+operator E µ can be detected (0), or not (1); and λ µ are the number of actions n A and trajectory length T.
+realpositivehyperparametersweighingeachcorrespond-
+ing error that for now can be thought to be their likeli- TheseissuesseriouslyhamperthescalabilityofRLand
+hoodp . Bydefinition,Σ iseitherpositiveornull. In castdoubtsonitsbroaderapplicabilityfortheautomated
+µ KL
+the former case, some errors are undetectable and only discovery of quantum circuits in the more challenging
+when Σ is zero can we guarantee that all errors E situations of larger code parameters.
+KL µ
+satisfytheKnill-Laflammeconditionsand,hence,ca { nb } e One could consider two strategies going forward. The
+detected. In this work, we use the instantaneous reward first one would be to change the reward function to take
+intoaccountthehierarchyofthedifferenterroroperators
+that participate in the QEC conditions. This would al-
+r = [Σ (t) Σ (t 1)] , (3)
+t KL KL
+− − − leviate problem 1, but would not make the large horizon
+problem any easier. We found no obvious way to design
+whichispositiveifmoreerrorsaredetectedatthecurrent
+such a reward function and leave this as an interesting
+timestep than at the previous one, and negative other-
+area of future research. The second strategy consists in
+wise.
+allowingtheagenttousemorecomplexactions. Thishas
+The second implementation difference with respect to the obvious benefit of taming the large horizon problem
+[39] is a modification of the PPO algorithm itself ac- by needing smaller trajectories to solve the problem, but
+cordingto[53](MAXPPO).Inparticular,thisalgorithm inprincipledoesnotalleviatetheerrorhierarchyproblem
+maximizes affecting reward signals.
+In this work, we describe a successful implementation
+(cid:34) (cid:88) k (cid:35) ofthesecondstrategywhichallowsonetoovercomeboth
+E max r , (4)
+π t issues mentioned above. We provide a conceptual illus-
+k∈[0,T]
+t=0 trationoftheentireprocedureinFig.1. Itconsistsofthe
+repeatedapplicationofacomputationalblockcontaining
+with r t given by Eq. (3). The reason that we use this an automated search of encoding circuits with RL and a
+algorithm is that it was designed to find the RL state further processing of those circuits that helps identify
+withthelowestcostfoundduringatrajectory,i.e. aQEC motifs. These motifs, which we call gadgets, are reused
+codeinourapplication. Intuitively,thisalgorithmallows as actions of the next generation of RL agents and new
+the agent to explore more freely the possible space of gadgets are found. This whole process is iterated until
+solutions thanks to not receiving negative rewards when we find a rule that allows us to generalize the construc-
+trying to escape from local minima. tionofgadgets. Thankstothese,weareabletoscalethe
+All other implementation details, such as neural net- RL strategy to discover QEC codes with code distances
+work architecture or hyperparametersused, are identical larger than those possible when primitive Clifford gates
+to those used in [39]. were used.5
+B. Building gadgets
+q0 q0
+q1 H q1 H
+To enable the scalability of RL to discover more com-
+q2 q2
+…
+q3 H q3 H
+plexcircuits,wehaveexpandedthesetofallowedactions q4 q4
+which are provided to the RL agent. In the vanilla ver- q5 H q5 H
+q6 q6
+sion [39], the agent has access to primitive Clifford gates
+such as the Hadamard or the CNOT gate. The strat-
+egy is to build new actions as ”composite Clifford gates”
+consisting of several of the primitive Clifford gates, see q
+0
+Fig.2. We refer to the composite gates as gadgets. q 1 H
+Building gadgets is a complex task due to their inher- q 2 H
+ent combinatorial nature. For instance, given n qubits, q 3 H
+all-to-allconnectivityandtwoCNOTs,thereare
+(cid:0)n(cid:1)
+pos- q
+4 4
+sible gadget configurations (corresponding to the 4 posi- q 5
+tionswherethecontrolsandtargetscanbeplaced). From q 6
+all of these, it is not clear at all which are useful gadgets
+and which are not. In addition, since CNOTs acting on FIG.3. ExampleofaDCXgadgetpatternina[[7,1,3]]code.
+differentqubitsubsetscommute,manyofthesewouldbe First we illustrate the second step in the data preprocessing
+equivalent. Thus, we would ideally want to build useful pipeline where two circuits with different canonical tableaux
+gadgetswhosecomponents–theindividualCliffordgates get mapped to the same circuit in normalized form. After
+preprocessing the raw dataset into circuits in normal form,
+– do not commute along the quantum circuit, i.e. along
+oneremainswithahandfulofcircuitsthatarerepresentatives
+the “time-axis”. We refer to such gadgets as “static”.
+ofallpatternsfoundbytheRLagent. Here,wehighlightDCX
+We do not know a priori an optimal way of construct-
+patterns.
+ing useful gadgets. We thus start by analyzing the auto-
+matically discovered encoders for small and medium-size
+codes, e.g. the codes with 3 d 5 and k = 1, discov- tion. Crucially, this enables further visual inspection by
+≤ ≤
+eredbyRLwithout gadgets. Suchananalysisconsistsof a human in order to detect repeating patterns that will
+several steps. constitute the gadgets.
+Next,wevisuallyidentifyrecurringstructuralpatterns
+of gates in these normalized circuits. An example of
+1. Pre-processing simple discovered circuits and identifying a motif which occurs in the [[9,1,3]] code is shown in
+the simplest gadgets Fig.3. The simplest repeating object is a combination
+of two CNOT gates: the double-CNOT gate (DCX), see
+First,westartwithd=3andn=7andn=9(k =1). Fig.4. Notethatthisgadgetisstaticinthesensethatits
+For these code parameters, we launch O(100) training individual constituents (the CNOTs) do not commute.
+runs to extract O(100) raw encoding circuits. Some of Moreover, DCX gadgets can have two orientations, see
+these will constitute equivalent codes, in the sense that Fig.4. Thus, given the underlying connectivity graph of
+they will correspond to the same canonical tableau - a CNOTs, there are as many DCX gadgets as CNOTs.
+standardized (n k) 2n binary matrix representation This is important when we allow DCX gadgets as new
+− ×
+of the code’s stabilizer generators where each row en- actions, as the number of new actions is much smaller
+codes a different generator. Using this representation is thanthena¨ıvenumberofpossiblegadgetsobtainedfrom
+usefulbecausetwocodesareequivalentiftheircanonical a combinatorial argument.
+tableauxareidenticaluptoqubitpermutations. Wethus
+filterthisrawdatasetbykeepingonlyasinglecircuitper
+canonical tableau instance and discard the rest. At this 2. Simple gadgets as building blocks for
+moment, we have a dataset of inequivalent circuits up to next-generation gadgets
+qubit permutations, cf. Fig.3.
+The next step is to reduce the qubit permutation mul- Having identified the simplest gadgets, we now allow
+tiplicity of the dataset by bringing the circuits to a stan- new RL training runs to contain DCXs as possible ac-
+dardized (or normal) form as follows. First, label the tions,togetherwithindividualCNOTs. Launchingthese
+logical qubit to be 0 and the qubits where Hadamard runs in the regime of small code parameters (n = 7,9,
+gates are placed to be 1,2,...,num . Then, temporally k = 1, d = 3) does not lead to interesting insights due
+H
+traverse the circuit and relabel the participating qubits to the rather simple structure of the encoding circuits.
+in the gates. If there is a qubit that has not yet been We thus increase to n = 13 and d = 4, keeping k = 1
+relabeled, assign the next available label starting from fixed,andwegatherO(100)automaticallydiscoveredcir-
+num +1. Theresultisanormalizeddatasetofinequiv- cuits with DCX gadgets (second column of Fig.1). Af-
+H
+alent circuits (see Fig.2) that is much smaller than the ter having pre-processed the dataset of circuits into its
+raw dataset but that essentially contains all its informa- normalized form, we notice the frequent appearance of6
+• •
+• •
+•
+•
+•
+•
+•
+•
+•
+•
+•
+• •
+•
+•
+• •
+•
+•
+•
+•
+•
+First orientation C. Details of implementation
+Severalimplementationtechniqueswerecrucialforthe
+success of the scaling of the RL strategy with gadgets.
+CX DCX DCX(4)
+Here, we detail the key elements that enabled efficient
+Second orientation training and improved results.
+To facilitate the discovery of QEC codes with larger
+distances, we implemented an automatic transfer learn-
+ing between scenarios with increasing target code dis-
+CX DCX DCX(4)
+tance. Thisallowstheagenttoleveragepatternslearned
+from simpler codes when constructing more complex
+FIG. 4. Examples of hierarchy of multiqubit gates which are
+ones. For instance, when the goal is to discover a
+provided to the RL agents as allowed actions. Note that the
+[[n,k,d=6]] code, the agent’s first target is to find a
+gadgets of the next generation involve more qubits. For ex-
+ample,DCX(4)usesfourqubits. Dependingonthepositionof [[n,k,d=4]]code. Afterafewtrainingepochs,thesame
+agentisthenrequestedtofinda[[n,k,d=5]]code,trans-
+control-andtargetqubitsintheparentCNOTgate,onecan
+obtain two different orientations of the descendant gadgets. ferring the learned parameters from the d = 4 task. Fi-
+nally, after a few training epochs at d = 5, the agent is
+tasked with finding the [[n,k,d=6]] code that we were
+after. We have found this strategy to improve the ef-
+a pattern which consists of four consecutive DCX gates
+ficiency and stability of training runs with respect to a
+affecting neighborhoods of four qubits, see Fig.4.
+cold start at d = 6. This strategy can also be viewed
+We call these gadgets DCX(4) because they are built as a form of curriculum learning, where we leverage our
+from DCX gates and affect 4 qubits. Interestingly, these understandingofsmallerquantumcodestofacilitatethe
+newgadgetscanalsoonlyhavetwodifferentorientations discovery of larger ones.
+and are static. Thus, the total number of DCX(4) gad- Thesecondimplementationdetailthatwefoundtobe
+gets,thatcouldbeaddedasnewactionsgiventheunder- very helpful - particularly when searching for codes with
+lyingCNOTgraphconnectivity,isupper-boundedbythe k > 1 - consists of two ingredients: (i) place the logical
+number of different CNOTs. More precisely, it is given qubit indices equally spaced, alternating the Hadamard
+by the number of connected subgraphs of 4 qubits. placing in the remaining, and (ii) use periodic boundary
+conditionsinthequbitconnectivitygraph. Thesetwode-
+signchoicesprovideamoreuniformconfigurationforthe
+different qubits of the system. In addition, we also ini-
+tializethecircuitwithBellpairsbetweenadjacentqubits
+3. Using powerful gadgets to scale the automated discovery
+for qubits that are not placed in a logical index.
+of complex encoders with RL
+Oneschemethatweexploredbutfoundtonotbecru-
+cial was weighing the reward with an additional term
+Motivated by the unexpected finding of an emergent depending on which kind of gate/action was used. In
+descendant hierarchy of gadgets (from CNOT to DCX, particular,thisstrategyconsistedofpenalizingtheagent
+to DCX(4)), we have surmised that the nesting could de- when using too many gadgets. This stems from observa-
+velop further in the larger codes with d>5 and k 1. tions with training runs on simple codes where the ten-
+≫
+Here, we conjecture that there is a tower of new de- dency was for the RL agent to use a few gadgets at the
+scendant gadgets (DCX(8), DCX(16), etc.) constructed beginning and simple CX gates afterwards. To encour-
+byanalogytohowDCX(4) isbuiltfromDCX.Explicitly, age this behavior in agents for more complex encoders,
+we conjecture that the rule for gadget DCX(2m) is con- we tried introducing a penalty when a gadget was used
+structed from four DCX(2[m−1]) assembled following the after a certain threshold timestep. Since we saw com-
+cross-patternseeninFig.4. Wealsoassumethatthisrule parable performance to not using it, we decided to drop
+is the same for all gadget generations. This rule main- it.
+tains the two properties of useful gadgets as actions in
+RL, namely: the fact that only two orientations are al-
+lowed and that they are static. Crucially, these keep the IV. RESULTS
+otherwise natural combinatorial proliferation of possible
+gadgets under control. A. Facilitation of automated discovery of encoders
+InthenextSection,wedemonstratehowourapproach with d=5 by RL with gadgets
+enhancestheefficiencyofRLagentsandopenstheavenue
+for its further scalability. We will also show how the Medium-complexity encoders with d=5 can be found
+codes found by the gadget-based RL compare to other with the help of the simple, i.e., CX-based, RL search.
+well-known codes, such as surface codes and low-density However, the gadget-based RL search using CX+DCX
+parity-check codes, see Sect.IVB and IVC below. gadgets provides a substantial acceleration to discover7
+1.0
+0.8
+CX
+CX+DCX 0.6
+CX+DCX(4)
+0.4 CX+DCX(8)
+CX+DCX(16)
+0.2
+10 50 100 5001000 5000104
+Number of epochs
+nruteR
+rameters. The results that we present in this paper have
+beenobtainedfromourmostsuccessfulattemptsatfine-
+tuning hyperparameters and our discussion should be
+treatedasadiscussionoftendencies. Asinanymachine-
+learningscenario,theefficiencyoftheRLapplicationcan
+be further improved if one spends more computing time
+to further optimize hyperparameters.
+B. Discovery of large-distance codes, d≥6 at k=1,
+by using gadgets
+FIG. 5. Speedup at finding encoders for [[21,1,5]] codes by
+We have already mentioned that the CX-based RL
+using gadgets. Results are averaged over 10 agents. Returns
+search for encoders with k = 1 can be successful for
+arenormalizedforeasiercomparisonandthetaskissuccessful
+distances d 5 and fails at d 6. Using gadgets to
+when the return is 1. More powerful gadgets provide much ≤ ≥
+explore d=5 brings two obvious advantages: the search
+faster discovery.
+is crucially accelerated, and its success rate is noticeably
+enhanced, cf. Sect.IVA and Fig.5.
+solutions. As shown in Fig.5 with the [[21,1,5]] code Thefullpowerofthegadget-basedRLsearchbecomes
+as an example, the learning process exhibits markedly obvious if one explores d=6. There is a range of n val-
+different convergence behaviors depending on the gadget ueswherenovel(notknownpreviously)encodersaredis-
+configuration. The baseline CX-only approach requires covered very quickly with a high success rate, see Fig.6.
+approximately 6000 epochs to reach optimal return, dis- Fig.7 illustrates an example of such an encoder. We em-
+playingagraduallearningcurvethatstartsfrom0.2and phasize that we found the discovery of codes with d 6
+slowlyincreases. Incontrast,theenhancedCX+DCX(16) by the CX-based RL search to be impossible. ≥
+configuration achieves near-optimal performance (return
+The success rate of the gadget-based RL search be-
+1) in just 300 epochs, representing a 20x speedup in
+∼ comes small if one focuses on the code [[25,1,6]] and fails
+convergence time.
+atsmallervaluesofn. Hence,weobservetheexistenceof
+Interestingly, we observe that increasing the power of
+alowerboundaryfortheRLapplication. Webelievethat
+DCXgadgets(fromDCX(4)toDCX(8)toDCX(16))leads
+it is directly related to a substantially decreasing num-
+to progressively faster convergence, with CX+DCX(16)
+berofsuccessfulsolutionswhennapproachesitsminimal
+showing the most rapid approach to discovery. The base
+theoretical value. For instance, the smallest d = 7 CSS
+CX+DCX configuration, while performing better than
+code is the Golay code [[23,1,7]] [48].
+CX-only, demonstrates slower convergence compared to
+its counterparts with multiple DCX gadgets, suggesting The most striking result which we obtained by using
+that the multiplicity of DCX operations plays a crucial the gadgets is the discovery of encoders with d = 7, in
+role in the search efficiency. Therefore, we believe that particular [[35,1,7]] and [[37,1,7]]. We did not attempt
+thepoweroftheDCXgadgetreliesonitbeingusefulfor toreachhigherdistancesbutareconfidentthatthistask
+building more complex gadgets. is feasible with a proper choice of the gadgets and, per-
+Anotherpronouncedadvantageofthegadget-basedRL haps, with larger values of n. The major limitation is
+search is related to the substantially enhanced success likely to result from the amount of available GPU mem-
+rate. We define the success rate as the fraction of agents oryratherthanfromtheapproachitself. Moreover,these
+which are able to find solutions for a given set of hyper- resultswereobtainedwithasingleGPU,suggestingthat
+parameters. For the example shown in Fig.5, the success a distributed approach on multiple GPUs can enhance
+rate was approximately enhanced by a factor 2-3 when the reachable code distance even more.
+the powerful gadgets were used. We would like to conclude this section by comparing
+Thesignificantadvantageofthegadgets-basedRLap- the performance of our codes with that of surface codes.
+proach becomes even more pronounced when increasing Toreachthedistanced, thesurfacecodesrequiren=d2
+the encoder complexity. For example, the discovery of qubits and, hence, have an encoding ratio n/d=d. The
+encoding circuits for [[31,7,5]] codes was accelerated by majority of the codes with d = 6,7 shown in Fig.6 have
+50iftheDCX(16) gadgetisusedinsteadofonlyCX.Si- a smaller (or even substantially smaller) ratio n/d and,
+×
+multaneously,thesuccessratebecame100%(asopposed thus, have a higher encoding rate than surface codes. In
+to 10% produced by the CX-based search). other words, the high-distance encoding discovered by
+∼
+Finally, we note that both the speed of the search and gadget-based RL can be implemented by using smaller
+the success rate depend on the choice of the hyperpa- qubit arrays and, hence, is less resource-consuming.8
+7
+6
+5
+25 27 29 31 33 35 37
+n
+d
+ered encoding circuits lay below the Quantum Hamming
+k=1
+DCX(16) Bound(QHB)forCSScodes; seeAppendixAfordetails
+onthisbound. Themainlimitationhereisrelatedtothe
+availability of GPU memory.
+Based on the successful use of the gadgets
+(cid:110) (cid:111) CX,DCX,DCX(2q) for codes with k > 1 we can
+conclude that this hierarchy of gadgets possesses some
+universality. The origin of this universality and the
+possible existence of other families of powerful gadgets
+DCX(8) remain open questions which we postpone for future
+studies.
+Finally, let us emphasize that the codes which have
+been discovered by the gadget-based RL approach may
+haveapromisingencodingefficiencyreflectedbytheratio
+k/n. For example, the code [[36,7,6]] has k/n = 7/36
+FIG. 6. Efficiency of the gadget-based RL for the automated which is slightly better than the encoding efficiency of
+discovery of medium- to large distance encoders. The size the LDPC code [[72,12,6]] of [54], namely k/n = 1/6.
+of circles reflects the RL efficiency, i.e. the fraction of suc-
+However, the price paid for this higher encoding rate is
+cessfulRLtrainingruns,rangingfrom100%(largecircles)to
+having generators with larger weights, see the discussion
+<10% (the smallest circle). Colors of different regions mark
+in Sect.IVD.
+the type of the most powerful gadgets that we used for the
+calculations. Red crosses denote runs which failed at a given
+n. Note that increasing n and/or employing more powerful
+gadgets can allow one to reach larger distances. Many codes
+D. Weights of generators
+ofthetype[[n,1,5]]canbefoundbyusingonlytheCXgates,
+though with substantially longer calculation times and lower
+success rates. We observed one seemingly general limitation of our
+gadget-based approach, when applied to this QEC task:
+the relatively high weight of the discovered code gener-
+C. Encoding many logical qubits: example of d=6 ators. We include in Fig. 9 a comparison of the weights
+of the discovered [[21,1,5]] codes with different levels
+(cid:110) (cid:111) of gadget complexity. There we see that, on average,
+The hierarchy of gadgets, CX,DCX,DCX(2q) has weightsofcodesfoundwithDCX(16)are50%largerthan
+been discovered in examples with k = 1. We could have thosefoundbyusingCXonly. However, neverdoween-
+repeatedthegadgetdiscoveryprocessforsimpleencoders counter a situation where the average weight is larger
+with k > 1, potentially leading to different gadgets be- than n/2. Weights can be as small as 4 and as large as
+ing discovered. Instead, we have directly used the same 16, depending on the gadgets used.
+already known gadgets for codes with k > 1. This ap- The(generallyundesirable)generationoflargeweights
+proach was very useful and allowed us to discover the canbeformallyunderstoodfromthetransformationrules
+more challenging encoders (d > 5) for encoding several oftheDCX(2m)gadgets. Inparticular,acodegenerator’s
+logical qubits (k >1). weightcangofrom1tomafterasinglegadgetoperation,
+Fig.8 shows the result of the gadget application for see Appendix B for an analytic treatment.
+the discovery of codes with d = 6 and 1 k 7. We Wealsoexaminethelargercodeswithd=6andd=7
+≤ ≤
+remind the reader that these codes are not reachable by that we have presented in Sections IVB and IVC and
+thestandardRLapproachbasedonlyonusingCXgates. show a representative analysis in Fig. 10. The codes
+The success rate is explained in the previous section. In shown were selected as the ones with the most efficient
+general,thediagramsshowninFig.6andFig.8havesev- encoding rates. The majority of the weights fall within
+eral common features. In particular, the success rate at the range of 10-20, with a few outliers both below 10
+d = 6 and some fixed k always drops with decreasing and above 25. We also don’t see significant jumps in the
+n. On the other hand, by increasing n and using more resulting weights when increasing the complexity of the
+powerful gadgets, we were able to find the encoders for gadgetused. Forinstance, codes[[34,5,6]]and[[36,7,6]]
+relatively large values of k. The best achievement for were found with DCX(16) and DCX(32) gadgets, respec-
+our choice of hyperparameters is the code [[36,7,6]]. We tively, yet their weights are rather similar, see Fig.10.
+wouldliketoemphasizethatthisisnottheultimatelimit Another interesting feature seen in Fig. 10 is that the
+of our approach. We are confident that one can extend d=7 codes possess smaller weights on average than the
+our results to even larger values of k after fine-tuning other d = 6 codes shown. However, for comparison, the
+the hyperparameters and, perhaps, using more compli- smallest d = 7 code is the Golay code, with parameters
+cated gadgets at larger n. In particular, as shown in [[23,1,7]]andgeneratorsofweight8[48]. Thealternative
+Fig.8 (dashed line), the code parameters of the discov- using surface codes is the [[49,1,7]] code with generators9
+H
+FIG.7. Exampleof[[31,1,6]]codediscoverywithDCX(8) gadgets. Intotal,theagentuses5gadgets(highlightedinmagenta),
+each consisting of 32 CX gates, and two single CX gates (highlighted in blue). The circuit is initialized with an equal number
+ofBellpairs. ThetotalnumberofCXgatesneededis177andthecircuitdepthis55,whichcouldbereducedtoadepthof29
+by optimizing a pulse to implement a DCX gate on the hardware level as a single gate.
+of weight 4 or 2. V. DISCUSSION AND CONCLUSIONS
+Wehavedemonstratedthatthereinforcementlearning
+approachtothediscoveryofquantumcircuitscanbesub-
+stantially facilitated by using composite gates – the gad-
+Whilemodifyingtherewardfunctiontopenalizehigh- gets. Our approach consists of several basic steps. First,
+weight generators provides some improvement, the re- one generates simple circuits by using the vanilla RL
+duction remains modest. In our experiments, adding method[39]. Next,theavailablecircuitsarepreprocessed
+a weight penalty term to the reward function yielded inordertoenableaposteriortractablevisualinspection.
+only a 10 15% weight reduction, but the success rate Atthisstage,ouralgorithmfiltersouttheequivalentcir-
+−
+of agents was hampered. We note that slightly lower cuits with the same canonical tableaux and rearranges
+weightsaroseautomaticallywhenonlyemployingCNOT qubitsandgatesintheremainingnon-equivalentcircuits
+gates without any deliberate modification of the reward to compress the dataset into a handful of representative
+toassignapreferencetolowweights,seeFig.9. However, circuits. Finally,onecanusethefirstfewdiscoveredgad-
+despite our various optimization attempts, we have not gets to generalize to larger qubit numbers.
+yet matched the low-weight efficiency of surface codes. We have applied this new approach to the example of
+This limitation stems partly from our dual optimization discovering codes for quantum error correction. In this
+goal - we seek not only minimal-weight generators but application, we were able to conjecture a hierarchy of
+also efficient implementation circuits for specific hard- gadgets involving two, four, eight, etc., qubits. The use
+ware constraints. This combined objective appears to ofgadgetsfromthisfamilyhasacceleratedtheRLsearch
+makeweightoptimizationparticularlychallenging. Over- of new QEC codes by one to two orders of magnitude.
+all, this suggests that achieving low-weight generators This made it possible to scale the RL-based automatic
+of the RL-discovered codes while maintaining hardware- discovery of codes to larger numbers of data qubits and
+efficient circuits mayrequirefundamental changestothe larger code distances than without gadgets. Using the
+approach rather than simple reward modifications. For standard [[n,k,d]] notation, we have found encoders for
+instance, a recent interesting approach that discovers codes with k = 1,d 7 and d = 6,k 7. This range
+≤ ≤
+codes(withouthardware-efficientencoders)oflowweight goes well beyond the results of Ref.[39] where the RL
+is presented in Ref.[55]. method with primitive Clifford gates was used. To the10
+=7)
+9 B (d H Q
+7
+CSS
+5
+3
+1
+28 30 32 34 36 38
+n
+k
+d=6
+DCX(32)
+DCX(16)
+DCX(8)
+FIG. 8. Efficiency of the gadget-based RL for the auto-
+mateddiscoveryofencodersformanylogicalqubitsatd=6.
+The meaning of circle sizes, colors of different layers and red
+crossesisexplainedinthecaptionofFig.6. Notethatincreas-
+ing n and/or employing more powerful gadgets allows one to
+reachalargernumberoflogicalqubits. Thedashedlineisthe
+Quantum Hamming Bound (QHB) for self-dual CSS codes
+(seeAppendixA).TheQHBisapackingargumentmapping
+eachpossibleerrorpatterntoauniquesyndrome,andisonly
+well-definedforoddcodedistances. Here,weshowthebound
+for distance 7, meaning that codes above the dashed line are
+unlikely to exist, but below the line are very likely to exist.
+20
+X-weights
+Z-weights
+15
+10
+5
+0 C X C X + D C X C X + D C X(4) C X + D C X(8) C X + D C X(16)
+sthgieW
+iluaP
+30 X-weights
+Z-weights 25
+10
+5
+[[31,4,6]]
+FIG.9. Weightsof[[21,1,5]]codesobtainedbyusingdifferent
+gadgets. Resultsareaveragedover10agents. Thebodyofthe
+candle shows the mean±standard deviation, and the vertical
+black lines go from minimum to maximum. More powerful
+gadgets lead to codes with larger weights on average.
+best of our knowledge, the encoders, e.g., for the codes
+[[n,1,7]] and [n,7,6]] are reported in the current paper
+for the first time.
+Two important notes are due here. Firstly, the total
+number of qubits, n, can be fine-tuned to improve the
+performanceoftheautomateddiscoveryprocessofcodes
+and, simultaneously, competitive ratios d/n and k/n can
+be reached. The ratios that we have managed to achieve
+can be better than those of the well-known surface- and
+LDPC codes [54]. Secondly, the principal computational
+sthgieW
+iluaP
+20
+15
+[[34,5,6]] [[36,7,6]] [[37,7,6]] [[35,1,7]] [[37,1,7]]
+FIG.10. Weightsofthelargestcodesthatwehavebeenable
+to find. Results are averaged over successful runs. Notations
+are the same as in Fig.9. The gadgets employed have been
+(from left to right): DCX(16), DCX(16), DCX(32), DCX(32),
+DCX(16) and DCX(8).
+limitationofourapproachcomesfromtheamountofthe
+available computer (GPU) memory.
+Themaindisadvantageoftheencodersfoundwiththe
+help of the gadget-based RL is the rather large weights
+of code generators. This seems to be an unavoidable
+consequenceoftheuseofgadgetsintheone-dimensional
+networks of qubits. We do not exclude that the weights
+are reduced if the gadgets are used in different physi-
+cal networks of qubits, for example, in two-dimensional
+qubit structures which mimic the connectivity of surface
+codes and which match the current capabilities of avail-
+able hardware better. In this scenario, it would also be
+interesting to leverage symmetries to restrict the search
+space further by either imposing them in the implemen-
+tation of actions or by employing tools from geometric
+deep learning.
+Complicated gadget-based encoders contain a large
+number of primitive Clifford gates. Current quantum
+hardware has been designed by optimizing each primi-
+tive gate separately. However, there is no need to con- trolindividuallythoseprimitiveswhicharepartofinten- sively used gadgets. Therefore, a higher-level optimiza-
+tion might be desirable. In particular, one may try to
+engineer hardware where each gadget works as an irre-
+ducible unit and, hence, is controlled by a single control
+pulse, which is specially-designed for a given platform.
+Thismaysubstantiallyimprovetheperformanceandop-
+eration speed of the encoders.
+We do not know whether the gadget family that we
+have found is unique. A possibility would be that other
+families could also be successfully used to facilitate the
+RL discovery of new quantum circuits. The search for
+alternative gadgets is currently based on the visual anal-
+ysis of the circuits, which may become difficult in other
+scenarios. Therefore, it is highly desirable to automate
+this step. One possibility could be that the preprocessed
+circuits be represented as two-dimensional graphs and
+further analyzed with the help of standard graph-based
+algorithms. Wewilladdresstheautomatedsearchofgad-
+gets elsewhere.11
+Overall,ourapproachpavesthewayforscalingtheRL- ACKNOWLEDGMENTS
+basedautomaticdiscoveryofmorecomplicatedquantum
+circuits. While we have presented the particular case of We acknowledge enlightening and helpful discussions
+QEC encoders, we believe that the same gadget-based with Remmy Zen, Maximilian N¨agele, and Matteo Pu-
+approach can also be used in other tasks, such as, e.g., viani, as well as Christian Schilling and members of his
+intheautomateddiscoveryoflogicaloperationsbetween group. This research is part of the Munich Quantum
+logical qubits or of quantum algorithms. Valleynetwork,whichissupportedbytheBavarianstate
+government with funds from the Hightech Agenda Bay-
+ern Plus.
+[1] M. Mohseni, A. Scherer, K. G. Johnson, O. Wertheim, [12] Y.-H. Zhang, P.-L. Zheng, Y. Zhang, and D.-L.
+M. Otten, N. A. Aadit, Y. Alexeev, K. M. Bresniker, Deng, Topological quantum compiling with reinforce-
+K. Y. Camsari, B. Chapman, S. Chatterjee, G. A. Dag- ment learning, Phys. Rev. Lett. 125, 170501 (2020).
+new, A. Esposito, F. Fahim, M. Fiorentino, A. Gajjar, [13] L. Sarra, K. Ellis, and F. Marquardt, Discovering quan-
+A. Khalid, X. Kong, B. Kulchytskyy, E. Kyoseva, R. Li, tumcircuitcomponentswithprogramsynthesis,Machine
+P. A. Lott, I. L. Markov, R. F. McDermott, G. Pe- Learning: Science and Technology 5, 025029 (2024).
+dretti, P. Rao, E. Rieffel, A. Silva, J. Sorebo, P. Spent- [14] F. Preti, M. Schilling, S. Jerbi, L. M. Trenkwalder,
+zouris,Z.Steiner,B.Torosov,D.Venturelli,R.J.Visser, H. P. Nautrup, F. Motzoi, and H. J. Briegel, Hybrid
+Z. Webb, X. Zhan, Y. Cohen, P. Ronagh, A. Ho, R. G. discrete-continuous compilation of trapped-ion quantum
+Beausoleil, and J. M. Martinis, How to build a quan- circuits with deep reinforcement learning, Quantum 8,
+tum supercomputer: Scaling from hundreds to millions 1343 (2024).
+of qubits (2025), arXiv:2411.10406 [quant-ph]. [15] A. Kundu and L. Sarra, From easy to hard: Tackling
+[2] Google Quantum AI and Collaborators, Quantum er- quantum problems with learned gadgets for real hard-
+ror correction below the surface code threshold, Nature ware (2024), arXiv:2411.00230 [quant-ph].
+10.1038/s41586-024-08449-y (2024). [16] F.Fu¨rrutter,G.Mun˜oz-Gil,andH.J.Briegel,Quantum
+[3] H. Aghaee Rad, T. Ainsworth, R. N. Alexander, et al., circuit synthesis with diffusion models, Nature Machine
+Scaling and networking a modular photonic quantum Intelligence 6, 515–524 (2024).
+computer, Nature 10.1038/s41586-024-08406-9 (2025). [17] F. J. R. Ruiz, T. Laakkonen, J. Bausch, M. Ba-
+[4] T. Fo¨sel, P. Tighineanu, T. Weiss, and F. Marquardt, log, M. Barekatain, F. J. H. Heras, A. Novikov,
+Reinforcement learning with neural networks for quan- N. Fitzpatrick, B. Romera-Paredes, J. van de We-
+tumfeedback,Phys.Rev.X10.1103/PhysRevX.8.031084 tering, A. Fawzi, K. Meichanetzidis, and P. Kohli,
+(2018). Quantum circuit optimization with alphatensor (2024),
+[5] A. A. Melnikov, H. P. Nautrup, M. Krenn, V. Dun- arXiv:2402.14396 [quant-ph].
+jko, M. Tiersch, A. Zeilinger, and H. J. Briegel, [18] R. S. Sutton and A. G. Barto, Reinforcement learning:
+Active learning machine learns to create new An introduction (MIT press, 2018).
+quantum experiments, Proceedings of the Na- [19] M. Ostaszewski, L. M. Trenkwalder, W. Masarczyk,
+tional Academy of Sciences 115, 1221 (2018), E.Scerri,andV.Dunjko,Reinforcementlearningforop-
+https://www.pnas.org/doi/pdf/10.1073/pnas.1714936115. timization of variational quantum circuit architectures
+[6] M. Krenn, J. Landgraf, T. Foesel, and F. Marquardt, (2021), arXiv:2103.16089 [quant-ph].
+Artificial intelligence and machine learning for quantum [20] Y. J. Patel, A. Kundu, M. Ostaszewski, X. Bonet-
+technologies, Physical Review A 107, 010101 (2023). Monroig, V. Dunjko, and O. Danaci, Curriculum rein-
+[7] J. M. Arrazola, T. R. Bromley, J. Izaac, C. R. Myers, forcement learning for quantum architecture search un-
+K.Bra´dler,andN.Killoran,Machinelearningmethodfor derhardwareerrors(2024),arXiv:2402.03500[quant-ph].
+state preparation and gate synthesis on photonic quan- [21] L. M. Trenkwalder, A. Lo´pez-Incera,
+tum computers, Quantum Science and Technology 4, H. Poulsen Nautrup, F. Flamini, and H. J. Briegel,
+024004 (2019). Automated gadget discovery in the quantum domain,
+[8] Z. He, X. Zhang, C. Chen, et al., A gnn-based predictor Machine Learning: Science and Technology 4, 035043
+for quantum architecture search, Quantum Information (2023).
+Processing 22, 128 (2023). [22] H. Briegel and G. De las Cuevas, Projective simulation
+[9] S.-X. Zhang, C.-Y. Hsieh, S. Zhang, and H. Yao, Neural forartificialintelligence,ScientificReports2,400(2012).
+predictor based quantum architecture search, Machine [23] J.Wallno¨fer,A.A.Melnikov,W.Du¨r,andH.J.Briegel,
+Learning: Science and Technology 2, 045027 (2021). Machinelearningforlong-distancequantumcommunica-
+[10] T. F¨osel, M. Y. Niu, F. Marquardt, and L. Li, Quan- tion, PRX Quantum 1, 010301 (2020).
+tum circuit optimization with deep reinforcement learn- [24] S.Krinner,N.Lacroix,A.Remm,A.DiPaolo,E.Genois,
+ing (2021), arXiv:2103.07585 [quant-ph]. C. Leroux, C. Hellings, S. Lazar, F. Swiadek, J. Her-
+[11] L. Moro, M. G. A. Paris, M. Restelli, et al., Quantum rmann, et al., Realizing repeated quantum error correc-
+compiling by deep reinforcement learning, Communica- tion in a distance-three surface code, Nature 605, 669
+tions Physics 4, 178 (2021). (2022).12
+[25] C. Ryan-Anderson, J. G. Bohnet, K. Lee, D. Gresh, [42] B. C. A. Freire, N. Delfosse, and A. Leverrier, Opti-
+A. Hankin, J. Gaebler, D. Francois, A. Chernoguzov, mizing hypergraph product codes with random walks,
+D.Lucchetti,N.C.Brown,etal.,Realizationofreal-time simulated annealing and reinforcement learning (2025),
+fault-tolerantquantumerrorcorrection,PhysicalReview arXiv:2501.09622 [quant-ph].
+X 11, 041058 (2021). [43] M.Puviani,S.Borah,R.Zen,J.Olle,andF.Marquardt,
+[26] L. Postler, S. Heuβen, I. Pogorelov, M. Rispler, T. Feld- Non-markovian feedback for optimized quantum error
+ker, M. Meth, C. D. Marciniak, R. Stricker, M. Ring- correction, Physical Review Letters 134, 10.1103/phys-
+bauer, R. Blatt, et al., Demonstration of fault-tolerant revlett.134.020601 (2025).
+universal quantum gate operations, Nature 605, 675 [44] D. Gottesman, Stabilizer codes and quantum error cor-
+(2022). rection (1997), quant-ph/9705052 [quant-ph].
+[27] I. Cong, H. Levine, A. Keesling, D. Bluvstein, S.- [45] S. Aaronson and D. Gottesman, Improved simula-
+T. Wang, and M. D. Lukin, Hardware-efficient, fault- tion of stabilizer circuits, Phys. Rev. A 10.1103/phys-
+tolerant quantum computation with rydberg atoms, reva.70.052328 (2004).
+Physical Review X 12, 021049 (2022). [46] C.H.Bennett,D.P.DiVincenzo,J.A.Smolin,andW.K.
+[28] R.Acharya,I.Aleiner,R.Allen,T.I.Andersen,M.Ans- Wootters, Mixed-state entanglement and quantum error
+mann,F.Arute,K.Arya,A.Asfaw,J.Atalaya,R.Bab- correction, Phys. Rev. A 54, 3824 (1996).
+bush, et al., Suppressing quantum errors by scaling a [47] E. Knill and R. Laflamme, Theory of quantum
+surface code logical qubit, Nature 614, 676 (2023). error-correcting codes, Phys. Rev. A 10.1103/Phys-
+[29] V.V.Sivak,A.Eickbusch,B.Royer,S.Singh,I.Tsiout- RevA.55.900 (1997).
+sios, S. Ganjam, A. Miano, B. Brock, A. Ding, L. Frun- [48] A. M. Steane, Simple quantum error-correcting codes,
+zio, et al., Real-time quantum error correction beyond Phys. Rev. A 54, 4741 (1996).
+break-even, Nature 616, 50 (2023). [49] A.R.CalderbankandP.W.Shor,Goodquantumerror-
+[30] H. P. Nautrup, N. Delfosse, V. Dunjko, H. J. Briegel, correcting codes exist, Phys. Rev. A 54, 1098 (1996).
+andN.Friis,Optimizingquantumerrorcorrectioncodes [50] R. S. Sutton, D. McAllester, S. Singh, and Y. Mansour,
+with reinforcement learning, Quantum 10.22331/q-2019- Policy gradient methods for reinforcement learning with
+12-16-215 (2019). function approximation, Advances in neural information
+[31] C. Mauron, T. Farrelly, and T. M. Stace, Optimiza- processing systems 12 (1999).
+tionoftensornetworkcodeswithreinforcementlearning, [51] V. Konda and J. Tsitsiklis, Actor-critic algorithms, Ad-
+arXiv:2305.11470 (2023). vances in neural information processing systems 12
+[32] V. P. Su, C. Cao, H.-Y. Hu, Y. Yanay, C. Tahan, (1999).
+and B. Swingle, Discovery of optimal quantum er- [52] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and
+ror correcting codes via reinforcement learning (2023), O. Klimov, Proximal policy optimization algorithms,
+arXiv:2305.06378 [quant-ph]. arXiv:1707.06347 (2017).
+[33] C. Cao and B. Lackey, Quantum lego: Building quan- [53] M. Na¨gele, J. Olle, T. Fo¨sel, R. Zen, and F. Marquardt,
+tum error correction codes from tensor networks, PRX Tackling decision processes with non-cumulative
+Quantum 3, 020332 (2022). objectives using reinforcement learning (2024),
+[34] P. Andreasson, J. Johansson, S. Liljestrand, and arXiv:2405.13609 [cs.LG].
+M. Granath, Quantum error correction for the toric [54] S. Bravyi, A. W. Cross, J. M. Gambetta, D. Maslov,
+codeusingdeepreinforcementlearning,Quantum3,183 P. Rall, and T. J. Yoder, High-threshold and low-
+(2019). overhead fault-tolerant quantum memory, Nature 627,
+[35] R. Sweke, M. S. Kesselring, E. P. van Nieuwenburg, 778 (2024).
+andJ.Eisert,Reinforcementlearningdecodersforfault- [55] A.Y.HeandZ.-W.Liu,Discoveringhighlyefficientlow-
+tolerant quantum computation, Machine Learning: Sci- weight quantum error-correcting codes with reinforce-
+ence and Technology 2, 025005 (2020). ment learning (2025), arXiv:2502.14372 [quant-ph].
+[36] L.D.Colomer,M.Skotiniotis,andR.Mun˜oz-Tapia,Re-
+inforcementlearningforoptimalerrorcorrectionoftoric
+codes, Physics Letters A 384, 126353 (2020).
+[37] D.Fitzek,M.Eliasson,A.F.Kockum,andM.Granath,
+Deep q-learning decoder for depolarizing noise on the
+toric code, Physical Review Research 2, 023230 (2020).
+[38] F. Metz and M. Bukov, Self-correcting quantum many-
+body control using reinforcement learning with tensor
+networks, Nature Machine Intelligence 5, 780 (2023).
+[39] J. Olle, R. Zen, M. Puviani, and F. Marquardt, Si-
+multaneous discovery of quantum error correction codes
+and encoders with a noise-aware reinforcement learning
+agent, npj Quantum Information 10, 1 (2024).
+[40] R. Zen, J. Olle, L. Colmenarez, M. Puviani, M. Mu¨ller,
+and F. Marquardt, Quantum circuit discovery for fault-
+tolerant logical state preparation with reinforcement
+learning, arXiv preprint arXiv:2402.17761 (2024).
+[41] Google Quantum AI and collaborators, Demonstrating
+dynamic surface codes (2024), arXiv:2412.14360 [quant-
+ph].13
+Appendix A: The Quantum Hamming Bound for We note that we can obtain the transformation rules for
+CSS codes Z operators by exchanging control with target and Z
+with X. This property is also true for all other gad-
+The quantum Hamming bound (QHB) establishes a gets that we consider in this paper. Thus, from now
+theoreticallimitonQECcodes. Foran[[n,k,d]]stabilizer on, we will ignore the second orientation and study the
+code, the bound is transformationrulesofmorecomplexgadgetsinthefirst
+orientation (see Fig. 4).
+t (cid:18) (cid:19)
+2n−k (cid:88) 3j n , (A1) The transformation rules for DCX are:
+≥ j
+j=0
+where t = (d 1)/2 is the maximum weight of the XI IX , ZI ZZ (B3)
+⌊ − ⌋ • → →
+errorsthatthecodecancorrect. Thesummationtermin IX XX , IZ ZI
+Eq.(A1)representsthenumberofpossibleerrorpatterns • → →
+up to weight t. Assuming that each error gets mapped
+to a different syndrome gives the upper bound in terms The transformation rules for DCX(4) are:
+of n and k.
+The factor 3j appears because errors can be of three
+types: bit flips (X errors), phase flips (Z errors), and
+XIII XIXI , ZIII IZZI (B4)
+combined bit-phase flips (Y errors). → →
+IXII IXXX , IZII ZZZZ (B5)
+In CSS codes, X errors and Z errors are detected in-
+→ →
+dependently. Assuming a scenario in which we want to IIXI XXXX , IIZI ZZZI (B6)
+→ →
+correct an equal number of errors of both X and Z-type, IIIX IXXI , IIIZ IZIZ (B7)
+theoptimalconfigurationistohaveanequalnumberofX → →
+andZcodegenerators,equalto (n k)/2 . Thisleadsto
+⌊ − ⌋
+the notion of weakly self-dual CSS codes. Thus, we can We also see another symmetry between the X and Z
+write a version of the QHB bound for weakly self-dual rules: rule (B7) is identical to rule (B4) after inverting
+codes as leftandrightandexchangingXbyZ.Thesamehappens
+for rules (B5) and (B6). Thus, we only need to write the
+t (cid:18) (cid:19)
+2⌊(n−k)/2⌋ (cid:88) n . (A2) X rules moving forward. These are the transformation
+≥ j rules for DCX(8):
+j=0
+Notice that this bound offers a necessary but not suffi-
+cient condition for a CSS code with parameters [[n,k,d]] XIIIIIII XIXIXIII ,
+→
+to exist. Moreover, this assumes that the code is non- IXIIIIII IXXXIXII ,
+degenerate (in the sense of different errors having differ- →
+IIXIIIII XXIIXIXI ,
+ent syndromes). In particular, being in a regime where →
+IIIXIIII IXIIXXIX ,
+this bound is satisfied does not guarantee existence of a
+→
+code,butitdoesexcludetheexistenceofnon-degenerate IIIIXIII XIXXXIIX ,
+→
+codes when it is violated. IIIIIXII IXIXIXXI ,
+As a final remark, codes that saturate this bound are →
+IIIIIIXI IIXIIXXX ,
+called perfect, and an example is the [[23,1,7]] self-dual →
+CSS code, as can be easily verified. IIIIIIIX IIIXXIXI ,
+→
+Appendix B: Transformation Rules of Gadgets where we see that the maximum weight is 5.
+Similar rules can be derived for higher-order gadgets
+The CNOT transformation rules are the following: like DCX(16), etc. Since they are much more lengthy
+andnotparticularlyilluminating,werefrainfromwriting
+XI XX , ZI ZI (B1)
+• → → them down explicitly, but we show their trend in Fig.11.
+IX IX , IZ ZZ
+→ → Hence,weobservethatthemaximumweightgradually
+increases with increasing the maximal order m of the
+utilized gadget, DCX(m). Moreover, the maximal weight
+XI XI , ZI ZZ (B2)
+→ → isclosetom/2,seeFig.11. Thismightexplainthegrowth
+IX XX , IZ IZ of the weights discussed in Sect.IVD.
+• → →14
+60
+40
+20
+0
+0 25 50 75 100 125
+Size of gadget
+thgiew
+mumixaM
+FIG. 11. Maximum weight of weight-1 Paulis after being
+propagated through a gadget of size m, DCX(m). The maxi-
+mal weight is close to but below m/2.

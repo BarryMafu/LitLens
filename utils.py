@@ -49,7 +49,7 @@ def search_arxiv(query: str, max_results: int = 10):
         'max_results': max_results
     }
     response = requests.get(url, params=params)
-    print(response.content)
+    # print(response.content)
     
     # Check if the request was successful
     if response.status_code != RESPONSE_CODE_OK:
@@ -161,7 +161,9 @@ def get_content_pdf(arxiv_id: str):
     return txt_path
 
 if __name__ == "__main__":
-    arxiv_id = "2404.13208"
-    print(get_content_pdf(arxiv_id))
+    search_word = "quantum circuit routing, reinforcement learning, Monte Carlo tree search"
+    results = search_arxiv(search_word, max_results=10)
+    for paper in results:
+        print(paper)
 
 # https://api.semanticscholar.org/graph/v1/paper/arXiv:1706.03762/references

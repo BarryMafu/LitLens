@@ -1,0 +1,547 @@
+7102
+beF
+12
+]LC.sc[
+3v95850.8061:viXra
+Using the Output Embedding to Improve Language Models
+OfirPress and LiorWolf
+SchoolofComputerScience
+Tel-AvivUniversity,Israel
+{ofir.press,wolf}@cs.tau.ac.il
+Abstract which results in an activation vector h that
+2
+similarly to U⊤c, is also in IRH. In this case, U
+We study the topmost weight matrix of
+andV areofexactlythesamesize.
+neural network language models. We
+show that this matrix constitutes a valid
+wordembedding. Whentraininglanguage We call U the input embedding, and V the
+models, we recommend tying the input output embedding. In both matrices, we expect
+embedding and this output embedding. rows that correspond to similar words to be sim-
+We analyze the resulting update rules and ilar: for the input embedding, we would like the
+show that the tied embedding evolves in network to react similarly to synonyms, while in
+a more similar way to the output embed- the output embedding, we would like the scores
+ding than to the input embedding in the of words that are interchangeable to be simi-
+untiedmodel. Wealsoofferanewmethod lar(MnihandTeh,2012).
+ofregularizingtheoutputembedding. Our
+methods lead to a significant reduction in
+WhileU andV canboth serveaswordembed-
+perplexity, asweareabletoshowonava-
+dings, intheliterature, onlytheformerservesthis
+riety of neural network language models.
+role. In this paper, we compare the quality of the
+Finally, weshow thatweighttying canre-
+input embedding tothat ofthe output embedding,
+duce the size of neural translation models
+andweshowthatthelattercanbeusedtoimprove
+tolessthanhalfoftheiroriginalsizewith-
+neuralnetworklanguagemodels. Ourmainresults
+outharmingtheirperformance.
+are as follows: (i) We show that in the word2vec
+skip-gram model, the output embedding is only
+1 Introduction
+slightly inferior to the input embedding. This is
+In a common family of neural network language shownusingmetricsthatarecommonlyusedinor-
+models, the current input word is represented as dertomeasureembeddingquality. (ii)Inrecurrent
+the vector c ∈ IRC and is projected to a dense neuralnetworkbasedlanguagemodels,theoutput
+representation using awordembedding matrixU. embeddingoutperformstheinputembedding. (iii)
+Somecomputation is then performed on the word Bytyingthetwoembeddingstogether,i.e.,enforc-
+embedding U⊤c, which results in a vector of ac- ingU = V,thejointembeddingevolvesinamore
+tivations h . A second matrix V then projects h similarwaytotheoutputembeddingthantothein-
+2 2
+toavectorh containingonescorepervocabulary putembedding oftheuntiedmodel. (iv)Tyingthe
+3
+word: h = Vh . Thevectorofscoresisthencon- inputandoutputembeddingsleadstoanimprove-
+3 2
+verted to a vector of probability values p, which ment in the perplexity of various language mod-
+representsthemodels’predictionofthenextword, els. Thisistruebothwhenusing dropout orwhen
+usingthesoftmaxfunction. not using it. (v) When not using dropout, wepro-
+For example, in the LSTM-based lan- pose adding an additional projection P before V,
+guage models of (Sundermeyer etal.,2012; and apply regularization to P. (vi) Weight tying
+Zarembaetal.,2014), for vocabulary of size C, in neural translation models can reduce their size
+theone-hotencodingisusedtorepresenttheinput (number of parameters) to less than half of their
+c and U ∈
+IRC×H.
+An LSTM is then employed, originalsizewithoutharmingtheirperformance.2 Related Work bilinear model of (MnihandHinton,2009), but
+the decision to use it was not explained, and
+Neural network language models (NNLMs)
+its effect on the model’s performance was not
+assign probabilities to word sequences. Their
+tested. Independently and concurrently with
+resurgence was initiated by (Bengioetal.,2003).
+our work (Inanetal.,2016) presented an ex-
+Recurrent neural networks were first used for
+planation for weight tying in NNLMs based
+language modeling in (Mikolovetal.,2010)
+on(Hintonetal.,2015).
+and (Pascanuetal.,2013). The first model
+that implemented language modeling with 3 WeightTying
+LSTMs (Hochreiter andSchmidhuber, 1997)
+was (Sundermeyeretal.,2012). Follow- Inthiswork,weemploythreedifferentmodelcat-
+ing that, (Zarembaetal.,2014) introduced egories: NNLMs,theword2vecskip-gram model,
+a dropout (Srivastava, 2013) augmented and NMT models. Weight tying is applied sim-
+NNLM. (Gal,2015; GalandGhahramani, 2016) ilarly in all models. For translation models, we
+proposedanewdropoutmethod,whichisreferred alsopresentathree-wayweighttyingmethod.
+to as Bayesian Dropout below, that improves on NNLMmodelscontainaninputembeddingma-
+theresultsof(Zarembaetal.,2014). trix, twoLSTMlayers (h 1 and h 2 ), athird hidden
+The skip-gram word2vec model introduced scores/logits layer h 3 , and a softmax layer. The
+in (Mikolovetal.,2013a; Mikolovetal.,2013b) loss used during training is the cross entropy loss
+learnsrepresentationsofwords. Thismodellearns withoutanyregularization terms.
+a representation for each word in its vocabulary, Following (Zarembaetal.,2014), we employ
+both in an input embedding matrix and in an twomodels: largeandsmall. Thelargemodelem-
+output embedding matrix. When training is ploysdropout forregularization. Thesmallmodel
+complete, the vectors that are returned are the is not regularized. Therefore, we propose the fol-
+input embeddings. The output embedding is lowingregularizationscheme. Aprojectionmatrix
+typically ignored, although (Mitraetal.,2016; P ∈
+IRH×H
+is inserted before the output embed-
+MnihandKavukcuoglu, 2013) use both the ding, i.e., h 3 = VPh 2 . The regularizing term
+output and input embeddings of words λkPk 2 is then added to the small model’s loss
+in order to compute word similarity. Re- function. Inallofourexperiments, λ = 0.15.
+cently, (Goldberg andLevy,2014) argued that Projection regularization allows us to use the
+the output embedding of the word2vec skip- sameembedding (asboththeinput/output embed-
+gram model needs to be different than the input ding) with some adaptation that is under regular-
+embedding. ization. Itis,therefore, especially suitedforWT.
+Asweshow, tyingtheinput andtheoutput em- While training a vanilla untied NNLM, at
+beddingsisindeeddetrimentalinword2vec. How- timestep t, with current input word sequence
+ever,itimprovesperformance inNNLMs. i 1:t = [i 1 ,...,i t ] and current target output word
+In neural machine translation (NMT) o t , the negative log likelihood loss is given by:
+models (Kalchbrenner andBlunsom,2013; L t = −logp t (o t |i 1:t ), where p t (o t |i 1:t ) =
+Choetal.,2014; Sutskeveretal.,2014; exp(V o ⊤ t h( 2 t)) ,U (V )isthekthrowofU (V),
+Bahdanauetal.,2014), the decoder, which PC x=1 exp(V x ⊤h( 2 t)) k k
+(t)
+generates the translation of the input sentence in whichcorrespondstowordk,andh isthevector
+2
+the target language, is a language model that is ofactivations ofthetopmostLSTMlayer’soutput
+conditionedonboththepreviouswordsoftheout- at time t. For simplicity, we assume that at each
+put sentence and on the source sentence. State of timestep t, i t 6= o t . Optimization of the model is
+theartresultsinNMThaverecentlybeenachieved performedusingstochastic gradient descent.
+by systems that segment the source and target Theupdateforrowkoftheinputembeddingis:
+wordsintosubwordunits(Sennrich etal.,2016a).
+Onesuchmethod(Sennrichetal.,2016b)isbased ∂Lt = ( C x=1 p t(x|i 1:t)·V x ⊤−V o ⊤ t ) ∂ ∂ h U ( 2 i t t ) k=i t
+on the byte pair encoding (BPE) compression al- ∂U k (0 P k6=i t
+gorithm (Gage,1994). BPE segments rare words Fortheoutputembedding, rowk’supdateis:
+intotheirmorecommonlyappearing subwords. ∂Lt
+=
+(p t(o t|i 1:t)−1)h(
+2
+t) k=o
+t
+Weight tying was previously used in the log- ∂V k (p t(k|i 1:t)·h( 2 t) k6=o tTherefore, intheuntiedmodel,ateverytimestep, Language Subwords Subwords Subwords
+pairs onlyinsource onlyintarget inboth
+the only row that is updated in the input embed-
+EN→FR 2K 7K 85K
+ding is the row U it representing the current input EN→DE 3K 11K 80K
+word. This means that vectors representing rare
+words are updated only a small number of times. Table1: SharedBPEsubwordsbetweenpairsoflanguages.
+The output embedding updates every row at each
+timestep. sizeofthe vocabulary ofthesource /target). G(t)
+In tied NNLMs, we set U = V = S. The
+is the decoder, which receives the context vector,
+updateforeachrowinS isthesumoftheupdates
+theembedding oftheinput word(i )inU,and its
+t
+obtainedforthetworolesofSasbothaninputand
+previous state at each timestep. c is the context
+t
+outputembedding.
+vector at timestep t, c = P a h , where a
+t j∈r tj j tj
+The update for row k 6= i is similar to the up-
+t istheweightgiventothejthannotation attimet:
+dateofrowkintheuntiedNNLM’soutputembed-
+a =
+exp(etj)
+, and e = a (h ), where a is
+ding (the only difference being that U and V are tj P k∈r exp(e ik) tj t j
+thealignmentmodel. F istheencoder whichpro-
+both replaced by a single matrix S). In this case,
+ducesthesequence ofannotations (h ,...,h ).
+there is no update from the input embedding role 1 N
+The output of the decoder is then projected to
+ofS.
+a vector of scores using the output embedding:
+Theupdateforrowk = i ,ismadeupofaterm
+t l = VG(t). Thescoresarethenconvertedtoprob-
+fromtheinputembedding(casek = i )andaterm t
+t abilityvaluesusingthesoftmaxfunction.
+from the output embedding (case k 6= o ). The
+t In our weight tied translation model, we tie the
+second term grows linearly withp (i |i ), which
+t t 1:t inputandoutputembeddings ofthedecoder.
+is expected to be close to zero, since words sel-
+Weobserved that when preprocessing the ACL
+dom appear twice in a row (the low probability
+WMT2014 EN→FR1 and WMT2015 EN→DE2
+in the network was also verified experimentally).
+datasets using BPE, many of the subwords ap-
+The update that occurs in this case is, therefore,
+peared in the vocabulary of both the source and
+mostlyimpactedbytheupdatefromtheinputem-
+the target languages. Tab. 1 shows that up to
+bedding roleofS.
+90%(85%)ofBPEsubwordsbetweenEnglishand
+Toconclude, inthetiedNNLM,everyrowofS
+French(German)areshared.
+is updated during each iteration, and for all rows
+Based on this observation, we propose three-
+except one, this update is similar to the update of
+way weight tying (TWWT), where the input em-
+the output embedding of the untied model. This
+bedding of the decoder, the output embedding of
+implies a greater degree of similarity of the tied
+the decoder and the input embedding of the en-
+embedding to the untied model’s output embed-
+coder are all tied. Thesingle source/target vocab-
+dingthantoitsinputembedding.
+ularyofthismodelistheunion ofboththesource
+The analysis above focuses on NNLMs for
+andtarget vocabularies. Inthis model, bothinthe
+brevity. In word2vec, the update rules are simi-
+encoder and decoder, all subwords are embedded
+(t)
+lar, just that h is replaced by the identity func-
+2 inthesameduo-lingual space.
+tion. As argued by (Goldberg andLevy,2014), in
+this case weight tying is not appropriate, because 4 Results
+if p (i |i ) is close to zero then so is the norm
+t t 1:t
+Our experiments study the quality of various em-
+of the embedding of i . This argument does not
+t
+beddings, the similarity between them, and the
+hold for NNLMs, since the LSTM layers cause a
+impact of tying them on the word2vec skip-gram
+decoupling oftheinputandoutputembedddings.
+model,NNLMs,andNMTmodels.
+Finally, we evaluate the effect of weight ty-
+ing in neural translation models. In this model: 4.1 QualityofObtainedEmbeddings
+exp(V⊤G(t))
+p t (o t |i 1:t ,r) = P Ct exp ot (V⊤G(t)) where r = In order to compare the various embeddings,
+x=1 x
+(r ,...,r ) is the set of words in the source sen- we pooled five embedding evaluation meth-
+1 N
+tence, U and V are the input and output embed- ods from the literature. These evaluation
+dings of the decoder and W is the input embed- methods involve calculating pairwise (cosine)
+ding ofthe encoder (intranslation models U,V ∈
+1
+http://statmt.org/wmt14/translation-task.html
+IRCt ×H and W ∈ IRCs ×H, where C / C is the 2
+s t http://statmt.org/wmt15/translation-task.htmlInput Output Tied A B ρ(A,B) ρ(A,B) ρ(A,B)
+Simlex999 0.30 0.29 0.17 word2vec NNLM(S) NNLM(L)
+Verb-143 0.41 0.34 0.12 In Out 0.77 0.13 0.16
+MEN 0.66 0.61 0.50 In Tied 0.19 0.31 0.45
+Rare-Word 0.34 0.34 0.23 Out Tied 0.39 0.65 0.77
+MTurk-771 0.59 0.54 0.37
+Table4: Spearman’srankcorrelationρofsimilarityvalues
+Table 2: Comparison of input and output embeddings betweenallpairsofwordsevaluatedforthedifferentembed-
+learned by a word2vec skip-gram model. Results are also dings:input/outputembeddings(oftheuntiedmodel)andthe
+shownforthetiedword2vecmodel.Spearman’scorrelationρ embeddingsofourtiedmodel. Weshowtheresultsforboth
+isreportedforfivewordembeddingevaluationbenchmarks. theword2vecmodelsandthesmallandlargeNNLMmodels
+from(Zarembaetal.,2014).
+PTB text8
+Embedding In Out Tied In Out Tied Model Size Train Val. Test
+Simlex999 0.02 0.13 0.14 0.17 0.27 0.28 Large(Zarembaetal.,2014) 66M 37.8 82.2 78.4
+Verb143 0.12 0.37 0.32 0.20 0.35 0.42 Large+WeightTying 51M 48.5 77.7 74.3
+MEN 0.11 0.21 0.26 0.26 0.50 0.50 Large+BD(Gal,2015)+WD 66M 24.3 78.1 75.2
+Rare-Word 0.28 0.38 0.36 0.14 0.15 0.17 Large+BD+WT 51M 28.2 75.8 73.2
+MTurk771 0.17 0.28 0.30 0.26 0.48 0.45 RHN(Zillyetal.,2016)+BD 32M 67.4 71.2 68.5
+RHN+BD+WT 24M 74.1 68.1 66.0
+Table3: Comparisonoftheinput/outputembeddingsofthe
+smallmodelfrom(Zarembaetal.,2014)andtheembeddings Table 5: Word level perplexity (lower is better) on PTB
+fromourweighttiedvariant.Spearman’scorrelationρispre- and size (number of parameters) of models that use either
+sented. dropout (baseline model) or Bayesian dropout (BD).WD –
+weightdecay.
+distances between embeddings and correlat-
+ing these distances with human judgments of the original model. We, therefore, run the fol-
+of the strength of relationships between con- lowingexperiment: First,foreachembedding, we
+cepts. We use: Simlex999 (Hilletal.,2016), computethecosinedistancesbetweeneachpairof
+Verb-143 (Bakeretal.,2014), words. We then compute Spearman’s rank corre-
+MEN (Brunietal.,2014), Rare- lation between these vectors of distances. As can
+Word (Luongetal.,2013) and MTurk- be seen in Tab. 4, the results are consistent with
+771(Halawietal.,2012). our analysis and the results of Tab. 2 and Tab. 3:
+We begin by training both the tied and un- forword2vectheinputandoutputembeddingsare
+tied word2vec models on the text83 dataset, us- similar to each other and differ from the tied em-
+ing a vocabulary consisting only of words that bedding; for the NNLM models, the output em-
+appear at least five times. As can be seen bedding and the tied embeddings are similar, the
+in Tab. 2, the output embedding is almost as input embedding is somewhat similar to the tied
+good as the input embedding. As expected, embedding,anddiffersconsiderably fromtheout-
+the embedding of the tied model is not com- putembedding.
+petitive. The situation is different when train-
+ing the small NNLM model on either the Penn 4.2 NeuralNetworkLanguageModels
+Treebank (Marcusetal.,1993) or text8 datasets
+We next study the effect of tying the embeddings
+(for PTB, we used the same train/validation/test
+on the perplexity obtained by the NNLM mod-
+set split and vocabulary as (Mikolovetal.,2011),
+els. Following (Zarembaetal.,2014), we study
+while on text8 we used the split/vocabulary
+twoNNLMs. Thetwomodelsdiffermostlyinthe
+from (Mikolovetal.,2014)). These results are
+sizeoftheLSTMlayers. Inthesmallmodel,both
+presented inTab.3. Inthis case, theinputembed-
+LSTM layers contain 200 units and in the large
+ding is far inferior to the output embedding. The
+model, both contain 1500 units. In addition, the
+tied embedding is comparable to the output em-
+large model uses three dropout layers, one placed
+bedding.
+rightbefore thefirstLSTMlayer, one between h
+A natural question given these results and the 1
+andh andoneright afterh . Thedropout proba-
+analysis in Sec. 3 is whether the word embedding 2 2
+bilityis0.65. Forboththesmallandlargemodels,
+intheweighttiedNNLMmodelismoresimilarto
+weusethesamehyperparameters (i.e. weightini-
+the input embedding or to the output embedding
+tialization, learning rate schedule, batch size) as
+3 in(Zarembaetal.,2014).
+http://mattmahoney.net/dc/textdataModel Size Train Val. Test
+KN5-gram 141
+RNN 123
+LSTM 117
+StackRNN 8.48M 110
+FOFE-FNN 108
+NoisyLSTM 4.65M 111.7 108.0
+DeepRNN 6.16M 107.5
+Smallmodel 4.65M 38.0 120.7 114.5
+Small+WT 2.65M 36.4 117.5 112.4
+Small+PR 4.69M 50.8 116.0 111.7
+Small+WT+PR 2.69M 53.5 104.9 100.9
+Table 6: Word level perplexity on PTB and size
+for models that do not use dropout. The com-
+pared models are: KN 5-gram (Mikolovetal.,2011),
+RNN (Mikolovetal.,2011), LSTM (Graves,2013),
+Stack / Deep RNN (Pascanuetal.,2013),
+FOFE-FNN (Zhangetal.,2015), Noisy
+LSTM (Gu¨lc¸ehreetal.,2016), and the small model
+from (Zarembaetal.,2014). Thelastthreemodelsareour
+models, which extend the small model. PR – projection
+regularization.
+Model Small S+WT S+PR S+WT+PR
+8txet
+Train 90.4 95.6 92.6 95.3
+Val. - - - -
+Test 195.3 187.1 199.0 183.2
+BDMI Train 71.3 75.4 72.0 72.9
+Val. 94.1 94.6 94.0 91.2
+Test 94.3 94.8 94.4 91.5
+CBB
+Size Validation Test
+EN→FR Baseline 168M 29.49 33.13
+DecoderWT 122M 29.47 33.26
+TWWT 80M 29.43 33.46
+EN→DE Baseline 165M 20.96 16.79
+DecoderWT 119M 21.09 16.54
+TWWT 79M 21.02 17.15
+Table 8: Size(numberofparameters)andBLEUscoreof
+varioustranslationmodels.TWWT–three-wayweighttying.
+tied, a similar amount of improvement is gained.
+We tried this with and without weight decay and
+got similar results in both cases, with slight im-
+provement in the latter model. Finally, by re-
+placing the LSTM with a recurrent highway net-
+work(Zillyetal.,2016),stateoftheartresultsare
+achievedwhenapplying weighttying. Thecontri-
+butionofWTisalsosignificant inthismodel.
+Perplexity results are often reported separately
+formodelswithandwithoutdropout. InTab.6,we
+report the results of the small NNLM model, that
+does not utilize dropout, on PTB.Ascan be seen,
+both WT and projection regularization (PR) im-
+prove the results. When combining both methods
+Train 28.6 30.1 42.5 45.7 together, state of the art results are obtained. An
+Val. 103.6 99.4 104.9 96.4 analog table for text8, IMDB and BBC is Tab. 7,
+Test 110.8 106.8 108.7 98.9
+which shows a significant reduction in perplexity
+across these datasets when both PR and WT are
+Table 7: Word level perplexity on the text8, IMDB and
+used. PR does not help the large models, which
+BBCdatasets. Thelastthreemodelsareourmodels,which
+extendthesmallmodel(S)of(Zarembaetal.,2014). employdropout forregularization.
+4.3 NeuralMachineTranslation
+In addition to training our models on PTB and
+Finally,westudytheimpactofweighttyinginat-
+text8, following (MiyamotoandCho,2016), we
+tention based NMT models, using the DL4MT4
+also compare the performance of the NNLMs
+implementation. We train our EN→FR mod-
+on the BBC (GreeneandCunningham, 2006)
+els on the parallel corpora provided by ACL
+and IMDB (Maasetal.,2011) datasets,
+WMT 2014. We use the data as processed
+each of which we process and split into a
+by (Choetal.,2014) using the data selection
+train/validation/test split (we use the same
+method of (Axelrodetal.,2011). For EN→DE
+vocabularies as(MiyamotoandCho,2016)).
+we train on data from the translation task of
+Inthefirstexperiment,whichwasconductedon
+WMT 2015, validate on newstest2013 and test
+the PTB dataset, we compare the perplexity ob-
+on newstest2014 and newstest2015. Follow-
+tained by the large NNLM model and our ver-
+ing(Sennrichetal.,2016b)welearntheBPEseg-
+sion in which the input and output embeddings
+mentation on the union of the vocabularies that
+are tied. As can be seen in Tab. 5, weight tying
+we are translating from and to (we use BPE with
+significantly reduces perplexity on both the val-
+89500mergeoperations). Allmodelsweretrained
+idation set and the test set, but not on the train-
+using Adadelta (Zeiler, 2012) for 300K updates,
+ingset. Thisindicateslessoverfitting,asexpected
+have a hidden layer size of 1000 and all embed-
+due to the reduction in the number of parameters.
+dinglayersareofsize500.
+Recently, (GalandGhahramani, 2016), proposed
+Tab. 8 shows that even though the weight tied
+a modified model that uses Bayesian dropout and
+modelshaveabout28%fewerparametersthanthe
+weight decay. They obtained improved perfor-
+mance. When the embeddings of this model are 4
+https://github.com/nyu-dl/dl4mt-tutorialbaselinemodels,theirperformanceissimilar. This Alex Graves. 2013. Generating sequences
+isalsothecaseforthethree-wayweighttiedmod- with recurrent neural networks. arXiv preprint
+arXiv:1308.0850.
+els, even though they have about 52% fewer pa-
+rametersthantheiruntiedcounterparts. DerekGreeneandPa´draigCunningham. 2006. Prac-
+tical solutions to the problem of diagonal dom-
+inance in kernel document clustering. In Proc.
+References 23rdInternationalConferenceonMachinelearning
+(ICML’06),pages377–384.ACMPress.
+Amittai Axelrod, Xiaodong He, and Jianfeng Gao.
+2011. Domainadaptationviapseudoin-domaindata C¸aglarGu¨lc¸ehre,MarcinMoczulski,MishaDenil,and
+selection. InProceedingsofthe2011Conferenceon Yoshua Bengio. 2016. Noisy activation functions.
+Empirical Methods in Natural Language Process- arXivpreprintarXiv:1603.00391.
+ing,pages355–362,Edinburgh,Scotland,UK.,July.
+AssociationforComputationalLinguistics. Guy Halawi, Gideon Dror, Evgeniy Gabrilovich, and
+Yehuda Koren. 2012. Large-scale learning of
+DzmitryBahdanau,KyunghyunCho,andYoshuaBen- wordrelatednesswithconstraints. InProceedingsof
+gio. 2014. Neural machine translation by jointly the18thACMSIGKDDinternationalconferenceon
+learning to align and translate. arXiv preprint Knowledgediscoveryanddatamining,pages1406–
+arXiv:1409.0473. 1414.
+Felix Hill, Roi Reichart, and Anna Korhonen. 2016.
+SimonBaker,RoiReichart,andAnnaKorhonen. 2014.
+Simlex-999:Evaluatingsemanticmodelswith(gen-
+An unsupervised model for instance level subcate-
+uine)similarityestimation. ComputationalLinguis-
+gorization acquisition. In Proceedings of the 2014
+tics.
+Conference on Empirical Methods in Natural Lan-
+guageProcessing(EMNLP),pages278–289.Asso-
+GeoffreyHinton, OriolVinyals, andJeffDean. 2015.
+ciationforComputationalLinguistics.
+Distillingtheknowledgeinaneuralnetwork. arXiv
+preprintarXiv:1503.02531.
+YoshuaBengio,Re´jeanDucharme,PascalVincent,and
+Christian Janvin. 2003. A neuralprobabilisticlan-
+SeppHochreiterandJu¨rgenSchmidhuber. 1997. Long
+guage model. J. Mach. Learn. Res., 3:1137–1155,
+short-term memory. Neural Comput., 9(8):1735–
+March.
+1780,November.
+Elia Bruni, Nam-Khanh Tran, and Marco Baroni.
+HakanInan,KhashayarKhosravi,andRichardSocher.
+2014. Multimodal distributional semantics. J. Ar-
+2016. Tying word vectors and word classifiers:
+tif.Intell.Res.(JAIR),49(1-47).
+A loss framework for language modeling. arXiv
+preprintarXiv:1611.01462.
+Kyunghyun Cho, Bart van Merrienboer, Caglar Gul-
+cehre, Dzmitry Bahdanau, Fethi Bougares, Holger
+NalKalchbrennerandPhilBlunsom. 2013. Recurrent
+Schwenk, and Yoshua Bengio. 2014. Learning
+continuous translation models. In Proceedings of
+phrase representations using rnn encoder–decoder
+the2013ConferenceonEmpiricalMethodsinNatu-
+forstatisticalmachinetranslation. InProceedingsof
+ralLanguageProcessing,pages1700–1709,Seattle,
+the2014ConferenceonEmpiricalMethodsinNat-
+Washington,USA,October.AssociationforCompu-
+ural Language Processing (EMNLP), pages 1724–
+tationalLinguistics.
+1734, Doha, Qatar, October. Association for Com-
+putationalLinguistics. Thang Luong, Richard Socher, and Christopher Man-
+ning,2013. ProceedingsoftheSeventeenthConfer-
+PhilipGage. 1994. Anewalgorithmfordatacompres- enceonComputationalNaturalLanguageLearning,
+sion. TheCUsersJournal,12(2):23–38. chapterBetterWordRepresentationswithRecursive
+Neural Networks for Morphology, pages 104–113.
+Yarin Gal and Zoubin Ghahramani. 2016. Dropout AssociationforComputationalLinguistics.
+as a Bayesian approximation: Representing model
+uncertaintyin deeplearning. InProceedingsofthe L. Andrew Maas, E. Raymond Daly, T. Peter Pham,
+33rdInternationalConferenceonMachineLearning Dan Huang, Y. Andrew Ng, and Christopher Potts.
+(ICML-16). 2011. Learning word vectors for sentiment analy-
+sis. In Proceedings of the 49th Annual Meeting of
+Yarin Gal. 2015. A Theoretically Grounded Appli- theAssociationforComputationalLinguistics: Hu-
+cation of Dropout in Recurrent Neural Networks. manLanguageTechnologies,pages142–150.Asso-
+arXivpreprintarXiv:1512.05287. ciationforComputationalLinguistics.
+Yoav Goldberg and Omer Levy. 2014. word2vec Mitchell P. Marcus, Mary Ann Marcinkiewicz, and
+explained: deriving mikolov et al.’s negative- Beatrice Santorini. 1993. Building a large anno-
+sampling word-embeddingmethod. arXiv preprint tated corpus of english: The penn treebank. Com-
+arXiv:1402.3722. put.Linguist.,19(2):313–330,June.Tomas Mikolov, Martin Karafia´t, Luka´s Burget, Jan Rico Sennrich, Barry Haddow, and Alexandra Birch.
+Cernocky´, and Sanjeev Khudanpur. 2010. Recur- 2016b. NeuralMachineTranslationof Rare Words
+rent neural network based language model. In IN- withSubwordUnits. InProceedingsofACL.
+TERSPEECH2010,11thAnnualConferenceofthe
+International Speech Communication Association, Nitish Srivastava. 2013. Improving Neural Net-
+Makuhari, Chiba, Japan, September 26-30, 2010, workswithDropout. Master’sthesis, Universityof
+pages1045–1048. Toronto,Toronto,Canada,January.
+Toma´sˇ Mikolov, Stefan Kombrink, Luka´sˇ Burget, Jan MartinSundermeyer,RalfSchlu¨ter,andHermannNey.
+Cˇernocky`, and Sanjeev Khudanpur. 2011. Exten- 2012. Lstmneuralnetworksforlanguagemodeling.
+InInterspeech,pages194–197,Portland,OR,USA,
+sions of recurrent neural network language model.
+September.
+In 2011 IEEE International Conference on Acous-
+tics,SpeechandSignalProcessing(ICASSP),pages
+Ilya Sutskever, Oriol Vinyals, and Quoc V Le. 2014.
+5528–5531.IEEE.
+Sequence to sequence learning with neural net-
+works. InAdvancesinneuralinformationprocess-
+Tomas Mikolov, Kai Chen, Greg Corrado, and Jef-
+ingsystems,pages3104–3112.
+frey Dean. 2013a. Efficient estimation of word
+representations in vector space. arXiv preprint
+WojciechZaremba, IlyaSutskever,andOriolVinyals.
+arXiv:1301.3781.
+2014. Recurrent neural network regularization.
+arXivpreprintarXiv:1409.2329.
+TomasMikolov,IlyaSutskever,KaiChen,GregSCor-
+rado,andJeffDean. 2013b. Distributedrepresenta-
+MatthewDZeiler. 2012. Adadelta: anadaptivelearn-
+tionsofwordsandphrasesandtheircompositional-
+ingratemethod. arXivpreprintarXiv:1212.5701.
+ity. In Advancesin Neural Information Processing
+Systems26,pages3111–3119. ShiliangZhang,HuiJiang,MingbinXu,JunfengHou,
+and Li-Rong Dai. 2015. A fixed-size encoding
+Tomas Mikolov, Armand Joulin, Sumit Chopra, method for variable-length sequences with its ap-
+Michae¨lMathieu,andMarc’AurelioRanzato. 2014. plicationtoneuralnetworklanguagemodels. arXiv
+Learning longer memory in recurrent neural net- preprintarXiv:1505.01504.
+works. arXivpreprintarXiv:1412.7753.
+JulianG.Zilly,RupeshKumarSrivastava,JanKoutn´ık,
+Bhaskar Mitra, Eric Nalisnick, Nick Craswell, and andJu¨rgenSchmidhuber. 2016. Recurrenthighway
+Rich Caruana. 2016. A dual embedding space networks. arXivpreprintarXiv:1607.03474.
+model for document ranking. arXiv preprint
+arXiv:1602.01137.
+Yasumasa Miyamoto and Kyunghyun Cho. 2016.
+Gatedword-characterrecurrentlanguagemodel. In
+Proceedings of the 2016 Conference on Empirical
+Methods in Natural Language Processing, pages
+1992–1997.AssociationforComputationalLinguis-
+tics.
+Andriy Mnih and Geoffrey E Hinton. 2009. A scal-
+able hierarchical distributed language model. In
+Advancesinneuralinformationprocessingsystems,
+pages1081–1088.
+AndriyMnihandKorayKavukcuoglu. 2013. Learning
+word embeddingsefficiently with noise-contrastive
+estimation. InAdvancesinNeuralInformationPro-
+cessingSystems,pages2265–2273.
+Andriy Mnih and Yee Whye Teh. 2012. A fast and
+simple algorithm for training neural probabilistic
+languagemodels. arXivpreprintarXiv:1206.6426.
+Razvan Pascanu, C¸aglar Gu¨lc¸ehre, Kyunghyun Cho,
+and Yoshua Bengio. 2013. How to construct
+deep recurrent neural networks. arXiv preprint
+arXiv:1312.6026.
+Rico Sennrich, Barry Haddow, and Alexandra Birch.
+2016a. Edinburgh neural machine translation sys-
+temsforwmt16. arXivpreprintarXiv:1606.02891.

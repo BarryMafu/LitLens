@@ -1,0 +1,808 @@
+AlphaRouter: Quantum Circuit Routing with
+Reinforcement Learning and Tree Search
+Wei Tang† Yiheng Duan† Yaroslav Kharkov Rasool Fakoor
+AWS Quantum Technologies AWS Quantum Technologies AWS Quantum Technologies Amazon Web Services
+New York, NY, USA Seattle, WA, USA New York, NY, USA Santa Clara, CA, USA
+weittang@amazon.com yiheng@amazon.com ykharkov@amazon.com fakoor@amazon.com
+Eric Kessler Yunong Shi
+AWS Quantum Technologies AWS Quantum Technologies
+New York, NY, USA New York, NY, USA
+erikessl@amazon.com shiyunon@amazon.com
+Abstract—Quantumcomputershavethepotentialtooutperform connectivity in quantum computers, routers must move pairs
+classical computers in important tasks such as optimization and of remote logical qubits to adjacent physical qubits, so that
+number factoring. They are characterized by limited connectivity,
+they can be executed on a quantum computer. To generate
+which necessitates the routing of their computational bits, known
+physical circuits that comply with specific topologies, routers
+as qubits, to specific locations during program execution to carry
+out quantum operations. Traditionally, the NP-hard optimization utilize specialized quantum operations known as SWAP gates.
+problem of minimizing the routing overhead has been addressed These gates are applied to adjacent pairs of physical qubits
+through sub-optimal rule-based routing techniques with inherent to exchange the positions of the corresponding pair of logical
+human biases embedded within the cost function design. This
+qubits, effectively swapping their locations.
+paper introduces a solution that integrates Monte Carlo Tree
+Unfortunately, SWAP insertion is very costly. Quantum
+Search(MCTS)withReinforcementLearning(RL).OurRL-based
+router, called AlphaRouter, outperforms the current state-of-the- operations are inherently non-perfect and error-prone [22].
+art routing methods and generates quantum programs with up SWAPsintroducesignificantlymoreerrortoquantumprograms,
+to 20% less routing overhead, thus significantly enhancing the destroys accurate quantum data and makes quantum program
+overall efficiency and feasibility of quantum computing.
+outputs wrong. As a result, optimizing routers to minimize
+I. INTRODUCTION their added SWAP overhead is crucial for advancing quantum
+computing efficiency [38].
+Quantumcomputing[20],[41]isanemergingcomputational
+Minimizing SWAP gates in quantum programs is crucial but
+paradigm, which has a potential to transform many industries,
+challenging, as it parallels the token swapping problem [56],
+including optimization [18], machine learning [47], quantum
+recognized as at least NP-hard [12]. Currently, there are two
+chemistry and material science [2], [3]. A quantum computer
+primaryapproachestothecircuitroutingproblem:satisfiability
+comprises quantum bits (qubits) that share quantum edges
+solver-based routing algorithms [33] and heuristics-based
+with each other. Quantum computers perform computation by
+routing algorithms [1], [12], [24]. However, solver-based
+applying quantum operations (gates) to qubits, akin to classical
+algorithms achieve optimal SWAP numbers but suffer from
+Booleancircuits.Suchquantumgatesoperateonpairsofqubits,
+exponential time complexity with more qubits and quantum
+creating correlation in their states. This phenomenon, called
+gates. On the other hand, heuristic routers generally produce a
+entanglement, constitutes the underlying potential advantage
+suboptimal solution with a high SWAP overhead. In contrast,
+of quantum computing.
+machine learning methods for circuit routing problem allow to
+However, quantum computers face a key challenge in
+balance the solution quality and the runtime.
+applying quantum gates. Due to physical constraints, quantum
+Instead, quantum circuit routing can be formulated as a
+gates can only be applied to adjacent pairs of qubits on a
+sequential decision-making process by employing RL-based
+quantum computer. In general, quantum computers do not
+methods. Given the recent impressive results of Deep RL [4],
+haveall-to-allconnectivity.Asaresult,transforminghigh-level
+[15]–[17], [19], [26], [30], [34], [37], [48], [49], adapting
+abstract quantum programs (logical circuits) into hardware
+DeepRLframeworkstothisproblemoffersseveraladvantages.
+executable quantum circuits (physical circuits) that satisfy the
+Firstly, an RL-based router can adapt to different benchmarks
+connectivity constraints is necessary to run quantum programs.
+and quantum computer topologies through re-training or fine-
+Quantum routers hence become a necessary component
+tuning, eliminating the need for manual algorithm redesign.
+to tackle the challenge. To accommodate the sparse qubit
+Secondly, RL agent models, particularly those utilizing trans-
+†WeiTangandYihengDuancontributedequallytothiswork. formers[55],areadeptathandlinglongerinputsequences.This
+4202
+tcO
+7
+]hp-tnauq[
+1v51150.0142:viXracapabilityenhancestheirpotentialtoachievebetteroptimization logical qubits (l ,l ) adjacent on the quantum computer, thus
+1 4
+results, thereby significantly improving the efficiency of RL- enabling g . With its dependence on g fulfilled, g is also
+2 2 3
+based routing over traditional heuristic methods. scheduled, hence completing the routing process.
+We developed an RL-based quantum circuit router, called Routing strategically inserts SWAPs to reposition logical
+AlphaRouter. AlphaRouter is inspired by AlphaZero [48], qubits on a quantum computer so that they become adjacent to
+where it combines MCTS [11], [27] and RL [51]. MCTS execute the required logical gates. A SWAP could be applied
+excels in exploring a vast space of possible actions and to any physical edge on a quantum computer, exchanging the
+outcomes,enhancingdecision-makingbybalancingexploration position of the two logical qubits. This process is guided by
+and exploitation. Meanwhile, RL contributes by learning from thequantumcomputertopology,thecurrentqubitmappingand
+the outcomes of these explorations, continuously improving the remaining sequence of logical gates. Routing carries out a
+strategy over time. This synergy allows for more sophisticated sequential decision making process to apply a SWAP gate and
+and globally optimized quantum compilation solutions. Our schedule all possible logical gates, given the current state. The
+contributions hence include: routing process terminates once all the logical gates from the
+1) SWAP reduction: To the best of our knowledge, Al- inputcircuitaresuccessfullyscheduledintotheoutputphysical
+circuit.
+phaRouter is the first to integrate MCTS and RL to
+optimize for extended circuit sequences, in contrast Existing quantum circuit routing methods [12], [32], [38]
+against traditional methods that focus on single-layer adopt local search that only considers the first few gates from
+local search. This enables AlphaRouter to reduce the the front layer of the circuit, leading to suboptimal routing
+number of SWAP gates by 10−20% over state-of-the- quality.
+art routers.
+B. Reinforcement Learning
+2) Unseen Benchmark: AlphaRouter demonstrates robust
+In Reinforcement learning (RL), an agent learns to make
+performance and generalization ability across bench-
+decisions by interacting with an environment [51]. It involves
+marks, achieving consistent compilation results even for
+the agent taking actions in the environment and receiving
+previously unseen benchmarks.
+feedback in the form of rewards. Markov Decision Process
+3) Scalability AlphaRouter exhibits scalable compilation
+(MDP) [43] is a mathematical framework commonly used to
+efficiency, evidenced by a 15% reduction in the linear
+model and formalize RL problems. An MDP is defined by a
+scaling coefficient for the number of SWAPs as bench-
+tuple (S,A,T,r,µ ,γ), where S denotes the state space and
+marksizesincrease,whileretainingalowinferencetime. 0
+A is the action space, the function T : S ×A×S → R
++
+II. BACKGROUND encodes the transition probabilities of the MDP, µ 0 denotes
+the initial state distribution, r(s,a) is the instantaneous reward
+A. Quantum Circuit Routing
+obtained by taking action a∈A in state s∈S, and γ ∈[0,1]
+Figure1ashowsanexample5-qubitlogicalcircuitvisualized isadiscountfactorforfuturerewards.ThegoalofRListofind
+as a Directed Acyclic Graph (DAG). Logical quantum gates a policy, which is a mapping from states to actions f :S →A
+could apply to any pair of logical qubits. Each logical qubit , that maximizes the cumulative expected reward over time.
+goesthroughoneormorequantumgatestoevolveitsquantum Figure 2 visualizes the standard RL framework. An agent,
+state. This is analogues to the classical computing process of usually in the form of a neural network, interacts with an
+applying operations to data stored in registers. environment by taking actions a based on the current state
+t
+Figure 1b shows the topology and qubit mapping of a ring s . Each action then leads to a new state s and produces a
+t t+1
+quantum computer with a trivial initial mapping, i.e. logical rewardr ,guidingtheagenttolearnoptimalbehaviorsthrough
+t
+qubit l is mapped to physical qubit p , ∀i∈{0,...,4}. Given trial and error to maximize cumulative rewards.
+i i
+the logical circuit and the quantum computer mapping, g Given the sequential nature of quantum circuit routing, RL
+0
+cannot be scheduled since the corresponding physical qubits can be an effective tool for finding optimal routing. Section III
+of l and l – p and p – are not adjacent on the quantum details the formalization of quantum circuit routing, framing it
+0 2 0 2
+computer. g cannot be scheduled for the same reason. In as an MDP planning problem, and demonstrates how RL can
+1
+addition, g and g must wait for g to execute first because of efficiently and adaptively optimize the process.
+2 3 1
+data dependency. Instead, inserting a SWAP between p and
+1
+C. Monte Carlo Tree Search
+p brings pairs of logical qubits (l ,l ) and (l ,l ) adjacent
+2 0 2 1 3
+on the quantum computer. Figure 1c hence shows that both MCTS [11] is a search algorithm that progressively builds a
+gates g and g can now be scheduled into the output physical search tree by exploring and evaluating potential moves, while
+0 1
+circuit. focusing on exploring the high value regions. MCTS does not
+Figure 1d shows the remaining logical circuit after the first require supervision, but generates values for states iteratively.
+SWAP. Since the logical qubit targets of g and g are not Figure 3 shows the four stages in an MCTS cycle. An
+2 3
+adjacent on the quantum computer, they require an additional MCTS search tree consists of nodes corresponding to states
+SWAPbetweenp andp ,asshowninFigure1e.Consequently, s. In addition, each node stores statistics such as the number
+3 4
+Figure1fshowsthatasecondSWAPbetweenp andp brings of visits N(s) and the Monte Carlo valule estimation Q(s).
+3 4
+2𝑙 𝑔
+$ $
+𝑙 𝑔
+" "
+𝑙 𝑙 ! 𝑝 $ 𝑙 $ 𝑙 $
+# 𝑙 " 𝑙 # 𝑔 $
+𝑝 ! 𝑝 "
+𝑙 ! 𝑙 " 𝑝 " 𝑝 # 𝑙 # 𝑝 𝑙 # 𝑙 "
+#
+𝑙 % 𝑔 # 𝑔 ! 𝑙 ! 𝑙 ! 𝑔 "
+𝑝
+!
+(a) Input logical circuit as 𝑝 $ 𝑝 % SWAP 𝑙 % 𝑙 %
+a Directed Acyclic Graph 𝑝
+𝑙 𝑙 %
+(DAG) with five logical $ %
+qubits l ,∀i ∈ {0,...,4} (c) g can be scheduled as l and l are
+i 0 0 2
+and four quantum gates (b) A SWAP between physical qubits p adjacent. g can be scheduled as l and l
+1 1 1 3
+g ,∀j ∈{0,...,3}. and p exchanges l and l . are adjacent.
+j 2 1 2
+𝑙 $ 𝑙 $ 𝑙 $
+𝑝
+$
+𝑙 $ 𝑙 ! 𝑙 " 𝑙 # 𝑔 $ 𝑙 #
+𝑝
+"
+𝑙 " 𝑝 ! 𝑙 # 𝑙 " 𝑙 "
+𝑙 # 𝑙 " 𝑝 " 𝑝 % 𝑙 # 𝑝 # 𝑙 ! 𝑙 ! 𝑔 " 𝑙 % 𝑔 #
+𝑝
+!
+𝑙 ! SWAP 𝑝 𝑝 𝑝 𝑙 % 𝑙 % 𝑙 ! 𝑔 !
+$ # %
+𝑙 % 𝑔 # 𝑔 ! 𝑙 $ 𝑙 % (f) g 2 can be scheduled as l 1 and l 4 are
+adjacent. g can be scheduled as l and l
+3 3 4
+(d)Remaininglogicalcircuit (e) A SWAP between physical qubits p are adjacent and its preceding gate g has
+3 2
+after the first SWAP. and p exchanges l and l . also been scheduled.
+4 3 4
+Fig. 1: Example of routing a logical circuit to a quantum computer using two SWAPs. Figures 1a, 1d show the logical circuits.
+Colors represent the flow of qubits through the gates. Figures 1b, 1e show the topology and qubit mapping of a ring quantum
+computer. p ,∀i ∈ {0,...,4} represent physical qubits. l ,∀i ∈ {0,...,4} represent the logical qubit mapped to a physical
+i i
+qubit. The black edges represent the connections. Figures 1c, 1f represent the routed physical circuit output. The gates are
+scheduled on their target logical qubits and topology compliant.
+Confidence Bound (UCB) [28] score in Equation 1.
+Action 𝑎 (cid:115)
+! Q(s ) logN(s )
+UCB(s →s )= t+1 +c× t (1)
+t t+1 N(s ) N(s )
+t+1 t+1
+Environment Agent
+where s indicates a parent node, s represents a child node
+t t+1
+to s , Q(s) represents the current Monte Carlo value of a state
+t
+s, N(s) represents the number of visits to a state s, and c
+𝑠 , 𝑟 State 𝑠 , Reward 𝑟
+!"# !"# ! ! represents a hyperparameter tradeoff coefficient. UCB scores
+hence favor children states less visited and with higher Monte
+Fig. 2: A standard RL framework. An agent interacts with an
+Carlo values.
+environment to generate and learn from its experiences.
+The Expansion stage appends one or more new child states
+to the selected leaf state to expand the tree by applying each
+possible action. This represents exploring a new action from
+the leaf state.
+The Simulation stage conducts a simulated roll-out from the
+Throughout the iterative cycles of these stages, the values
+leaf state by predicting the additional reward to a potential
+associated with each state in the tree are continuously updated.
+terminal state. Vanilla versions of MCTS usually follow a
+The Selection stage greedily traverses the existing search random policy to reach a terminal state. For example, when
+tree from the root state till reaching a non-terminal child searching next moves for the game of Go, a vanilla MCTS
+state. Greedy selections are based on maximising the Upper implementation randomly plays stones to the current board
+3The state space for circuit routing s comprises of the
+t
+remaining logical circuit to be routed and the current qubit
+mapping.Thestatespaceisinfiniteasthereareinfinitelymany
+logicalcirucits.Alogicalquantumcircuitisexpressedaslogical
+gates G ≡ {g : l ,l }, where l and l represent the
+t g,1 g,2 g,1 g,2
+two logical qubits of a gate g. The qubit mapping is a bijective
+mapping between physical and logical qubits M :P ←→L.
+t
+The action space is limited as there are |E| possible SWAPs
+to insert, one for every quantum computer edge. A SWAP
+(a)Selection.Greedytraversalof
+action A on edge {p ,p } exchanges the qubit mapping from
+t i j
+the existing tree from the root
+p ,p ↔l ,l to p ,p ↔l ,l and updates the mapping M
+statetochoosetheleafstatewith (b) Expansion. Add child states i j i j i j j i t
+maximum UCB scores. by applying possible actions. to M t+1 .
+In addition, gates are sequentially checked for topology
+compliance and pending dependence on other gates. g ∈ G
+t
+satisfying the following conditions are scheduled and removed
+from G : (i) l ,l are adjacent on the quantum computer
+t g,1 g,2
+after the SWAP, i.e. (M (l ),M (l )) ∈ E and (ii)
+t+1 g,1 t+1 g,2
+l ,l have no other pending gates in G preceding g that
+g,1 g,2 t
+had not been removed in the current time step.
+State
+Reward The circuit routing problem is hence framed as: Route
+Encoding
+Prediction
+an input logical quantum circuit G to a quantum computer
+0
+Transformer
+backend E with an initial mapping M . Find the shortest
+Agent 0
+sequence of actions {s ,A ,s }T−1 such that |G |=0.
+t t t+1 t=0 T
+(c) Simulation. Agent predicts (d) Backpropagation. Update the
+the additional reward from the statistics of the branch of nodes
+IV. FRAMEWORK
+leaf state to a terminal state. involved in the current iteration.
+AlphaRoutercombinesbothRLandMCTStoautonomously
+Fig. 3: MCTS with a transformer agent. The process repeats
+train a RL agent to predict the best placement of SWAPs given
+the four stages for a pre-determined max number of iterations.
+a logical quantum circuit and a quantum computer.
+Circles in the tree represent states. Lines connecting the states
+represent actions. A. Training
+Our training approach, inspired by AlphaZero, enables
+autonomous label generation and more efficient exploration
+until victory or loss. However, quantum circuit compilation
+for RL via MCTS. Figure 4 visualizes the overall training
+is a decision process with an infinite horizon. This means
+framework. The environment comprises both the remaining
+that randomly inserting SWAP gates to the circuit does
+logical circuit to be routed and the current qubit mapping to
+not guarantee compilation completion. Instead, AlphaRouter
+produce a state observation s . Section IV-C details the state
+obtains a prediction of the value of the leaf state by feeding t
+encoding. In addition, we limit the remaining logical circuit
+the leaf state encoding to a transformer-based agent, described
+lookahead to be up to 48 logical gates. A transformer-based
+in section IV-C.
+agent predicts the next SWAP action A by feeding the state
+The Backpropagation stage propagates the real rewards t
+s through its network as shown in Figure 6. A chosen SWAP
+gathered from the simulation back to the root state. The t
+action is then applied to advance the environment state.
+statistics for each node within the selected branch, including
+A replay buffer stores the state experiences s and passes
+metrics like value and visit count, are updated to reflect the t
+a randomly sampled experience batch {s} to MCTS. MCTS
+resultsobtainedfromthesimulationstage.Thisprocessensures
+undergoes its value update process in Section II-C for the
+that the information at each node accurately represents the
+sampled batch for 200 iterations (rollouts). Rewards r are
+accumulated knowledge so far. t
+defined to be the number of additional gates scheduled by
+III. PROBLEMSTATEMENT applying action A t , minus a penalty of incurring one extra
+SWAP:
+Finding the minimum number of SWAPs to route a logical
+r =|G |−|G |−1 (2)
+quantum circuit to a quantum computer can be modeled as t t t+1
+an MDP. AlphaRouter focuses training a routing agent for a Note that r = −1 if a SWAP fails to schedule any logical
+t
+given quantum computer topology, i.e. with fixed number of gates at time step t.
+qubits and connectivity. A quantum computer is modeled as MCTS then outputs its action prediction for the sampled
+a set of edges E ≡ {e : p i ,p j }, where P ≡ {p j } represents states s′ ∈{s}.
+the physical qubits. Similarly, L≡{l } represents the logical
+j
+qubits in an input quantum circuit. a∗ =argmaxQMCTS(f(s′,a)) (3)
+MCTS
+a
+4MCTS Prediction
+Loss MCTS
+Random Batch
+SWAP 𝐴 ! Train {𝑠}
+Agent Prediction
+-Remaining Logical Circuit Transformer-based Replay
+-QPU Mapping Agent Buffer
+𝑠 𝑠
+! !
+Fig. 4: AlphaRouter: MCTS + RL training framework.
+where f is a state transition function s = f(s ,a), and
+t+1 t
+QMCTS(s) is the Monte Carlo value of a state s.
+Inaddition,theagentoutputsitsactionprobabilityprediction Agent
+by forwarding s′ ∈{s} through its transformer network. The
+two state value predictions are then compared to compute a Encoded State 𝑆 ! SWAP Action 𝐴 !
+cross entropy loss: Remaining
+Logical Circuit +
+(cid:88)
+l (s′)=− δ(a∗ ,a)×log(Qπ(s′,a)) (4) Current
+1 MCTS
+Mapping
+a
+where δ(a,a′) is a delta function between two actions a and SWAP + SCHEDULE
+a′. Qπ(s,a) is the transformer network action probability
+prediction for a given state s and action a. Output Physical
+Thetwostatevaluepredictionsarealsocomparedtocompute Circuit
+a square loss:
+Fig. 5: AlphaRouter compiles quantum circuits with its trained
+l (s′)=(QMCTS(s′)−Qπ(s′))2 (5) agent via model inference without MCTS.
+2
+where Qπ(s) is the transformer state value prediction for a
+state s. instance independently handles a portion of the tree search and
+Finally, an average loss combines both the cross entropy node expansion, significantly enhancing the overall efficiency
+loss in Equation 4 and the square loss in Equation 5 to update and speed of the search process. By dividing the workload in
+the transformer network. thismanner,wecanconcurrentlyexecutemultipletreesearches
+l +αl and updates, accelerating the MCTS value update and making
+L= 1 2 (6) the most of the available computational resources.
+|E|
+where|E|isthesizeoftheactionspace.αisahyperparameter B. Routing as Inference
+tradeoff coefficient. α balances the two losses l and l . l After completing its training, the RL agent employs a
+1 2 1
+is the cross entropy loss between transformer network action standard iterative inference process to perform circuit routing.
+probability prediction and MCTS action prediction. l is the Figure 5 illustrates AlphaRouter’s use of a trained agent for
+2
+squared loss between MCTS and transformer SWAP count routingviamodelinference.TheRLagentreceivesanencoded
+prediction for a given state. The tradeoff coefficient α is state s comprising the remaining logical circuit and current
+t
+neededbecauselargerbenchmarkswillrequiremoreSWAPsto qubit mapping. Based on this, it then predicts and applies the
+finish compilation. As a result, l naturally becomes larger and next SWAP action a to adjust the qubit mapping. Any logical
+2 t
+dominant for larger benchmarks. α is empirically determined gates that now satisfy the topology are greedily scheduled. The
+based on the size of input benchmarks such that l and l are iteration terminates when the input logical circuit has been
+1 2
+roughly of the same scale. fully routed.
+One of the key advantages of MCTS is its highly paral- In the standard AlphaZero [48] implementation, MCTS
+lelizable nature, primarily due to the structure of its data and is utilized alongside the trained agent during the inference
+the relative independence of node expansions. This aspect of phase for additional refinement of predictions. However, this
+MCTS makes it well-suited for distribution across multiple integrated approach tends to be slower compared to using the
+compute nodes. In our implementation, we leverage this trained agent alone.
+parallelizability by distributing the MCTS process across 16 AlphaRouter, having demonstrated performance improve-
+ml.c5.18xlarge CPU instances on AWS SageMaker. Each ments over existing methods, enables us to omit the use of
+5MCTS during inference to achieve a much faster runtime. Each layer comprises two main components: multi-head
+Our experiments show that excluding MCTS from the in- attentionandafeed-forwardnetwork,bothfollowedbyan“Add
+ference process significantly improves the runtime without &Norm”stepforresidualconnectionsandlayernormalization.
+compromising the routing performance. This enhancement The multi-head attention, with 6 attention heads, allows the
+in runtime is crucial for quantum computing, particularly modeltofocusondifferentpartsoftheinputsequencesimulta-
+because numerous quantum algorithms, such as variational neously, enhancing its ability to capture complex dependencies.
+quantum algorithms, necessitate the execution of thousands of This is because self-attention enables each gate to interact with
+distinct circuits to tackle benchmark problems. For context, every other gate in the circuit, assessing their relationships
+the operational timeframe for executing a quantum circuit and the overall sequence. Such an approach captures not only
+on a quantum processor is typically within the microsecond the individual qubit connections of each gate but also how
+range.Consequently,thetimetakenforcompilationcanquickly gates influence one another across the circuit. This nuanced
+emerge as a significant bottleneck in the standard workflow of understanding of both local and global gate interactions is
+quantum computing. crucial for identifying optimal routing paths, as it mirrors
+the inherently interconnected nature of quantum computations,
+C. Agent Network where the placement and order of gates significantly impact
+the best routing sequence. This structure repeats across all 4
+Figure 6 depicts the state encoding, beginning with the
+layers, enabling the encoder to process and transform the input
+logical circuit DAG. In this DAG, each quantum gate is
+into a high-level, contextually enriched representation. A final
+represented by its two qubits and a depth based on its
+linear layer serves as the decoder and outputs the action and
+topological order. For example, g has physical qubit targets
+0 state value predictions.
+of M(l ) and M(l ) based on the mapping M. In addition,
+0 2 Table I summarizes AlphaRouter’s Tranformer model archi-
+since g does not depend on any other gates, it has a depth of
+0 tecture and hyperparameters.
+1. g has direct dependency on g and hence have depth of 2.
+2 1
+Eventually, g 3 has depth of 3 as it depends on g 2 . Numberofattentionlayers 4
+AlphaRouter observes the first few logical gates to limit the Numberofattentionheads 6
+Nodeembeddingdimension 20
+lookaheaddepthwithamaxnumbersetat48.Eachgatevector
+Totalnumberofparameters 2.2M
+then embeds its two physical qubit targets with a trainable Optimizer Adam
+lookup table. Each gate vector is subsequently represented as Learningrate 0.1
+Learningratedecay 0.8
+the mean of the two qubit embeddings, together with an extra √
+UCTcoefficientc 2
+dimension of depth. Overall, the node embedding process BatchSize 32
+produces a feature matrix of shape Lookahead Length ×
+TABLE I: Transformer model parameters and training configu-
+(Embedding Dimension+1).
+ration.
+Finally, this matrix is fed into a transformer-based actor-
+critic [29] network for encoding and decoding, yielding
+predictions including both SWAP action values and a state D. Overall Algorithm
+value. Figure 7 shows the transformer network architecture. Algorithm 1 shows the overall training algorithm. The algo-
+AlphaRouter employs a 4-layer, 6-head transformer encoder rithm box uses the same notations as Section III. AlphaRouter
+architecture, starting with the embedded input shown in usestheAdamoptimizer[25]totrainitstransformernetwork.
+Figure 6.
+The embedded input is first combined with positional
+V. EXPERIMENTSETTINGS
+encoding to retain sequence information. The Transformer A. Quantum Computer Backends
+architecturelacksinherentpositionalinformationinitsstructure
+WetrainandtesttheperformanceofAlphaRouteronvarious
+because it processes input sequences as sets of elements
+quantum computers include (i) Tokyo, an IBM quantum
+without considering the order of these elements. To address
+computer with 12 qubits arranged in a 3×4 grid; (ii) OQC,
+this, Transformers often incorporate positional encodings [55]
+an Oxford Quantum Circuits quantum computer with 8 qubits
+to provide the model with information about the position of
+arranged in a circle; and (iii) Guadalupe, an IBM quantum
+each element in the sequence.
+computer with 16 qubits in a heavy hexagon topology [9].
+Positional encoding involves alternating sine and cosine The training was performed using AWS SageMaker cloud
+functions that depend on the position of a quantum gate in the service. The training runs for 100 episodes on Random
+input sequence and the embedding dimension. This positional benchmarks for all quantum computer topologies.
+information is crucial for quantum circuit routing as the order
+of quantum gates carries physical meaning. Equations 7 shows B. Initial Mapping
+the sinusoidal wave functions. We employ two distinct strategies for initial qubit mapping:
+(i) trivial and (ii) random. The trivial initial mapping simply
+PE(pos,2i) = sin(pos/100002i/d)
+assigns the logical qubits in a numerical order to the physical
+PE(pos,2i+1) = cos(pos/100002i/d) (7) qubits, i.e. p = l . On the other hand, random initial
+i i
+6Depth=1 Depth=2 Depth=3
+𝑝 " 𝑝 $ Depth
+𝑙 " 𝑔 " 𝑔 " :𝑀 ! (𝑙 " ) 𝑀 ! (𝑙 # ) 1
+𝑔 :𝑀(𝑙 ) 𝑀(𝑙 ) 1
+$ ! $ ! % (𝐴 𝑣𝑎𝑙𝑢𝑒𝑠,𝑠 𝑣𝑎𝑙𝑢𝑒)
+𝑙 𝑔 ⋮ ! !
+$ $
+𝑙
+#
+Node Embedding
+𝑙
+%
+𝑙 𝑔 𝑔 Lookahead Transformer Encoder +
+& # %
+Length Linear Decoder
+Logical Circuit DAG
+Embedding
+Dimension
+Depth Dimension
+Fig. 6: Encoding the logical circuit G and the current qubit mapping M .
+t t
+1) Regular: Quantum Approximate Optimization Algo-
+rithm (QAOA) solves the maximum independent set
+problem for random 3-regular graphs [46].
+2) Erdos: The same algorithm as Regular but for random
+Erdos-Renyi graphs.
+Add & Norm
+3) QFT: Quantum Fourier Transform [10] is a common
+subroutine in many quantum algorithms that promise
+Feed Forward
+speedup over classical algorithms, including the Shor’s
+factoring algorithm.
+4× Add & Norm
+4) QV: Quantum Volume circuits [13] quantify the largest
+Multi-Head random circuit of equal width and depth that a quantum
+Attention computer successfully implements.
+5) GHZ: Generates the entangled Greenberger–Horne-
+6× Zeilinger state [23].
+Positional ⨁ 6) BV. Bernstein Vazirani algorithm solves the hidden
+Encoding string problem more efficiently than classical algorithms
+do [6].
+Embedded Input 7) HS. Hidden Shift algorithm [54].
+8) Random. Random quantum circuits consisting of uni-
+Fig. 7: AlphaRouter uses a transformer-based neural network
+formly sampled single and two-qubit gates.
+asitsagent.Themodelcomprises4multi-headattentionlayers,
+Ourbenchmarksencompassadiversearrayofcircuitstructures,
+each layer has 6 attention heads.
+ensuring a thorough and extensive assessment of our RL-based
+quantum circuit router’s performance across various circuit
+complexities.
+mapping introduces variability by randomly assigning qubits.
+AlphaRouter is designed to solve only the circuit routing
+D. Baseline Routers
+problem for a given initial mapping. In the future it is viable
+to extend our approach to simultaneously solve both routing We use various Qiskit routers as the baseline comparisons.
+and initial mapping problems using the same RL model. One These are some of the most commonly used heuristics routers.
+possible approach is to consider the initial mapping as a Specifically, Basic is a greedy strategy that finds the shortest
+sequence of virtual SWAPs in the beginning of the routing. path to implement quantum gates sequentially. Stochastic is a
+randomized algorithm that performs multiple trials for SWAP
+C. Benchmarks
+insertion in each circuit layer. SABRE [32] is the state-of-
+Thebenchmarkslistedbelowareamongthemostcommonly the-art heuristics router. It performs a bi-directional search
+usedquantumcircuittypes.Wesamplerandomcircuitinstances and uses a custom objective function, that takes into account
+from each circuit class and compute the average SWAP count. SWAPs both in the front layer and the last layer in the circuit.
+7Algorithm 1: MCTS+RL Training
+Input: Number of circuits N. Logical quantum circuits
+{G }. Initial qubit mapping {M }. Quantum computer
+0,i 0,i
+topology E. Feature extraction function O. State transition
+function f. Transformer network π.
+Initialize unfinishedIndices={1,...,N}.
+Initialize t=0.
+Initialize replay buffer B =empty.
+for each episode do
+for i∈unfinishedIndices do
+State s =O(G ,M ).
+t,i t,i t,i
+Sample A based on Qπ(s ,a).
+t,i t,i
+s =f(s ,A ).
+t+1,i t,i t,i
+Add s t to B. (a) Trivial mapping. The error bars show the standard
+if s is a terminal state then deviation from 20 circuits for each benchmark type. Al-
+remove i from unfinishedIndices. phaRouterreducesthenumberofSWAPsby∼10−15%
+compared to the state-of-the-art SABRE router.
+end if
+end for
+if |B|>320 then
+Random sample experience batch {s}.
+for Each state s′ ∈{s} do
+Run MCTS for 200 rollouts, outputs the MCTS
+action prediction
+a∗ =argmax QMCTS(f(s′,a)).
+MCTS a
+Compute the action value predictions by the
+transformer agent Qπ(s′,a).
+Compute cross entropy loss according to Equation 4.
+Compute squared error according to Equation 5.
+end for
+Compute the average batch loss according to (b) The same random initial mapping applies to both
+AlphaRouter and baseline routers. The error bars show
+Equation 6.
+the standard deviation from 5 random initial mappings.
+Update the transformer parameter with the Adam
+optimizer. Fig. 8: Average number of SWAPs by training AlphaRouter on
+end if Regular and testing it on various benchmarks. AlphaRouter
+end for outperforms baseline routers for the majority of the bench-
+marks.
+VI. RESULTS
+with the length of the benchmark. However, this linear growth
+We designed 4 experiments to test a specific aspect of the variesacrossdifferentrouters,indicatingtheirroutingefficiency.
+RL compiler, while keeping the other factors constant. We route Random benchmarks with an increasing number of
+gates on the Tokyo quantum computer using random initial
+A. Generalizing to Unseen Benchmarks
+mapping. Figure 9 shows that AlphaRouter has better scaling
+AlphaRouter was trained on the Regular benchmark and (lower linear coefficient α calculated by linear regression),
+tested on a variety of benchmarks listed in Section V-C. Fig- compared to the baseline Qiskit routers by approximately 15%.
+ure8comparesthetotalnumberofSWAPsbyAlphaRouterand
+C. Adapting to Different Quantum Computers
+Qiskit baseline routers. On average, the RL agent outperforms
+the baseline compilers for the majority of the benchmarks. Quantum circuit routers must be able to adapt to different
+Specifically, RL reduces the SWAP counts by 10−20% over quantum computers. We train AlphaRouter on IBM Tokyo
+the best baseline compiler in SABRE even for previously un- (12q), IBM Guadalupe (16q), and OQC (8q) quantum com-
+seen benchmarks. puters with Random benchmark and test its performance
+on all benchmarks. Figure 10 shows the ratio of SWAPs of
+B. Scaling to Larger Benchmarks
+AlphaRouterversusSABRE.AlphaRouterexcelsonTokyoand
+Given a fixed benchmark type and a quantum computer Guadalupe quantum computers, achieving 10−20% SWAP
+topology,thenumberofSWAPsisexpectedtoincreaselinearly reduction for most benchmarks. Its performance comes close
+8Fig. 9: Routing Random benchmark to the Tokyo quantum
+computer and random initial mapping for increasing number
+Fig.11:AlphaRouterwithandwithoutbidirectionalmappingto
+of gates. AlphaRouter demonstrates ∼ 15% smaller scaling
+improve its initial mapping. Integrating the technique reduces
+coefficient α compared to SABRE.
+swap 40% SWAPs on average on Tokyo quantum computer.
+overhead. Experiments in Figure 11 compare the AlphaRouter
+SWAP counts with and without the bidirectional mapping pass.
+Notably, incorporating bidirectional initial mapping reduces
+40% SWAPs on average across all benchmarks for the Tokyo
+quantum computer.
+VII. RELATEDWORK
+Graphroutingproblemsarewellknownproblemincomputer
+science and operations research [31]. Graph routing problems
+can be solved by using provable algorithms with exponential
+runtime in the worst case, heuristics based on mixed integer
+programming, or by employing a combination of planning and
+deep reinforcement learning methods [5], [7], [14], [35], [40],
+[45]. Routing problems are inherently classical and are not
+specific to quantum computing.
+It is widely recognized that even state-of-the-art quantum
+Fig. 10: Average swap ratios of AlphaRouter versus SABRE
+routers suffer from a significant optimality gap in SWAP
+across different benchmarks and with random initial mapping.
+count [52]. [42] have implemented a Q-learning based RL
+Lower is better. AlphaRouter adapts to different quantum
+approach for quantum circuit routing, utilizing a standard
+computers, outperforming or matching SABRE.
+setup comprising an environment and an agent. [50] adopted
+a structure combining MCTS and RL, but their optimization
+to SABRE on the OQC quantum computer. This is because focuses solely on a single layer of gates. In contrast, [58]
+OQC is a smaller quantum computer and has less room for employed MCTS without integrating RL, offering a different
+improvement by RL. perspective on quantum circuit optimization. It is important to
+note,that[42],[50]focusedonoptimizationofthecircuitdepth
+D. Improving Initial Mapping
+which defined the RL reward function, rather than optimizing
+TheSABRErouterutilizesabidirectionalmappingtechnique the SWAP count overhead. Minimizing SWAP count is the
+to optimize initial qubit mapping. It starts with a forward pass most important metric for the efficient utilization of quantum
+to establish an initial mapping of logical to physical qubits, computers rather than the gate depth. Each of these works
+followed by a backward pass that refines this mapping using contributes uniquely to the evolving landscape of quantum
+the complete circuit layout [32]. circuitcompilationmethodologies.Inaddition,severalheuristic-
+While AlphaRouter only solves SWAPs, it could integrate based compilers [12], [32], [39] perform local optimizations
+the bidirectional mapping technique to improve its routing but lack the scalability to perform global searches.
+9In addition, quantum compilation also involves other direc- [11] Re´miCoulom. Efficientselectivityandbackupoperatorsinmonte-carlo
+tions beyond improving routing. One direction of research treesearch. InComputersandGames,2006.
+[12] AlexanderCowtan,SilasDilkes,RossDuncan,AlexandreKrajenbrink,
+designs RL-based gate optimization algorithms, based on local
+WillSimmons,andSeyonSivarajah.Onthequbitroutingproblem.arXiv
+mathematicalidentitiesbetweengatesandlocalrewriterulesto preprintarXiv:1902.08091,2019.
+simplifytheinputcircuitsbeforerouting[21],[44].Inaddition, [13] Andrew W Cross, Lev S Bishop, Sarah Sheldon, Paul D Nation, and
+JayMGambetta.Validatingquantumcomputersusingrandomizedmodel
+RLhasappliedtocontinuoustimecontrolofquantumhardware,
+circuits. PhysicalReviewA,100(3):032328,2019.
+improving the accuracy of quantum operations [8], [36], [57]. [14] PaulodaCosta,JasonRhuggenaath,YingqianZhang,AlpErenAkc¸ay,
+Furthermore, combining quantum and classical computation andUzayKaymak. Learning2-optheuristicsforroutingproblemsvia
+deepreinforcementlearning. SNComputerScience,2,2021.
+resourcestoperformhybridcomputinghasbecomeanemerging
+[15] RasoolFakoor,PratikChaudhari,andAlexanderJ.Smola. P3O:policy-
+areaofquantumcomputingresearch[53].Theseresearchcover on policy-off policy optimization. In Proceedings of the Thirty-Fifth
+different stages of the quantum compilation stack. This paper ConferenceonUncertaintyinArtificialIntelligence,UAI2019,page371,
+2019.
+addresses the ubiquitous problem of circuit routing, which is
+[16] Rasool Fakoor, Pratik Chaudhari, Stefano Soatto, and Alexander J.
+necessary for quantum computers with a limited connectivity. Smola. Meta-q-learning. In International Conference on Learning
+Representations,2020.
+VIII. CONCLUSION [17] RasoolFakoor,JonasWMueller,KavoshAsadi,PratikChaudhari,and
+AlexanderJSmola. Continuousdoublyconstrainedbatchreinforcement
+In this paper, we incorporate RL and MCTS to develop learning.AdvancesinNeuralInformationProcessingSystems,34:11260–
+a quantum circuit router, distinctively free from arbitrary 11273,2021.
+[18] Edward Farhi, Jeffrey Goldstone, and Sam Gutmann. A quantum
+heuristic routing rules. Our approach not only exhibited
+approximateoptimizationalgorithm. arXiv:QuantumPhysics,2014.
+10 − 20% SWAP reduction over existing routers but also [19] AlhusseinFawzi,MatejBalog,AjaHuang,ThomasHubert,Bernardino
+demonstrated remarkable abilities in benchmark generalization Romera-Paredes,MohammadaminBarekatain,AlexanderNovikov,Fran-
+ciscoRuiz,JulianSchrittwieser,GrzegorzSwirszcz,DavidSilver,Demis
+and scalability. Our pioneering work in integrating MCTS with
+Hassabis,andPushmeetKohli. Discoveringfastermatrixmultiplication
+RL for quantum circuit routing highlights the transformative algorithmswithreinforcementlearning. Nature,610:47–53,102022.
+potentialofcombiningRLandMCTSforcomplexoptimization [20] RichardPFeynman. Simulatingphysicswithcomputers. Int.j.Theor.
+phys,21,1982.
+tasks, advancing the development and practicality of quantum
+[21] Thomas Fo¨sel, Murphy Yuezhen Niu, Florian Marquardt, and Li Li.
+computing. Quantumcircuitoptimizationwithdeepreinforcementlearning. arXiv
+preprintarXiv:2103.07585,2021.
+IX. ACKNOWLEDGEMENTS [22] DianaFranklinandFredericT.Chong. Challengesinreliablequantum
+computing. 2004.
+We would like to thank Lihong Li for the insightful
+[23] DanielMGreenberger,MichaelAHorne,andAntonZeilinger. Going
+discussions throughout the project. beyondbell’stheorem.InBell’stheorem,quantumtheoryandconceptions
+oftheuniverse,pages69–72.Springer,1989.
+REFERENCES [24] YaroslavA.Kharkov,AlexandraIvanova,EugeneA.Mikhantiev,and
+AleksandrI.Kotelnikov. Arlinebenchmarks:Automatedbenchmarking
+[1] MDSajidAnis,He´ctorAbraham,RochishaAgarwalAduOffei,Gabriele platformforquantumcompilers. ArXiv,abs/2202.14025,2022.
+Agliardi,MeravAharoni,IAkhalwaya,GadiAleksandrowicz,Thomas [25] Diederik P Kingma and Jimmy Ba. Adam: A method for stochastic
+Alexander,MAmy,SAnagolum,etal.Qiskit:anopen-sourceframework optimization. arXivpreprintarXiv:1412.6980,2014.
+forquantumcomputing(2021). DOI:https://doi.org/10.5281/zenodo, [26] BRaviKiran,IbrahimSobh,VictorTalpaert,PatrickMannion,AhmadA
+2573505,2021. Al Sallab, Senthil Yogamani, and Patrick Pe´rez. Deep reinforcement
+[2] Ala´nAspuru-Guzik,AnthonyD.Dutoi,PeterJ.Love,andMartinHead- learning for autonomous driving: A survey. IEEE Transactions on
+Gordon. Simulatedquantumcomputationofmolecularenergies. Science, IntelligentTransportationSystems,23(6):4909–4926,2021.
+309:1704–1707,2005. [27] LeventeKocsisandCsabaSzepesvari.Banditbasedmonte-carloplanning.
+[3] Bela Bauer, Sergey Bravyi, Mario Motta, and Garnet Kin-Lic Chan. InEuropeanConferenceonMachineLearning,2006.
+Quantum algorithms for quantum chemistry and quantum materials [28] LeventeKocsisandCsabaSzepesva´ri.Banditbasedmonte-carloplanning.
+science. Chemicalreviews,2020. InEuropeanconferenceonmachinelearning,pages282–293.Springer,
+[4] MarcGBellemare,SalvatoreCandido,PabloSamuelCastro,JunGong, 2006.
+MarlosCMachado,SubhodeepMoitra,SameeraSPonda,andZiyuWang. [29] VijayKondaandJohnTsitsiklis. Actor-criticalgorithms. Advancesin
+Autonomousnavigationofstratosphericballoonsusingreinforcement neuralinformationprocessingsystems,12,1999.
+learning. Nature,588(7836):77–82,2020. [30] Nevena Lazic, Craig Boutilier, Tyler Lu, Eehern Wong, Binz Roy,
+[5] YoshuaBengio,AndreaLodi,andAntoineProuvost. Machinelearning MKRyu,andGregImwalle. Datacentercoolingusingmodel-predictive
+forcombinatorialoptimization:amethodologicaltourd’horizon. ArXiv, control. AdvancesinNeuralInformationProcessingSystems,31,2018.
+abs/1811.06128,2018. [31] JanKarelLenstraandAlexanderH.G.RinnooyKan. Complexityof
+[6] EthanBernsteinandUmeshVazirani.Quantumcomplexitytheory.SIAM vehicleroutingandschedulingproblems. Networks,11:221–227,1981.
+JournalonComputing,26(5):1411–1473,1997. [32] GushuLi,YufeiDing,andYuanXie.Tacklingthequbitmappingproblem
+[7] Aigerim Bogyrbayeva, Meraryslan Meraliyev, Taukekhan Mustakhov, for nisq-era quantum devices. In Proceedings of the Twenty-Fourth
+andBissenbayDauletbayev. Learningtosolvevehicleroutingproblems: International Conference on Architectural Support for Programming
+Asurvey. ArXiv,abs/2205.02453,2022. LanguagesandOperatingSystems,pages1001–1014,2019.
+[8] MarinBukov,AlexandreG.R.Day,DriesSels,PhillipWeinberg,Anatoli [33] Wan-HsuanLin,JasonKimko,BochenTan,NikolajS.Bjørner,andJason
+Polkovnikov, and Pankaj Mehta. Reinforcement learning in different Cong. Scalableoptimallayoutsynthesisfornisqquantumprocessors.
+phasesofquantumcontrol. PhysicalReviewX,2017. 202360thACM/IEEEDesignAutomationConference(DAC),pages1–6,
+[9] Christopher Chamberland, Guanyu Zhu, Theodore J Yoder, Jared B 2023.
+Hertzberg,andAndrewWCross. Topologicalandsubsystemcodeson [34] YaoLiu,PratikChaudhari,andRasoolFakoor. Budgetingcounterfactual
+low-degreegraphswithflagqubits. PhysicalReviewX,10(1):011022, forofflinerl. InAdvancesinNeuralInformationProcessingSystems,
+2020. volume36,pages5729–5751,2023.
+[10] James W Cooley and John W Tukey. An algorithm for the machine [35] XuMai,QuanzhiFu,andYiChen. Packetroutingwithgraphattention
+calculation of complex Fourier series. Mathematics of Computation, multi-agentreinforcementlearning. 2021IEEEGlobalCommunications
+19(90):297–301,1965. Conference(GLOBECOM),pages1–6,2021.
+10[36] FriederikeMetzandMarinBukov. Self-correctingquantummany-body [57] JiahaoYao,PaulKo¨ttering,HansGundlach,LinLin,andMarinBukov.
+control using reinforcement learning with tensor networks. Nature Noise-robustend-to-endquantumcontrolusingdeepautoregressivepolicy
+MachineIntelligence,5:780–791,2022. networks. InMathematicalandScientificMachineLearning,2020.
+[37] VolodymyrMnih,KorayKavukcuoglu,DavidSilver,AlexGraves,Ioannis [58] Xiangzhen Zhou, Yuan Feng, and Sanjiang Li. Quantum circuit
+Antonoglou,DaanWierstra,andMartinRiedmiller. Playingatariwith transformation:Amontecarlotreesearchframework. ACMTransactions
+deepreinforcementlearning. arXiv:1312.5602,2013. on Design Automation of Electronic Systems (TODAES), 27(6):1–27,
+[38] Prakash Murali, Jonathan M. Baker, Ali Javadi-Abhari, Frederic T. 2022.
+Chong, and Margaret Martonosi. Noise-adaptive compiler mappings
+fornoisyintermediate-scalequantumcomputers. InProceedingsofthe
+Twenty-Fourth International Conference on Architectural Support for
+ProgrammingLanguagesandOperatingSystems,ASPLOS’19,page
+1015–1029, New York, NY, USA, 2019. Association for Computing
+Machinery.
+[39] GiacomoNannicini,LevSBishop,OktayGu¨nlu¨k,andPetarJurcevic.
+Optimalqubitassignmentandroutingviaintegerprogramming. ACM
+TransactionsonQuantumComputing,4(1):1–31,2022.
+[40] M.Nazari,AfshinOroojlooy,LawrenceV.Snyder,andMartinTaka´c.
+Reinforcement learning for solving the vehicle routing problem. In
+NeuralInformationProcessingSystems,2018.
+[41] Michael A Nielsen and Isaac L Chuang. Quantum computation and
+quantuminformation. Phys.Today,54(2):60,2001.
+[42] Matteo G Pozzi, Steven J Herbert, Akash Sengupta, and Robert D
+Mullins. Using reinforcement learning to perform qubit routing in
+quantumcompilers. ACMTransactionsonQuantumComputing,3(2):1–
+25,2022.
+[43] MartinL.Puterman. MarkovDecisionProcesses:DiscreteStochastic
+DynamicProgramming. USA,1stedition,1994.
+[44] Nils Quetschlich, Lukas Burgholzer, and Robert Wille. Compiler
+optimizationforquantumcomputingusingreinforcementlearning. 2023
+60thACM/IEEEDesignAutomationConference(DAC),pages1–6,2022.
+[45] JoaoReis,MiguelRocha,TruongKhoaPhan,DavidGriffin,FranckLe,
+andMiguelRio. Deepneuralnetworksfornetworkrouting. In2019
+InternationalJointConferenceonNeuralNetworks(IJCNN),pages1–8,
+2019.
+[46] Zain H Saleem, Teague Tomesh, Bilal Tariq, and Martin Suchara.
+Approaches to constrained quantum approximate optimization. arXiv
+preprintarXiv:2010.06660,2020.
+[47] MariaSchuldandFrancescoPetruccione. QuantumModelsasKernel
+Methods,pages217–245. SpringerInternationalPublishing,Cham,2021.
+[48] DavidSilver,AjaHuang,ChrisJMaddison,ArthurGuez,LaurentSifre,
+GeorgeVanDenDriessche,JulianSchrittwieser,IoannisAntonoglou,
+VedaPanneershelvam,MarcLanctot,etal. Masteringthegameofgo
+withdeepneuralnetworksandtreesearch. nature,529(7587):484–489,
+2016.
+[49] DavidSilver,ThomasHubert,JulianSchrittwieser,IoannisAntonoglou,
+Matthew Lai, Arthur Guez, Marc Lanctot, Laurent Sifre, Dharshan
+Kumaran, Thore Graepel, et al. A general reinforcement learning
+algorithmthatmasterschess,shogi,andgothroughself-play. Science,
+362(6419):1140–1144,2018.
+[50] AnimeshSinha,UtkarshAzad,andHarjinderSingh. Qubitroutingusing
+graph neural network aided monte carlo tree search. In Proceedings
+of the AAAI Conference on Artificial Intelligence, volume 36, pages
+9935–9943,2022.
+[51] Richard S Sutton and Andrew G Barto. Reinforcement learning: An
+introduction. MITpress,2018.
+[52] Bochen Tan and Jason Cong. Optimality study of existing quantum
+computing layout synthesis tools. IEEE Transactions on Computers,
+70:1363–1373,2020.
+[53] WeiTang,TeagueTomesh,MartinSuchara,JeffreyLarson,andMargaret
+Martonosi. Cutqc:usingsmallquantumcomputersforlargequantum
+circuit evaluations. In Proceedings of the 26th ACM International
+conference on architectural support for programming languages and
+operatingsystems,pages473–486,2021.
+[54] WimVanDam,SeanHallgren,andLawrenceIp.Quantumalgorithmsfor
+somehiddenshiftproblems.SIAMJournalonComputing,36(3):763–778,
+2006.
+[55] AshishVaswani,NoamShazeer,NikiParmar,JakobUszkoreit,Llion
+Jones,AidanNGomez,ŁukaszKaiser,andIlliaPolosukhin. Attention
+isallyouneed. Advancesinneuralinformationprocessingsystems,30,
+2017.
+[56] Katsuhisa Yamanaka, Erik D Demaine, Takehiro Ito, Jun Kawahara,
+MasashiKiyomi,YoshioOkamoto,ToshikiSaitoh,AkiraSuzuki,Kei
+Uchizawa, and Takeaki Uno. Swapping labeled tokens on graphs.
+TheoreticalComputerScience,586:81–94,2015.
+11

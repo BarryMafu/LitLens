@@ -1,0 +1,458 @@
+Grammar as a Foreign Language
+OriolVinyals∗ LukaszKaiser∗
+Google Google
+vinyals@google.com lukaszkaiser@google.com
+TerryKoo SlavPetrov IlyaSutskever
+Google Google Google
+terrykoo@google.com slav@google.com ilyasu@google.com
+GeoffreyHinton
+Google
+geoffhinton@google.com
+Abstract
+Syntacticconstituencyparsingisafundamentalprobleminnaturallanguagepro-
+cessingandhasbeenthesubjectofintensiveresearchandengineeringfordecades.
+As a result, the most accurate parsers are domain specific, complex, and in-
+efficient. In this paper we show that the domain agnostic attention-enhanced
+sequence-to-sequence model achieves state-of-the-art results on the most widely
+usedsyntacticconstituencyparsingdataset,whentrainedonalargesyntheticcor-
+pus that was annotated using existing parsers. It also matches the performance
+ofstandardparserswhentrainedonlyonasmallhuman-annotateddataset,which
+showsthatthismodelishighlydata-efficient,incontrasttosequence-to-sequence
+modelswithouttheattentionmechanism. Ourparserisalsofast,processingover
+ahundredsentencespersecondwithanunoptimizedCPUimplementation.
+1 Introduction
+Syntactic constituency parsing is a fundamental problem in linguistics and natural language pro-
+cessingthathasawiderangeofapplications. Thisproblemhasbeenthesubjectofintenseresearch
+fordecades,andasaresult,thereexisthighlyaccuratedomain-specificparsers. Thecomputational
+requirementsoftraditionalparsersarecubicinsentencelength, andwhilelinear-timeshift-reduce
+constituencyparsersimprovedinaccuracyinrecentyears,theynevermatchedstate-of-the-art. Fur-
+thermore,standardparsershavebeendesignedwithparsinginmind; theconceptofaparsetreeis
+deeplyingrainedintothesesystems,whichmakesthesemethodsinapplicabletootherproblems.
+Recently,Sutskeveretal.[1]introducedaneuralnetworkmodelforsolvingthegeneralsequence-
+to-sequenceproblem,andBahdanauetal.[2]proposedarelatedmodelwithanattentionmechanism
+thatmakesitcapableofhandlinglongsequenceswell. Bothmodelsachievestate-of-the-artresults
+onlargescalemachinetranslationtasks(e.g.,[3,4]). Syntacticconstituencyparsingcanbeformu-
+lated as a sequence-to-sequence problem if we linearize the parse tree (cf. Figure 2), so we can
+applythesemodelstoparsingaswell.
+Ourearlyexperimentsfocusedonthesequence-to-sequencemodelofSutskeveretal.[1]. Wefound
+this model to work poorly when we trained it on standard human-annotated parsing datasets (1M
+tokens),soweconstructedanartificialdatasetbylabellingalargecorpuswiththeBerkeleyParser.
+∗Equalcontribution
+1
+5102
+nuJ
+9
+]LC.sc[
+3v9447.2141:viXra(S (VP XX ) VP . ) S END
+LSTM3 LSTM3
+in out
+LSTM2 LSTM2
+in out
+LSTM1 LSTM1
+in out
+. Go END (S (VP XX ) VP . ) S
+Figure1: AschematicoutlineofarunofourLSTM+Amodelonthesentence“Go.”.Seetextfordetails.
+To our surprise, the sequence-to-sequence model matched the BerkeleyParser that produced the
+annotation,havingachievedanF1scoreof90.5onthetestset(section23oftheWSJ).
+We suspected that the attention model of Bahdanau et al. [2] might be more data efficient and we
+foundthatitisindeedthecase.Wetrainedasequence-to-sequencemodelwithattentiononthesmall
+human-annotatedparsingdatasetandwereabletoachieveanF1scoreof88.3onsection23ofthe
+WSJwithouttheuseofanensembleand90.5withanensemble,whichmatchestheperformanceof
+theBerkeleyParser(90.4)whentrainedonthesamedata.
+Finally,weconstructedasecondartificialdatasetconsistingofonlyhigh-confidenceparsetrees,as
+measuredbytheagreementoftwoparsers. Wetrainedasequence-to-sequencemodelwithattention
+onthisdataandachievedanF1scoreof92.5onsection23oftheWSJ–anewstate-of-the-art. This
+resultdidnotrequireanensemble,andasaresult,theparserisalsoveryfast. Anensemblefurther
+improvesthescoreto92.8.
+2 LSTM+AParsingModel
+Letusfirstrecallthesequence-to-sequenceLSTMmodel. TheLongShort-TermMemorymodelof
+[5]isdefinedasfollows. Letx ,h ,andm betheinput,controlstate,andmemorystateattimestep
+t t t
+t. Givenasequenceofinputs(x ,...,x ),theLSTMcomputestheh-sequence(h ,...,h )and
+1 T 1 T
+them-sequence(m ,...,m )asfollows.
+1 T
+i = sigm(W x +W h )
+t 1 t 2 t−1
+i(cid:48) = tanh(W x +W h )
+t 3 t 4 t−1
+f = sigm(W x +W h )
+t 5 t 6 t−1
+o = sigm(W x +W h )
+t 7 t 8 t−1
+m = m (cid:12)f +i (cid:12)i(cid:48)
+t t−1 t t t
+h = m (cid:12)o
+t t t
+Theoperator(cid:12)denoteselement-wisemultiplication,thematricesW ,...,W andthevectorh are
+1 8 0
+theparametersofthemodel,andallthenonlinearitiesarecomputedelement-wise.
+In a deep LSTM, each subsequent layer uses the h-sequence of the previous layer for its input
+sequencex. ThedeepLSTMdefinesadistributionoveroutputsequencesgivenaninputsequence:
+(cid:89)
+TB
+P(B|A) = P(B |A ,...,A ,B ,...,B )
+t 1 TA 1 t−1
+t=1
+(cid:89)
+TB
+≡ softmax(W ·h )(cid:62)δ ,
+o TA+t Bt
+t=1
+The above equation assumes a deep LSTM whose input sequence is x =
+(A ,...,A ,B ,...,B ), so h denotes t-th element of the h-sequence of topmost LSTM.
+1 TA 1 TB t
+2S
+Johnhasadog. → NP VP .
+NNP VBZ NP
+DT NN
+Johnhasadog. → (S(NPNNP) (VPVBZ(NPDTNN) ) . )
+NP NP VP S
+Figure2: Exampleparsingtaskanditslinearization.
+The matrix W consists of the vector representations of each output symbol and the symbol δ
+o b
+is a Kronecker delta with a dimension for each output symbol, so softmax(W ·h )(cid:62)δ is
+o TA+t Bt
+precisely the B ’th element of the distribution defined by the softmax. Every output sequence
+t
+terminateswithaspecialend-of-sequencetokenwhichisnecessaryinordertodefineadistribution
+oversequencesofvariablelengths. WeusetwodifferentsetsofLSTMparameters,onefortheinput
+sequenceandonefortheoutputsequence,asshowninFigure1. Stochasticgradientdescentisused
+tomaximizethetrainingobjectivewhichistheaverageoverthetrainingsetofthelogprobability
+ofthecorrectoutputsequencegiventheinputsequence.
+2.1 AttentionMechanism
+An important extension of the sequence-to-sequence model is by adding an attention mechanism.
+Weadaptedtheattentionmodelfrom[2]which,toproduceeachoutputsymbolB ,usesanattention
+t
+mechanism over the encoder LSTM states. Similar to our sequence-to-sequence model described
+in the previous section, we use two separate LSTMs (one to encode the sequence of input words
+A , andanotheronetoproduceordecodetheoutputsymbolsB ). Recallthattheencoderhidden
+i i
+statesaredenoted(h ,...,h )andwedenotethehiddenstatesofthedecoderby(d ,...,d ):=
+1 TA 1 TB
+(h ,...,h ).
+TA+1 TA+TB
+Tocomputetheattentionvectorateachoutputtimetovertheinputwords(1,...,T )wedefine:
+A
+ut = vT tanh(W(cid:48)h +W(cid:48)d )
+i 1 i 2 t
+at = softmax(ut)
+i i
+(cid:88)
+TA
+d(cid:48) = ath
+t i i
+i=1
+ThevectorvandmatricesW(cid:48),W(cid:48) arelearnableparametersofthemodel. Thevectorut haslength
+1 2
+T anditsi-thitemcontainsascoreofhowmuchattentionshouldbeputonthei-thhiddenencoder
+A
+stateh .Thesescoresarenormalizedbysoftmaxtocreatetheattentionmaskatoverencoderhidden
+i
+states. Inallourexperiments,weusethesamehiddendimensionality(256)attheencoderandthe
+decoder, so v is a vector and W(cid:48) and W(cid:48) are square matrices. Lastly, we concatenate d(cid:48) with d ,
+1 2 t t
+whichbecomesthenewhiddenstatefromwhichwemakepredictions,andwhichisfedtothenext
+timestepinourrecurrentmodel.
+InSection4weprovideananalysisofwhattheattentionmechanismlearned,andwevisualizethe
+normalizedattentionvectoratforalltinFigure4.
+2.2 LinearizingParsingTrees
+Toapplythemodeldescribedabovetoparsing, weneedtodesignaninvertiblewayofconverting
+theparsetreeintoasequence(linearization).Wedothisinaverysimplewayfollowingadepth-first
+traversalorder,asdepictedinFigure2.
+Weusetheabovemodelforparsinginthefollowingway. First,thenetworkconsumesthesentence
+inaleft-to-rightsweep,creatingvectorsinmemory. Then,itoutputsthelinearizedparsetreeusing
+informationinthesevectors. Asdescribedbelow,weuse3LSTMlayers,reversetheinputsentence
+3andnormalizepart-of-speechtags. AnexamplerunofourLSTM+Amodelonthesentence“Go.”
+isdepictedinFigure1(topgrayedgesillustrateattention).
+2.3 ParametersandInitialization
+Sizes. Inourexperimentsweusedamodelwith3LSTMlayersand256unitsineachlayer,which
+wecallLSTM+A.Ourinputvocabularysizewas90Kandweoutput128symbols.
+Dropout. Trainingonasmalldatasetweadditionallyused2dropoutlayers,onebetweenLSTM1
+andLSTM2,andonebetweenLSTM2andLSTM3. WecallthismodelLSTM+A+D.
+POS-tagnormalization. Sincepart-of-speech(POS)tagsarenotevaluatedinthesyntacticpars-
+ingF1score,wereplacedallofthemby“XX”inthetrainingdata. ThisimprovedourF1scoreby
+about1point, whichissurprising: Forstandardparsers, includingPOStagsintrainingdatahelps
+significantly. AllexperimentsreportedbelowareperformedwithnormalizedPOStags.
+Input reversing. We also found it useful to reverse the input sentences but not their parse trees,
+similarlyto[1]. NotreversingtheinputhadasmallnegativeimpactontheF1scoreonourdevelop-
+mentset(about0.2absolute). Allexperimentsreportedbelowareperformedwithinputreversing.
+Pre-trainingwordvectors. Theembeddinglayerforour90Kvocabularycanbeinitializedran-
+domlyorusingpre-trainedword-vectorembeddings. Wepre-trainedskip-gramembeddingsofsize
+512usingword2vec[6]ona10B-wordcorpus. Theseembeddingswereusedtoinitializeournet-
+workbutnotfixed,theywerelatermodifiedduringtraining. Wediscusstheimpactofpre-training
+intheexperimentalsection.
+We do not apply any other special preprocessing to the data. In particular, we do not binarize the
+parsetreesorhandleunariesinanyspecificway. Wealsotreatunknownwordsinanaiveway: we
+mapallwordsbeyondour90KvocabularytoasingleUNKtoken. Thispotentiallyunderestimates
+ourfinalresults,butkeepsourframeworktask-independent.
+3 Experiments
+3.1 TrainingData
+Wetrainedthemodeldescribedaboveon2differentdatasets. Forone,wetrainedonthestandard
+WSJ training dataset. This is a very small training set by neural network standards, as it contains
+only40Ksentences(comparedto60KexampleseveninMNIST).Still,eventrainingonthisset,we
+managedtogetresultsthatmatchthoseobtainedbydomain-specificparsers.
+Toexceedthepreviousstate-of-the-art,wecreatedanother,largertrainingsetof∼11Mparsedsen-
+tences(250Mtokens). First,wecollectedallpubliclyavailabletreebanks. WeusedtheOntoNotes
+corpusversion5[7], theEnglishWebTreebank[8]andtheupdatedandcorrectedQuestionTree-
+bank [9].1 Note that the popular Wall Street Journal section of the Penn Treebank [10] is part of
+theOntoNotescorpus. Intotal,thesecorporagiveus∼90Ktrainingsentences(weheldoutcertain
+sectionsforevaluation,asdescribedbelow).
+In addition to this gold standard data, we use a corpus parsed with existing parsers using the
+“tri-training” approach of [11]. In this approach, two parsers, our reimplementation of Berkeley-
+Parser[12]andareimplementationofZPar[13], areusedtoprocessunlabeledsentencessampled
+fromnewsappearingontheweb.Weselectonlysentencesforwhichbothparsersproducedthesame
+parse tree and re-sample to match the distribution of sentence lengths of the WSJ training corpus.
+Re-sampling is useful because parsers agree much more often on short sentences. We call the set
+of∼11millionsentencesselectedinthisway,togetherwiththe∼90Kgoldensentencesdescribed
+above,thehigh-confidencecorpus.
+Inearlierexperiments,weonlyusedoneparser,ourreimplementationofBerkeleyParser,tocreatea
+corpusofparsedsentences. Inthatcasewejustparsed∼7millionsentecesfromnewsappearingon
+1AlltreebanksareavailablethroughtheLinguisticDataConsortium(LDC):OntoNotes(LDC2013T19),
+EnglishWebTreebank(LDC2012T13)andQuestionTreebank(LDC2012R121).
+4Parser TrainingSet WSJ22 WSJ23
+baselineLSTM+D WSJonly <70 <70
+LSTM+A+D WSJonly 88.7 88.3
+LSTM+A+Densemble WSJonly 90.7 90.5
+baselineLSTM BerkeleyParsercorpus 91.0 90.5
+LSTM+A high-confidencecorpus 93.3 92.5
+LSTM+Aensemble high-confidencecorpus 93.5 92.8
+Petrovetal.(2006)[12] WSJonly 91.1 90.4
+Zhuetal.(2013)[13] WSJonly N/A 90.4
+Petrovetal.(2010)ensemble[14] WSJonly 92.5 91.8
+Zhuetal.(2013)[13] semi-supervised N/A 91.3
+Huang&Harper(2009)[15] semi-supervised N/A 91.3
+McCloskyetal.(2006)[16] semi-supervised 92.4 92.1
+Huang&Harper(2010)ensemble[17] semi-supervised 92.8 92.4
+Table1: F1scoresofvariousparsersonthedevelopmentandtestset. Seetextfordiscussion.
+thewebandcombinedtheseparsedsentenceswiththe∼90Kgoldencorpusdescribedabove. We
+callthistheBerkeleyParsercorpus.
+3.2 Evaluation
+We use the standard EVALB tool2 for evaluation and report F1 scores on our developments set
+(section22ofthePennTreebank)andthefinaltestset(section23)inTable1.
+First,letusremarkthatourtrainingsetupdiffersfromthosereportedinpreviousworks. Tothebest
+ofourknowledge,nostandardparsershaveeverbeentrainedondatasetsnumberinginthehundreds
+ofmillionsoftokens,anditwouldbehardtododuetoefficiencyproblems. Wethereforecitethe
+semi-supervisedresults,whichareanalogousinspiritbutuselessdata.
+Table1showsperformanceofourmodelsonthetopandresultsfromotherpapersatthebottom.We
+comparetovariantsoftheBerkeleyParserthatuseself-trainingonunlabeleddata[15], orbuiltan
+ensembleofmultipleparsers[14],orcombinebothtechniques. Wealsoincludethebestlinear-time
+parserintheliterature,thetransition-basedparserof[13].
+Itcanbeseenthat,whentrainingonWSJonly,abaselineLSTMdoesnotachieveanyreasonable
+score, even with dropout and early stopping. But a single attention model gets to 88.3 and an en-
+sembleof5LSTM+A+Dmodelsachieves90.5matchingasingle-modelBerkeleyParseronWSJ23.
+Whentrainedonthelargehigh-confidencecorpus, asingleLSTM+Amodelachieves92.5andso
+outperforms not only the best single model, but also the best ensemble result reported previously.
+Anensembleof5LSTM+Amodelsfurtherimprovesthisscoreto92.8.
+Generatingwell-formedtrees. TheLSTM+AmodeltrainedonWSJdatasetonlyproducedmal-
+formedtreesfor25ofthe1700sentencesinourdevelopmentset(1.5%ofallcases),andthemodel
+trained on full high-confidence dataset did this for 14 sentences (0.8%). In these few cases where
+LSTM+A outputs a malformed tree, we simply add brackets to either the beginning or the end of
+thetreeinordertomakeitbalanced. Itisworthnotingthatall14caseswhereLSTM+Aproduced
+unbalanced trees were sentences or sentence fragments that did not end with proper punctuation.
+Therewereveryfewsuchsentencesinthetrainingdata,soitisnotasurprisethatourmodelcannot
+dealwiththemverywell.
+Scorebysentencelength. Animportantconcernwiththesequence-to-sequenceLSTMwasthat
+it may not be able to handle long sentences well. We determine the extent of this problem by
+partitioningthedevelopmentsetbylength,andevaluatingBerkeleyParser,abaselineLSTMmodel
+without attention, and LSTM+A on sentences of each length. The results, presented in Figure 3,
+are surprising. The difference between the F1 score on sentences of length upto 30 and that upto
+70is1.3fortheBerkeleyParser, 1.7forthebaselineLSTM,and0.7forLSTM+A.Soalreadythe
+baselineLSTMhassimilarperformancetotheBerkeleyParser,itdegradeswithlengthonlyslightly.
+2http://nlp.cs.nyu.edu/evalb/
+5Surprisingly,LSTM+AshowslessdegradationwithlengththanBerkeleyParser–afullO(n3)chart
+parserthatusesalotmorememory.
+96
+95
+94
+93
+92
+91
+90 10 20 30 40 50 60 70
+Sentencelength
+erocs1F
+BerkeleyParser
+baselineLSTM
+LSTM+A
+Figure3: EffectofsentencelengthontheF1scoreonWSJ22.
+Beam size influence. Our decoder uses a beam of a fixed size to calculate the output sequence
+of labels. We experimented with different settings for the beam size. It turns out that it is almost
+irrelevant. Wereportreportresultsthatusebeamsize10,butusingbeamsize2onlylowerstheF1
+scoreofLSTM+Aonthedevelopmentsetby0.2,andusingbeamsize1lowersitby0.5(to92.8).
+Beamsizesabove10donotgiveanyadditionalimprovements.
+Dropoutinfluence. WeonlyuseddropoutwhentrainingonthesmallWSJdatasetanditsinflu-
+encewassignificant. AsingleLSTM+AmodelonlyachievedanF1scoreof86.5onourdevelop-
+mentset,thatisover2pointslowerthanthe88.7ofaLSTM+A+Dmodel.
+Pre-traininginfluence. Asdescribedintheprevioussection,weinitializedtheword-vectorem-
+beddingwithpre-trainedwordvectorsobtainedfromword2vec. Totesttheinfluenceofthisini-
+tialization,wetrainedaLSTM+Amodelonthehigh-confidencecorpus,andaLSTM+A+Dmodel
+on the WSJ corpus, starting with randomly initialized word-vector embeddings. The F1 score on
+our development set was 0.4 lower for the LSTM+A model (92.9 vs 93.3) and 0.3 lower for the
+LSTM+A+Dmodel(88.4vs88.7). Sotheeffectofpre-trainingisconsistentbutsmall.
+Performance on other datasets. The WSJ evaluation set has been in use for 20 years and is
+commonly used to compare syntactic parsers. But it is not representative for text encountered on
+theweb[8]. Eventhoughourmodelwastrainedonanewscorpus,wewantedtocheckhowwellit
+generalizestootherformsoftext. Tothisend,weevaluateditontwoadditionaldatasets:
+QTB 1000held-outsentencesfromtheQuestionTreebank[9];
+WEB thefirsthalfofeachdomainfromtheEnglishWebTreebank[8](8310sentences).
+LSTM+A trained on the high-confidence corpus (which only includes text from news) achieved
+an F1 score of 95.7 on QTB and 84.6 on WEB. Our score on WEB is higher both than the best
+score reported in [8] (83.5) and the best score we achieved with an in-house reimplementation of
+BerkeleyParser trained on human-annotated data (84.4). We managed to achieve a slightly higher
+score(84.8)withthein-houseBerkeleyParsertrainedonalargecorpus. OnQTB,the95.7scoreof
+LSTM+Aisalsolowerthanthebestscoreofourin-houseBerkeleyParser(96.2). Still,takinginto
+account that there were only few questions in the training data, these scores show that LSTM+A
+managedtogeneralizewellbeyondthenewslanguageitwastrainedon.
+Parsingspeed. OurLSTM+Amodel,runningonamulti-coreCPUusingbatchesof128sentences
+onagenericunoptimizeddecoder,canparseover120sentencesfromWSJpersecondforsentences
+ofalllengths(usingbeam-size1). ThisisbetterthanthespeedreportedforthisbatchsizeinFigure
+4 of [18] at 100 sentences per second, even though they run on a GPU and only on sentences of
+under 40 words. Note that they achieve 89.7 F1 score on this subset of sentences of section 22,
+whileourmodelatbeam-size1achievesascoreof93.7onthissubset.
+6Figure4: Attentionmatrix. Shownontopistheattentionmatrixwhereeachcolumnistheattention
+vectorovertheinputs. Onthebottom,weshowoutputsforfourconsecutivetimesteps,wherethe
+attention mask moves to the right. As can be seen, every time a terminal node is consumed, the
+attentionpointermovestotheright.
+4 Analysis
+As shown in this paper, the attention mechanism was a key component especially when learning
+from a relatively small dataset. We found that the model did not overfit and learned the parsing
+function from scratch much faster, which resulted in a model which generalized much better than
+theplainLSTMwithoutattention.
+Oneofthemostinterestingaspectsofattentionisthatitallowsustovisualizetointerpretwhatthe
+modelhaslearnedfromthedata. Forexample,in[2]itisshownthatfortranslation,attentionlearns
+analignmentfunction,whichcertainlyshouldhelptranslatingfromEnglishtoFrench.
+Figure 4 shows an example of the attention model trained only on the WSJ dataset. From the
+attentionmatrix,whereeachcolumnistheattentionvectorovertheinputs,itisclearthatthemodel
+focusesquitesharplyononewordasitproducestheparsetree. Itisalsoclearthatthefocusmoves
+fromthefirstwordtothelastmonotonically,andstepstotherightdeterministicallywhenawordis
+consumed.
+On the bottom of Figure 4 we see where the model attends (black arrow), and the current output
+beingdecodedinthetree(blackcircle). Thisstackprocedureislearnedfromdata(asalltheparam-
+etersarerandomlyinitialized),butisnotquiteasimplestackdecoding. Indeed,attheinputside,if
+themodelfocusesonpositioni,thatstatehasinformationforallwordsafteri(sincewealsoreverse
+theinputs). Itisworthnotingthat,insomeexamples(notshownhere),themodeldoesskipwords.
+75 RelatedWork
+Thetaskofsyntacticconstituencyparsinghasreceivedatremendousamountofattentioninthelast
+20years.Traditionalapproachestoconstituencyparsingrelyonprobabilisticcontext-freegrammars
+(CFGs). Thefocusintheseapproachesisondevisingappropriatesmoothingtechniquesforhighly
+lexicalized and thus rare events [19] or carefully crafting the model structure [20]. [12] partially
+alleviate the heavy reliance on manual modeling of linguistic structure by using latent variables
+to learn a more articulated model. However, their model still depends on a CFG backbone and is
+therebypotentiallyrestrictedinitscapacity.
+Earlyneuralnetworkapproachestoparsing,forexampleby[21,22]alsoreliedonstronglinguistic
+insights. [23] introduced Incremental Sigmoid Belief Networks for syntactic parsing. By con-
+structing the model structure incrementally, they are able to avoid making strong independence
+assumptionsbutinferencebecomesintractable. Toavoidcomplexinferencemethods,[24]propose
+a recurrent neural network where parse trees are decomposed into a stack of independent levels.
+Unfortunately,thisdecompositionbreaksforlongsentencesandtheiraccuracyonlongersentences
+falls quite significantly behind the state-of-the-art. [25] used a tree-structured neural network to
+scorecandidateparsetrees. TheirmodelhoweverreliesagainontheCFGassumptionandfurther-
+morecanonlybeusedtoscorecandidatetreesratherthanforfullinference.
+Our LSTM model significantly differs from all these models, as it makes no assumptions about
+the task. As a sequence-to-sequence prediction model it is somewhat related to the incremental
+parsingmodels,pioneeredby[26]andextendedby[27]. Suchlineartimeparsershowevertypically
+needsometask-specificconstraintsandmightbuilduptheparseinmultiplepasses. Relatedly,[13]
+present excellent parsing results with a single left-to-right pass, but require a stack to explicitly
+delay making decisions and a parsing-specific transition strategy in order to achieve good parsing
+accuracies. The LSTM in contrast uses its short term memory to model the complex underlying
+structurethatconnectstheinput-outputpairs.
+Recently, researchers have developed a number of neural network models that can be applied to
+general sequence-to-sequence problems. [28] was the first to propose a differentiable attention
+mechanismforthegeneralproblemofhandwrittentextsynthesis,althoughhisapproachassumeda
+monotonicalignmentbetweentheinputandoutputsequences. Later,[2]introducedamoregeneral
+attentionmodelthatdoesnotassumeamonotonicalignment,andappliedittomachinetranslation,
+and[29]appliedthesamemodeltospeechrecognition. [30]usedaconvolutionalneuralnetworkto
+encode a variable-sized input sentence into a vector of a fixed dimension and used a RNN to pro-
+ducetheoutputsentence. Essentiallythesamemodelhasbeenusedby[31]tosuccessfullylearnto
+generateimagecaptions. Finally,alreadyin1990[32]experimentedwithapplyingrecurrentneural
+networkstotheproblemofsyntacticparsing.
+6 Conclusions
+In this work, we have shown that generic sequence-to-sequence approaches can achieve excellent
+results on syntactic constituency parsing with relatively little effort or tuning. In addition, while
+wefoundthemodelofSutskeveretal.[1]tonotbeparticularlydataefficient,theattentionmodel
+of Bahdanau et al. [2] was found to be highly data efficient, as it has matched the performance of
+theBerkeleyParserwhentrainedonasmallhuman-annotatedparsingdataset. Finally, weshowed
+thatsyntheticdatasetswithimperfectlabelscanbehighlyuseful,asourmodelshavesubstantially
+outperformed the models that have been used to create their training data. We suspect it is the
+case due to the different natures of the teacher model and the student model: the student model
+haslikelyviewedtheteacher’serrorsasnoisewhichithasbeenabletoignore. Thisapproachwas
+so successful that we obtained a new state-of-the-art result in syntactic constituency parsing with
+a single attention model, which also means that the model is exceedingly fast. This work shows
+thatdomainindependentmodelswithexcellentlearningalgorithmscanmatchandevenoutperform
+domainspecificmodels.
+Acknowledgement. WewouldliketothankAminAhmad,DanBikelandJonniKanerva.
+8References
+[1] IlyaSutskever,OriolVinyals,andQuocVVLe. Sequencetosequencelearningwithneuralnetworks. In
+AdvancesinNeuralInformationProcessingSystems,pages3104–3112,2014.
+[2] DzmitryBahdanau,KyunghyunCho,andYoshuaBengio.Neuralmachinetranslationbyjointlylearning
+toalignandtranslate. arXivpreprintarXiv:1409.0473,2014.
+[3] ThangLuong,IlyaSutskever,QuocVLe,OriolVinyals,andWojciechZaremba. Addressingtherare
+wordprobleminneuralmachinetranslation. arXivpreprintarXiv:1410.8206,2014.
+[4] Se´bastien Jean, Kyunghyun Cho, Roland Memisevic, and Yoshua Bengio. On using very large target
+vocabularyforneuralmachinetranslation. arXivpreprintarXiv:1412.2007,2014.
+[5] SeppHochreiterandJu¨rgenSchmidhuber. Longshort-termmemory. Neuralcomputation,9(8):1735–
+1780,1997.
+[6] TomasMikolov,KaiChen,GregCorrado,andJeffreyDean.Efficientestimationofwordrepresentations
+invectorspace. arXivpreprintarXiv:1301.3781,2013.
+[7] Eduard Hovy, Mitchell Marcus, Martha Palmer, Lance Ramshaw, and Ralph Weischedel. Ontonotes:
+The90%solution. InProceedingsoftheHumanLanguageTechnologyConferenceoftheNAACL,Short
+Papers,pages57–60.ACL,June2006.
+[8] SlavPetrovandRyanMcDonald. Overviewofthe2012sharedtaskonparsingtheweb. Notesofthe
+FirstWorkshoponSyntacticAnalysisofNon-CanonicalLanguage(SANCL),2012.
+[9] JohnJudge,AoifeCahill,andJosefvanGenabith. Questionbank: Creatingacorpusofparse-annotated
+questions. InProceedingsofICCL&ACL’06,pages497–504.ACL,July2006.
+[10] MitchellP.Marcus,BeatriceSantorini,andMaryAnnMarcinkiewicz.Buildingalargeannotatedcorpus
+ofenglish:Thepenntreebank. ComputationalLinguistics,19(2):313–330,1993.
+[11] ZhenghuaLi,MinZhang,andWenliangChen. Ambiguity-awareensembletrainingforsemi-supervised
+dependencyparsing. InProceedingsofACL’14,pages457–467.ACL,2014.
+[12] Slav Petrov, Leon Barrett, Romain Thibaux, and Dan Klein. Learning accurate, compact, and inter-
+pretabletreeannotation.InProceedingsofthe21stInternationalConferenceonComputationalLinguis-
+ticsand44thAnnualMeetingoftheACL,pages433–440.ACL,July2006.
+[13] MuhuaZhu, YueZhang, WenliangChen, MinZhang, andJingboZhu. Fastandaccurateshift-reduce
+constituentparsing. InProceedingsofthe51stAnnualMeetingoftheACL(Volume1: LongPapers),
+pages434–443.ACL,August2013.
+[14] SlavPetrov. Productsofrandomlatentvariablegrammars. InHumanLanguageTechnologies:The2010
+AnnualConferenceoftheNorthAmericanChapteroftheACL,pages19–27.ACL,June2010.
+[15] ZhongqiangHuangandMaryHarper. Self-trainingPCFGgrammarswithlatentannotationsacrosslan-
+guages. InProceedingsofthe2009ConferenceonEmpiricalMethodsinNaturalLanguageProcessing,
+pages832–841.ACL,August2009.
+[16] DavidMcClosky,EugeneCharniak,andMarkJohnson. Effectiveself-trainingforparsing. InProceed-
+ingsoftheHumanLanguageTechnologyConferenceoftheNAACL,MainConference,pages152–159.
+ACL,June2006.
+[17] ZhongqiangHuang,MaryHarper,andSlavPetrov. Self-trainingwithproductsoflatentvariablegram-
+mars. InProceedingsofthe2010ConferenceonEmpiricalMethodsinNaturalLanguageProcessing,
+pages12–22.ACL,October2010.
+[18] DavidHall,TaylorBerg-Kirkpatrick,JohnCanny,andDanKlein. Sparser,better,fastergpuparsing. In
+ACL,2014.
+[19] MichaelCollins. Threegenerative,lexicalisedmodelsforstatisticalparsing. InProceedingsofthe35th
+AnnualMeetingoftheACL,pages16–23.ACL,July1997.
+[20] Dan Klein and Christopher D. Manning. Accurate unlexicalized parsing. In Proceedings of the 41st
+AnnualMeetingoftheACL,pages423–430.ACL,July2003.
+[21] JamesHenderson.Inducinghistoryrepresentationsforbroadcoveragestatisticalparsing.InProceedings
+ofthe2003HumanLanguageTechnologyConferenceoftheNorthAmericanChapteroftheACL,pages
+24–31,May2003.
+[22] JamesHenderson. Discriminativetrainingofaneuralnetworkstatisticalparser. InProceedingsofthe
+42ndMeetingoftheACL(ACL’04),MainVolume,pages95–102,July2004.
+[23] Ivan Titov and James Henderson. Constituent parsing with incremental sigmoid belief networks. In
+Proceedings of the 45th Annual Meeting of the Association of Computational Linguistics, pages 632–
+639.ACL,June2007.
+[24] Ronan Collobert. Deep learning for efficient discriminative parsing. In International Conference on
+ArtificialIntelligenceandStatistics,2011.
+[25] RichardSocher,CliffCLin,ChrisManning,andAndrewYNg. Parsingnaturalscenesandnaturallan-
+guagewithrecursiveneuralnetworks. InProceedingsofthe28thInternationalConferenceonMachine
+Learning(ICML-11),pages129–136,2011.
+[26] AdwaitRatnaparkhi. Alinearobservedtimestatisticalparserbasedonmaximumentropymodels. In
+SecondConferenceonEmpiricalMethodsinNaturalLanguageProcessing,1997.
+[27] MichaelCollinsandBrianRoark. Incrementalparsingwiththeperceptronalgorithm. InProceedingsof
+9the42ndMeetingoftheACL(ACL’04),MainVolume,pages111–118,July2004.
+[28] Alex Graves. Generating sequences with recurrent neural networks. arXiv preprint arXiv:1308.0850,
+2013.
+[29] JanChorowski,DzmitryBahdanau,KyunghyunCho,andYoshuaBengio.End-to-endcontinuousspeech
+recognitionusingattention-basedrecurrentnn:Firstresults. arXivpreprintarXiv:1412.1602,2014.
+[30] NalKalchbrennerandPhilBlunsom. Recurrentcontinuoustranslationmodels. InEMNLP,pages1700–
+1709,2013.
+[31] Oriol Vinyals, Alexander Toshev, Samy Bengio, and Dumitru Erhan. Show and tell: A neural image
+captiongenerator. arXivpreprintarXiv:1411.4555,2014.
+[32] ZoubinGhahramani.Aneuralnetworkforlearninghowtoparsetreeadjoininggrammar.B.S.EngThesis,
+UniversityofPennsylvania,1990.
+10

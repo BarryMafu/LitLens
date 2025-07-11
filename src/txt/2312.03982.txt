@@ -1,0 +1,2535 @@
+Logical quantum processor based on reconfigurable atom arrays
+Dolev Bluvstein1, Simon J. Evered1, Alexandra A. Geim1, Sophie H. Li1, Hengyun Zhou1,2,
+Tom Manovitz1, Sepehr Ebadi1, Madelyn Cain1, Marcin Kalinowski1, Dominik Hangleiter3, J. Pablo Bonilla
+Ataides1, Nishad Maskara1, Iris Cong1, Xun Gao1, Pedro Sales Rodriguez2, Thomas Karolyshyn2,
+Giulia Semeghini4, Michael J. Gullans3, Markus Greiner1, Vladan Vuleti´c5, and Mikhail D. Lukin1
+1Department of Physics, Harvard University, Cambridge, MA 02138, USA
+2QuEra Computing Inc., Boston, MA 02135, USA
+3Joint Center for Quantum Information and Computer Science,
+NIST/University of Maryland, College Park, Maryland 20742, USA
+4John A. Paulson School of Engineering and Applied Sciences,
+Harvard University, Cambridge, MA 02138, USA
+5Department of Physics and Research Laboratory of Electronics,
+Massachusetts Institute of Technology, Cambridge, MA 02139, USA
+Suppressing errors is the central challenge for useful quantum computing [1], requiring quan-
+tum error correction [2–6] for large-scale processing. However, the overhead in the realization of
+error-corrected“logical”qubits,whereinformationisencodedacrossmanyphysicalqubitsforredun-
+dancy [2–4], poses significant challenges to large-scale logical quantum computing. Here we report
+the realization of a programmable quantum processor based on encoded logical qubits operating
+with up to 280 physical qubits. Utilizing logical-level control and a zoned architecture in recon-
+figurable neutral atom arrays [7], our system combines high two-qubit gate fidelities [8], arbitrary
+connectivity[7,9],aswellasfullyprogrammablesingle-qubitrotationsandmid-circuitreadout[10–
+15]. Operatingthislogicalprocessorwithvarioustypesofencodings,wedemonstrateimprovement
+of a two-qubit logic gate by scaling surface code [6] distance from d = 3 to d = 7, preparation
+of color code qubits with break-even fidelities [5], fault-tolerant creation of logical GHZ states and
+feedforward entanglement teleportation, as well as operation of 40 color code qubits. Finally, using
+three-dimensional [[8,3,2]] code blocks [16, 17], we realize computationally complex sampling cir-
+cuits [18] with up to 48 logical qubits entangled with hypercube connectivity [19] with 228 logical
+two-qubit gates and 48 logical CCZ gates [20]. We find that this logical encoding substantially
+improves algorithmic performance with error detection, outperforming physical qubit fidelities at
+bothcross-entropybenchmarkingandquantumsimulationsoffastscrambling[21,22]. Theseresults
+heraldtheadventofearlyerror-correctedquantumcomputationandchartapathtowardlarge-scale
+logical processors.
+Quantumcomputershavethepotentialtosignificantly sicalprocessorsthatcanefficientlyaccessandmanipulate
+outperformtheirclassicalcounterpartsforsolvingcertain many bits of information [29], quantum devices are typi-
+problems [1]. However, executing large-scale, useful al- callybuiltsuchthateachphysicalqubitrequiresmultiple
+gorithms on quantum processors requires very low gate classical control lines. While suitable to the implemen-
+error rates (generally below ∼ 10−10) [23] , far below tation of physical qubit processors, this approach poses
+thosethatwilllikelyeverbeachievablewithanyphysical a significant obstacle to the control of logical qubits re-
+device [2]. The landmark development of quantum error dundantly encoded over many physical qubits.
+correction (QEC) theory provides a conceptual solution Here, we describe the realization of a programmable
+to this challenge [2–4]. The key idea is to use entan- quantum processor based on hardware-efficient control
+glement to delocalize a logical qubit degree of freedom over logical qubits in reconfigurable neutral atom ar-
+across many redundant physical qubits, such that if any rays[7]. Weusethislogicalprocessortodemonstratekey
+givenphysicalqubitfails,itdoesnotcorrupttheunderly- building blocks of QEC and realize programmable logi-
+inglogicalinformation. Inprinciple,withsufficientlylow cal algorithms. In particular, we explore important fea-
+physical error rates and sufficiently many qubits, a logi- tures of logical operations and circuits, including scaling
+cal qubit can be made to operate with extremely high to large codes, fault-tolerance, and complex non-Clifford
+fidelity, providing a path to realizing large-scale algo- circuits.
+rithms [4]. However, in practice useful QEC poses many
+challenges, ranging from significant overhead in physi-
+calqubitnumbers[23]tohighlycomplexgateoperations Logical processor based on atom arrays
+between the delocalized logical degrees of freedom [24].
+Recent experiments have achieved milestone demonstra- Our logical processor architecture, illustrated in
+tions of two logical qubits and one entangling gate [5, 6], Fig. 1a, is segmented into three zones. The storage zone
+and explorations of novel encodings [25–28]. isusedfordensequbitstorage, freefromentanglinggate
+One specific challenge for realizing large-scale logical errors and featuring long coherence times. The entan-
+processors involves efficient control. Unlike modern clas- glingzoneisusedforparallellogicalqubitencoding, sta-
+3202
+ceD
+7
+]hp-tnauq[
+1v28930.2132:viXra2
+a
+Rydberg AOD
+laser
+FPGA
+Camera Midcircuit
+measurement
+enoz
+egarotS
+enoz
+gnilgnatnE
+enoz
+tuodaeR
+b
+Logical qubit storage Ancilla qubit reservoir
+Logical 1Q gate
+c
+Feedforward
+Syndrome Logical qubit Logical 2Q gate extraction decoding
+1000
+Local imaging
+0
+1750 Camera counts 2250
+stneve
+muN
+1
+0.5
+0 0 1
+etats
+tibuQ
+Time (µs)
+With local imaging
+No local imaging
+Ramsey phase (2π)
+etats
+tibuQ
+80
+Addressed site Neighbor 40
+1
+0
+0 10 0 20
+xedni
+etiS
+1
+0
+Qubit
+State
+60 Time (µs)
+FIG.1. Aprogrammablelogicalprocessorbasedonreconfigurableatomarrays. a,Schematicofthelogicalprocessor,
+segmentedintothreezones: storage,entangling,andreadout(seeEDFig.1fordetailedlayout). Logicalsingle-qubitandtwo-
+qubitoperationsarerealizedtransversallywithefficient,paralleloperations. TransversalCNOTsarerealizedbyinterlacingtwo
+logical qubit grids and performing a single global entangling pulse that excites atoms to Rydberg states. Physical qubits are
+encodedinhyperfinegroundstatesof87Rbatomstrappedinopticaltweezers. b,Fullyprogrammablesingle-qubitrotationsare
+implemented using Raman excitation through a 2D AOD; parallel grid illumination delivers the same instruction to multiple
+atomic qubits. c, Mid-circuit readout and feedforward. The imaging histogram shows high-fidelity state discrimination (500
+µs imaging time, readout fidelity ≈ 99.8%, Methods), and the Ramsey fringe shows that qubit coherence is unaffected by
+measuring other qubits in the readout zone (error probability p ∼ 10−3, Methods). The FPGA performs real-time image
+processing, state decoding, and feedforward (Fig. 4).
+bilizer measurements, and logical gate operations. Fi- ingbeam[7,35],resultinginhigh-fidelityimagingaswell
+nally, the readout zone enables mid-circuit readout of asnegligibledecoherenceonstoredqubits(Fig.1c). The
+desired logical or physical qubits, without disturbing the mid-circuit[10–15]imageiscollectedwithaCMOScam-
+coherence of the computation qubits still in operation. eraandsenttoanFPGAforreal-timedecodingandfeed-
+Thisarchitectureisimplementedusingarraysofindivid- forward.
+ual 87Rb atoms trapped in optical tweezers, which can
+The central aspect of our logical processor is the con-
+bedynamicallyreconfiguredinthemiddleofthecompu-
+trolofindividuallogicalqubitsasthefundamentalunits,
+tation while preserving qubit coherence [7, 9].
+instead of individual physical qubits. To this end, we
+Our experiments make use of the apparatus described observe that during a vast majority of error-corrected
+previously in Refs. [7, 8, 30], with key upgrades enabling operations,thephysicalqubitsofalogicalblockaresup-
+universal digital operation. Physical qubits are encoded posed to realize the same operation, and this instruc-
+in clock states within the ground-state hyperfine mani- tion can be delivered in parallel with only a few control
+fold (T > 1s [7]), and stored in optical tweezer arrays lines. This approach naturally multiplexes with optical
+2
+created by a spatial light modulator (SLM) [30, 31]. We techniques. For example, to realize a logical single-qubit
+utilize systems of up to 280 atomic qubits, combining gate [2], we use the Raman 2D AOD (Fig. 1b) to cre-
+high-fidelity two-qubit gates [8], enabled by fast excita- ate a grid of light beams and simultaneously illuminate
+tion into atomic Rydberg states interacting through ro- the physical qubits of the logical block with the same in-
+bust Rydberg blockade [32], with arbitrary connectivity struction. Such a gate is transversal [2], meaning that
+enabled by atom transport via 2D acousto-optic deflec- operations act on physical qubits of the code block in-
+tors (AODs) [7]. Central to our approach of scalable dependently. This transversal property further implies
+control,AODs[10–15,31,33]usefrequencymultiplexing the gate is inherently fault-tolerant [2], meaning that er-
+to take in just two voltage waveforms (one for each axis) rors cannot spread within the code block (see Methods),
+tocreatelarge,dynamicallyprogrammablegridsoflight. thereby preventing a physical error from spreading into
+Fullyprogrammable local single-qubit rotationsare real- a logical fault. Crucially, a similar approach can realize
+izedviaqubit-specific,parallelRamanexcitationthrough logical entangling gates [2, 4]. Specifically, we use the
+an additional 2D AOD (Fig. 1b) [34]. Mid-circuit read- grids generated by our moving 2D AOD to pick up two
+outisenabledbymovingselectedqubits∼100µmaway logicalqubits,interlacethemintheentanglingzone,and
+to a readout zone and illuminating with a focused imag- then pulse our single global Rydberg excitation laser to3
+realizeaphysicalentanglinggateoneachtwinpairofthe a + b Physical error
+L X/Z X X
+blocks (Figs. 1a,2a). This process realizes a high-fidelity,
+L X/Z X
+fault-toleranttransversalCNOTinasingleparallelstep.
++
+L L
+1. Encode
+logical qubits
+Improving entangling gates with code distance
+A key property of QEC codes is that, for error rates
+below some threshold, the performance should improve 2. Parallel move c (interlace) XX ZZ
+with system size, associated with a so-called code dis-
+tance [4, 24]. Recently, this property has been experi-
+mentally verified by reducing idling errors of a code [6].
+Neutral atom qubits can be idly stored for long times 3 (t . r a P n u s l v s e e r g sa lo l b C a N l O la T se ) r CNOT
+with low errors, and the central challenge is to improve
+entangling operations with code distance. Thus moti-
+vated, we realize a transversal CNOT gate using logical d
+qubits encoded in two surface codes (Fig. 2). Surface
+0.4
+codeshavestabilizersthatareusedfordetectingandcor-
+rectingerrorswithoutdisruptingthelogicalstate[4,24].
+The stabilizers form a 2D lattice of 4-body plaquettes of 0.3
+X and Z operators, which commute with the X (Z )
+L L
+logical operators that run horizontally (vertically) along 0.2
+the lattice (Fig. 2d). By measuring stabilizers one can
+0.11
+detect the presence of physical qubit errors, decode (in-
+fer what error occured), and correct the error simply by
+0.09
+applying a software Z /X correction [24]. Such a code
+L L
+can detect and correct a certain number of errors deter-
+mined by the linear dimension of the system (the code 0.07
+distance d). 3 5 7
+Surface code distance d
+Totesttheperformanceofourlogicalentanglinggate,
+we first initialize the logical qubits by preparing phys-
+ical qubits of two blocks in |+⟩ and |0⟩ states, respec-
+tively, and performing a single round of stabilizer mea-
+surements with parallel operations [7]. While this state
+preparationisnon-fault-tolerant(nFT)beyondd=3,we
+are still able to probe error suppression of the transver-
+sal CNOT (Methods). Specifically, we prepare the two
+logicals in state |+ ⟩ and |0 ⟩, perform the transversal
+L L
+CNOT, and then projectively measure to evaluate the
+logical Bell state stabilizers X1X2 and Z1Z2 (Fig. 2c).
+L L L L
+Fordecodingandcorrectingthelogicalstate, weobserve
+there are strong correlations between the stabilizers of
+thetwoblocks(EDFig.4)duetopropagationofphysical
+errors between the codes during the transversal CNOT
+(Fig. 2b) [36]. We utilize these correlations to improve
+performance by decoding the logical qubits jointly, real-
+ized by a joint decoding graph that includes edges and
+hyperedges connecting the stabilizers of the two logical
+qubits (Fig. 2b). Using this correlated decoding proce-
+dure, we measure ≈ 0.95 populations in the X X and
+L L
+Z Z bases(Fig.2c),showingentanglementbetweenthe
+L L
+d=7 logical qubits.
+Studying the performance as a function of code size
+(Fig. 2d) reveals that the logical Bell pair improves with
+larger code distance, demonstrating improvement of the
+entangling operation. In contrast, we note that when
+conventionaldecoding,i.e. independentminimum-weight
+perfect matching within both codes [4], is used, the fi-
+rorre
+riap
+lleB
+lacigoL
+Control stabilizers Target stabilizers
+X
+Hyperedge
+d=7
+0.5
+y
+bilit
+a b o Pr
+0
++++--+-- 00011011
+Logical bitstring
+Number of physical qubits per Bell pair
+26 74 146 d = 3 (four pairs)
+d = 5
+Conventional decoding
+Correlated decoding
+d = 7
+ZL
+XL
+Data Ancilla X stab. Z stab.
+FIG.2. Transversal entangling gates between two sur-
+face codes. a, Illustration of transversal CNOT between
+twod=7surfacecodesbasedonparallelatomtransport. b,
+The concept of correlated decoding. Physical errors propa-
+gate between physical qubit pairs during transversal CNOT
+gates, creating correlations that can be utilized for improved
+decoding. Weaccountforthesecorrelations,arisingfromde-
+terministic error propagation (as opposed to correlated error
+events),byaddingedgesandhyperedgesthatconnectthede-
+coding graphs of the two logical qubits. c, Populations of
+entangled d = 7 surface codes measured in the XX and ZZ
+basis. d, Measured Bell pair error as a function of code dis-
+tance, for both conventional (top) and correlated (bottom)
+decoding. WeestimateBellerrorwiththeaverageoftheZZ
+populationsandtheXX parities(Methods). Toreducecode
+distance we simply remove selected atoms the grid, as shown
+ontheright,ensuringunchangedexperimentalconditions(for
+d=3,fourlogicalBellpairsaregeneratedinparallel). Error
+bars represent standard error of the mean. See ED Figs. 4, 5
+for additional surface code data.
+delity decreases with code distance. This is in part due
+to the nFT state preparation, whose effect is partially
+mitigated by the correlated decoding (Methods).
+We emphasize that while these results demonstrate
+surpassing an effective threshold for the entire circuit
+(implying we surpass the threshold of the transversal
+CNOT),suchathresholdishigherduetoprojectiveread-4
+a Encoding circuit Fault-tolerant GHZ circuit b
+C
+L
+H C 4 L C 5 L C
+7 6 L
+L
++
++ L
++ H L
++ H + H L
++ L
++ H L
+c d e
+egarots
+ot evoM
+0.01
+0.001
+Logical Physical Logical FT
+nFT atom (w CNOT)
+)MAPS(
+ytiledifni
+perp
+etatS
+1 Real(ρlogical) Imag(ρlogical)
+0.8
+0.5 0.5
+0.6 0.4 0.4
+0.3 0.3 0.4 FT
+1 0.2 0.2
+0.2 2 3 m fla a g x e rrors 0.1 0000 0.1 0000
+4 0.0 0.0
+0 nFT FT EDFT 0000 1111 1111 0000 1111 1111
+ytiledif
+etats
+ZHG
+lacigoL
+2
+X / L Y / L 3 ZL X/Z stab.
+1
+Physical
+1
+0.9
+0.8
+0.7
+0.6
+0.2 0.4 0.6 0.8 1
+Accepted fraction
+ytiledif
+ZHG
+Increasing
+error detection
+FIG. 3. Fault-tolerant logical algorithms a, Circuit for preparation of logical GHZ state. Ten color codes are encoded
+non-fault-tolerantly (nFT), and then parallel transversal CNOTs between computation and ancilla logical qubits perform
+FT initialization. The ancilla logical qubits are moved to storage, and a 4-logical-qubit GHZ state is created between the
+computation qubits. Logical Clifford operations are applied before readout to probe the GHZ state. b, State-preparation-
+and-measurement (SPAM) infidelity of the logical qubits without (nFT) and with (FT) the transversal-CNOT-based flagged
+preparation, compared to physical qubit SPAM. c, Logical GHZ fidelity without postselecting on flags (nFT), postselecting
+on flags (FT), and postselecting on flags and stabilizers of the computation logical qubits, corresponding to error detection
+(EDFT). d, GHZ fidelity as a function of sliding-scale error detection threshold (converted into the probability of accepted
+repetitions) and of number of successful flags in the circuit. e, Density matrix of the 4-logical-qubit GHZ state (with at most
+3 flag errors) measured via full state tomography involving all 256 logical Pauli strings.
+outafterthetransversalCNOT.Inpractice,thetransver- fordrotationsareusedattheendofthecircuitfordirect
+sal CNOT should be used in combination with many re- fidelity estimation [39] and full logical state tomography.
+peated rounds of noisy syndrome extraction [6], which is Wefirstbenchmarkourstateinitialization(Fig.3b)[5,
+expected to have a somewhat lower threshold and is an 40, 41]. Averaged over the five computation logicals,
+important goal for future research. we find that by using the fault-tolerant initialization
+(postselecting on the ancilla logical flag not detecting
+errors) our |0 ⟩ initialization fidelity is 99.91+0.04%,
+L −0.09
+Fault-tolerant logical algorithms exceeding both our physical qubit |0⟩ initialization fi-
+delity(99.32(4)%[8])andphysicaltwo-qubitgatefidelity
+All logical algorithms we perform in this work are (99.5% [8]). Then, Fig. 3c shows the resulting GHZ
+built from transversal gates which are intrinsically fault- state fidelity obtained using the fault-tolerant algorithm
+tolerant [2]. We now also use fault-tolerant state prepa- is72(2)%(againusingcorrelateddecoding),demonstrat-
+ration to explore programmable logical algorithms. We inggenuinemultipartiteentanglement. Additionally,one
+use two-dimensional d = 3 color codes [3, 37], which are can postselect on all stabilizers of our computation log-
+topological codes akin to the surface code, but with the icals being correct; using this error detection approach,
+usefulcapabilityoftransversaloperationsofthefullClif- the GHZ fidelity increases to 99.85+0.1% at the cost of
+−1.0
+ford group: Hadamard (H), π/2 phase (S) gate, and postselection overhead.
+CNOT [37]. This transversal gate set can realize any Since not all nontrivial syndromes are equally likely
+Clifford circuit fault-tolerantly. As a test case, here we to cause algorithmic failure, one can perform a partial
+create a logical GHZ state. Figure 3a shows the imple- postselection where syndrome events most likely to have
+mentation of a 10-logical-qubit algorithm, in which all caused algorithmic failure are discarded, given by the
+ten qubits are first encoded by a nFT encoding circuit weightofthecorrelatedmatchinginthewholealgorithm.
+(Methods). Then, five of the codes are used as ancilla Figure3dshowsthemeasuredGHZfidelityasafunction
+logicals, performing parallel transversal CNOTs in order of this sliding threshold converted into a fraction of ac-
+to fault-tolerantlydetect errorson the computationlogi- ceptedexperimentalrepetitions, continuouslytuningthe
+cals[38],andarethenmovedintothestoragezonewhere tradeoffbetweenthesuccessprobabilityofthealgorithm
+theyaresafelykept. Subsequentlyfourcomputationlog- and its fidelity; e.g., discarding just 50% of the data im-
+icalsareusedtopreparetheGHZstate, andlogicalClif- proves GHZ fidelity to ≈ 90%. (As discussed below, for5
+certain applications purifying samples can be advanta- a b
+L geous in improving algorithmic performance.) Finally, L
+L
+L
+fault-tolerantly measuring all 256 logical Pauli strings, L Entangling zone L L
+we perform full GHZ state tomography (Fig. 3e). L
+L
+L
+The use of the zoned architecture directly allows scal- L L
+L
+ing circuits to larger numbers, without increasing the L L
+L
+number of controls, by encoding and operating on log- L L
+L
+ical qubits, moving them to storage, and then access- L
+Storage zone L L
+ing storage as appropriate. This process is illustrated in L
+c L L
+Figs. 4a,b, where ten color codes are made and operated L L L
+on with parallel transversal CNOTs, moved to storage, L
+L L andthenmorequbitsareaccessedfromstorage. Repeat- L
+L
+L ingthisprocessfourtimes, wecreate40colorcodeswith L L L
+280 physical qubits, at the cost of slow idling errors of L
+L
+L
+∼ 1% logical decoherence per additional encoding step
+(Fig. 4c). These storage idling errors primarily originate d e L S
+H
+from global Raman π pulses applied for dynamical de- L
+S
+couplingofatomsintheentanglingzone, whichcouldbe L
+significantly reduced with zone-specific Raman controls.
+Entangling zone S S
+Sincemid-circuitreadout[10–15]isanimportantcom-
+ponentoflogicalalgorithms,wenextdemonstrateafault-
+tolerantentanglementteleportationcircuit. Wefirstcre-
+ate athree-logical-qubit GHZ state |0 0 0 ⟩+|1 1 1 ⟩ Storage zone
+L L L L L L
+Feedforward (Figs. 4d,e) from fault-tolerantly prepared color codes.
+Mid-circuit X-basis measurement of the middle logi-
+Readout zone
+cal creates |0 0 ⟩ + |1 1 ⟩ if measured as |+ ⟩, and
+L L L L L
+|0 0 ⟩ − |1 1 ⟩ if measured as |− ⟩. One recovers
+L L L L L
+|0 0 ⟩+|1 1 ⟩ by applying a logical S gate to the first
+L L L L
+and third logicals conditioned real-time on the state of
+the middle logical, akin to the magic state teleportation
+circuit [24]. Measurements in Fig. 4e indicate that while
+⟨X X ⟩ and ⟨Y Y ⟩ indeed vanish without the feedfor- L L L L
+wardstep,applyingthefeedforwardcorrectionwerecover
+aBellstatefidelityof77(2)%,limitedbyimperfectionsin
+theoriginalunderlyingGHZstate. Byrepeatingthisex-
+periment without mid-circuit readout and instead post-
+selecting on the middle logical being in |+ ⟩, we find
+L
+a similar Bell fidelity of 75(2)%, indicating high-fidelity
+performance of the readout and feedforward operations.
+Complex logical circuits using 3D codes
+One important challenge in realizing complex algo-
+rithms with logical qubits is that universal computa-
+tion cannot be implemented transversally [42]. For in-
+stance, when using 2D codes such as the surface code,
+non-Clifford operations cannot be easily performed [37],
+and relatively expensive techniques are required for non-
+trivialcomputation[24,43]asCliffordcircuitscanbeeas-
+ilysimulated[44]. Incontrast,3Dcodescantransversally
+realize non-Clifford operations, but lose the transversal
+H[37]. However,theseconstraintsdonotimplythatclas-
+sicallyhardorusefulquantumcircuitscannotberealized
+transversally or efficiently. Motivated by these consider-
+ations, we explore efficient realization of classically hard
+algorithms that are co-designed with a particular error-
+correcting code. Specifically, we implement fast scram-
+egarots
+sseccA
+egarots
+ot evoM
+Additional encoded groups
+ecnerehoced
+lacigoL
+Total number of color codes
+0.02
+0
+drawrofdeeF drawrofdeef
+oN
+ticuric-dim
+oN
+10 20 30 40
+Physical
+Detection
+Correction
+0 1 2 3
+ytirap
+lacigol
+derusaeM
+0.5
+0
+-0.5
+XX YY XX YY XX YY
+FIG. 4. Zoned logical processor: scaling and mid-
+circuit feedforward. a, Atoms in storage and entangling
+zones,andapproachforcreatingandentangling40colorcodes
+with 280 physical qubits. b,c, 40 color codes are prepared
+with an nFT circuit, and then 20 transversal CNOTs are
+used to fault-tolerantly prepare 20 of the 40 codes, whose
+fidelity is plotted. Logical decoherence is smaller than the
+physical idling decoherence experienced during the encoding
+steps. d, Mid-circuit measurement and feedforward for log-
+ical entanglement teleportation. The middle of three logical
+qubits is measured in the X-basis, and by applying a mid-
+circuit conditional, locally pulsed logical S rotation on the
+other two logical qubits, the state |0 0 ⟩+|1 1 ⟩ is pre-
+L L L L
+pared. e, Measured logical qubit parity with and without
+feedforward, showing that feedforward recovers the intended
+state with Bell fidelity of 77(2)% (ZZ parities of 83(4)% not
+plotted, Methods). No mid-circuit refers to turning off the
+mid-circuit readout, and postselecting on the middle logical
+being in state |+ ⟩ in the final readout. By postselecting on
+L
+perfectstabilizersofonlythetwocomputationlogicals(error
+detection in the final measurement) the feedforward Bell fi-
+delity is 92(2)% (not plotted). In d three of the additional
+blocksareflagqubitsandtheotherfourarepreparedbutun-
+used for this circuit.
+bling circuits using small 3D codes, which are used for
+native non-Clifford operations (CCZ).
+We focus on small 3-dimensional [[8,3,2]] codes
+(Fig. 5a) [16, 17, 26, 27], which have various appealing
+features. They encode three logicals per block, feature
+d=2(d=4)intheZ basis(X basis),implyingerrorde-
+tection(correction)capabilitesforZ (X)errors,andcan
+realizeatransversalCNOTbetweenblocks. Mostimpor-6
+a c d
+b e f
+Theory
+Postselection
+Raw Inc e r r e r a o s r i d ng etection
+ytilibaborp
+gnirtstib
+lacigoL
+106
+104
+102
+100
+0 1 2 3 Additional CNOT layers
+0.01 0
+0 4096
+Logical bitstring index
+)s(
+gnirtstib
+rep emitnuR
+100
+10-2 10-4
+612 24 48
+Number of logicals
+)s( gnirtstib
+rep emitnuR
+Measured
+Projected 48 logicals
+1
+0.1
+0.01
+3 6 12 24 48
+Number of logical qubits
+BEX
+lacigoL
+Hypercube dimension
+3 4 5 6 7
+1 Raw
+Error detection
+Physical upper bound
+0.1
+0.01
+0.001 0.01 0.1 1
+Accepted fraction
+BEX
+lacigoL
+7 5 Logical qubits X L3 Stabilizers S =ZZZZ
+3 1 Z1 1234
+X L1 8 Z 6 L1 Z L2 X L2 Z L3 S S S Z Z 3 2 = = = Z Z Z 1 1 Z Z Z 2 3 Z Z Z 5 5 Z Z Z 6 7 ZZZZ Z4 12345678
+4 2 S X1 =X 1 X 2 X 3 X 4 X 5 X 6 X 7 X 8
+Logical operations
+CCZ CZ Permutation CNOT Transversal CNOT
+T†
+T L1,L
+T
+2,L3 T†
+S†
+S L1,L2
+S
+S† Swap L1,L2
+1 1 3 3 5 5 7 7
+T 2 2 4 4 6 6 8 8
+T† T† T
+12 logicals 48 logicals
+3
+6
+12
+24
+48
+FIG.5. Complex logical circuits using 3D codes. a, [[8,3,2]]blockcodescantransversallyrealize{CCZ,CZ,Z, CNOT}
+gates within each block, and transversal CNOTs between blocks. By preparing logical qubits in |+ ⟩, performing layers of
+L
+{CCZ, CZ, Z} alternated with interblock CNOTs, and measuring in the X-basis, we realize classically hard sampling circuits
+with logical qubits. b, Measured sampling outcomes for a circuit with 12 logical qubits, 8 logical CZs, 12 logical CNOTs,
+and 8 logical CCZs. By increasing error detection, the measured distribution converges toward the ideal distribution. c,
+Circuitinvolving48logicalqubitswith228logicalCZ/CNOTgatesand48logicalCCZs. d,Classicalsimulationruntimefor
+calculatinganindividualbitstringprobability;bottomplotisestimatedbasedonmatrixmultiplicationcomplexity. e,Measured
+normalized XEB as a function of sliding-scale error-detection for 3, 6, 12, 24, and 48 logical qubits. For all sizes we observe
+a finite XEB score which improves with increased error detection. Diagram shows 48-logical connectivity, with logical triplets
+entangled on a 4D hypercube. f, Scaling of raw (red) and fully error-detected (black) XEB from e. Physical upper-bound
+fidelity (blue) is calculated using best measured physical gate fidelities (see Methods and ED Fig. 7 for scaling discussion).
+Diagrams show physical connectivity. [[8,3,2]] cubes are entangled on 4D hypercubes, realizing physical connectivity of 7D
+hypercubes.
+tantly,byusingphysical{T,S}rotations(T isπ/4phase beexponentiallyfasterthanaclassicalcomputerforthis
+gate) one can realize transversal {CCZ, CZ, Z} gates on task.
+thelogicalqubitsencodedwithineachblock,aswellasin-
+Figure 5b shows an example implementation of a 12-
+trablockCNOTsbyphysicalpermutation[26,27](Meth-
+logical-qubit sampling circuit. Here, we prepare all logi-
+ods). This gate set allows us to transversally realize the
+cal blocks in |+⟩ , implement a scrambling circuit with
+circuits illustrated in Fig. 5a,c, alternating between lay- L
+28 logical entangling gates, and then measure all logicals
+ers of {CCZ, CZ, Z} within blocks and layers of CNOTs
+in the X-basis. Figure 5b shows the probability of ob-
+between blocks. Although transversal H is forbidden,
+serving each of the 212 = 4096 possible logical bitstring
+initialization and measurement in either the X or Z ba-
+outcomes, showing that as we progressively apply more
+sis effectively allows H at the beginning and end of the
+error detection (i.e. postselection) in postprocessing, the
+circuit.
+distributionmorecloselyreproducestheidealtheoretical
+We use these transversal operations to realize log- distribution. To characterize the distribution overlap,
+ical algorithms that are difficult to simulate classi- we use the cross-entropy benchmark (XEB) [18], which
+cally [45, 46]. More specifically, these circuits can be is a weighted sum between the measured probability dis-
+mapped to Instantaneous Quantum Polynomial (IQP) tribution and the ideal calculated distribution, normal-
+circuits [20, 45, 46]. Sampling from the output distri- ized such that XEB=1 corresponds to perfectly repro-
+bution of such circuits is known to be classically hard ducing the ideal distribution, and XEB=0 corresponds
+in certain instances [20], implying a quantum device can to the uniform distribution which occurs when circuits7
+are overwhelmed by noise. Consistent with Fig. 5b, the
+12-logical-qubit circuit XEB increases from 0.156(2) to
+0.616(7) upon applying error detection (Fig. 5e). We
+note that XEB should be a good fidelity benchmark for
+IQP circuits (Methods).
+We next explore scaling to larger systems and circuit
+depths. To ensure high complexity of our logical cir-
+cuits,weusenonlocalconnectionstoentanglethelogical
+triplets on up to 4D hypercube graphs (see supplemen-
+tary movie), which results in fast scrambling [19]. Ex- c d
+ploring entangled systems of 3, 6, 12, 24, and 48 logical
+qubits, in all cases we find a finite XEB score which im-
+proves with increased error detection (Figs. 5e,f). The
+finite XEB indicates successful sampling, and the im-
+provementwitherrordetectionshowsthebenefitofusing
+logicalqubits. Whilethisimprovementcomesatthecost
+of measurement time due to error detection, improving
+the sample quality cannot be replaced by simply gen-
+erating more samples. Thus, improving the XEB score
+yields significant practical gains. We obtain an XEB of
+≈0.1for48logicalqubitsandhundredsofnonlocallogi-
+calentanglinggates,uptoroughlyanorderofmagnitude
+higher than previous physical qubit implementations of
+similarcomplexity[18,47],showingthebenefitsofalog-
+ical encoding for this application.
+Assumingourbestmeasuredphysicalfidelities,thees-
+timatedupper-boundforanoptimizedphysicalqubitim-
+plementation in our system is also significantly below
+the measured logical XEB (blue line in Fig. 5f, Meth-
+ods). In attempting to run these complex physical cir-
+cuits, in practice we find that realising non-vanishing
+XEB is significantly more challenging; we confirm with
+small physical instances that we measure values well be-
+low this upper-bound (Methods). In addition to the
+error-detecting benefits, it appears the logical circuit is
+significantly more tolerant to coherent errors, exhibiting
+operation that is inherently digital, just with imperfect
+fidelity (see e.g. ED Fig. 7a), consistent with theoret-
+ical predictions [48]. We also note that for the logical
+algorithms we optimize performance by optimizing the
+stabilizer expectation values (rather than the complex
+sampling output), providing further advantage for logi-
+cal implementations.
+Our 48-logical circuit, corresponding to a physical
+qubitconnectivityofa7Dhypercube,containsupto228
+logical two-qubit gates and 48 logical CCZ gates. Sim-
+ulation of such logical circuits is challenging due to the
+high connectivity (rendering tensor networks inefficient)
+and large numbers of non-Cliffords [49]. To benchmark
+ourcircuits,westructurethemsuchthatwecanleverage
+an efficient simulation method (Methods) which takes ≈
+2 seconds to calculate the probability of each bitstring
+(Fig. 5d). Modeling noise in our logical circuits is even
+morecomplicated, astheyarecomposedfrom128physi-
+calqubitsand384T gates,therebymakingexperimenta-
+tionwithlogicalalgorithmsnecessarytounderstandand
+optimize performance.
+gnilbmarcS
+gnilbmarcS
+tiucric
+tiucric
+a Bell basis measurement b
+10
+8
+X
+6
+4
+2
+Z
+0
+0 2 4 6 8 10 12
+Logical subsystem size
+yportne
+tnemelgnatne
+lacigoL
+0.25
+0.2
+0.15
+0.1
+0.05
+0
+0 0.2 0.4 0.6 0.8 1
+Logical purity
+eulav
+.pxe
+gnirts
+iluaP
+lacigoL
+8
+4
+0
+0 1 2 3
+Number of logical CCZ gates
+cigam
+lleB
+evitiddA
+Increasing error detection
+Experiment Increasing error detection
+Theory
+FIG. 6. Logical two-copy measurement. a, Identical
+scrambling circuits are performed on two copies of 12 logical
+qubits, and then measured in the Bell basis to extract infor-
+mation about the state. Z basis measurements are corrected
+with an [[8,3,2]] decoder (when full error detection is not ap-
+plied). b, Measured entanglement entropy as a function of
+subsystem size, showing expected Page-curve behavior [19]
+for the highly scrambled state, improving with increased er-
+ror detection. c, Measured and simulated magic (associated
+withnon-Cliffordoperations)asafunctionofnumberofCCZ
+gatesapplied,performedontwocopiesofscrambled6-logical-
+qubit systems. d, Pauli string measurement and zero-noise
+extrapolation using logical qubits. Plot shows the absolute
+values of all 412 Pauli string expectation values, which only
+have five discrete values for our digital circuit; Pauli strings
+with the same theory value are grouped. By analyzing with
+sliding-scale error detection we improve toward the theoreti-
+cal expectation values (squares) while also improving toward
+apurityof1. Byextrapolatingtoperfectpurity,weextrapo-
+late the expectation values and better-approximate the ideal
+values (shaded regions are statistical fit uncertainty).
+Quantum simulations with logical qubits
+Finally,weexploretheuseoflogicalqubitsasatoolin
+quantum simulation, probing entanglement properties of
+our fast scrambling circuits, potentially related to com-
+plex systems such as black holes [19, 50]. In particular,
+we utilize a Bell-basis measurement made on two copies
+of the quantum state (Fig. 6a), which is a powerful tool
+that can efficiently extract many properties of an un-
+known state [21, 22, 51]. With this two-copy technique,
+inFig.6bweplotthemeasuredentanglemententropyin
+the scrambled system. We observe a characteristic Page
+curve[50]associatedwithamaximallyentangled, highly
+scrambled, but globally pure state. These measurements
+also reveal a final state purity of 0.74(3), compared to
+themeasuredXEBof0.616(7)inFig.5f, consistentwith8
+XEB being a good proxy for the final state fidelity. De- qubits by increasing laser power and optimizing control
+spite postselection overhead, we find error detection sig- methods,whileQECefficiencycanbeimprovedbyreduc-
+nificantly improves signal-to-noise here, as near-zero en- ing two-qubit gate errors to 0.1% [8]. Deep computation
+tropies are exponentially faster to measure (ED Fig. 9). willfurtherrequirecontinuousreloadingofatomsfroma
+Two-copymeasurementscanalsobeusedtosimultane- reservoir source [11, 15]. Continued scaling will benefit
+ouslyextractinformationaboutall4N Paulistrings[22]. from improving encoding efficiency, e.g. by using quan-
+Using this property and an analysis technique known as tum low-density-parity-check (qLDPC) codes [54, 55],
+Bell difference sampling [52] we experimentally evaluate utilizingerasureconversion[13,33,56]ornoisebias[35],
+anddirectlyverifytheamountofadditiveBellmagic[52] and optimizing the choice of (possibly multiple) atomic
+in our circuits as a function of number of applied logi- species [11, 14], as well as advanced optical controls [34].
+cal CCZs (Fig. 6c). This measurement of magic, associ- Furtheradvancescouldbeenabledbyconnectingproces-
+ated with non-Clifford operations, quantifies the number sors together in a modular fashion using photonic links
+of T gates (assuming decomposition into T) required to or transport [10, 57], or more power-efficient trapping
+realize the quantum state by observing the probability schemessuchasopticallattices[58]. Althoughwedonot
+thatsampledPaulistringscommutewitheachother(see expectclockspeedtolimitmedium-scalelogicalsystems,
+Methods). Moreover,combiningencodedqubitsandtwo- approaches to speed up processing in hardware [59] or
+copy measurement allows for additional error mitigation with nonlocal connectivity [60] should also be explored.
+techniques. As an example, Fig. 6d shows the measured We expect that such experiments with early-generation
+absoluteexpectationvaluesofall412 logicalPaulistrings logical devices will enable experimental and theoretical
+with sliding-scale error detection. Since in the two-copy advances that dramatically reduce anticipated costs of
+measurements, foreacherrordetectionthresholdwealso large-scaleerror-correctedsystems, acceleratingdevelop-
+measure the overall system purity, we can extrapolate ment of practical applications of quantum computers.
+our expectation values to the case of unit-purity (zero-
+noise) [53]. This procedure evaluates the averaged Pauli
+expectationvaluesto≈10%relativeprecisionoftheideal
+theoretical values spanning several orders of magnitude
+(Methods).
+Outlook
+Theseexperimentsdemonstratekeyingredientsofscal-
+able error correction and quantum information process-
+ing with logical qubits. In addition to implementing the
+key elements of logical processing, our approach demon-
+strates practical utility of encoding methods for improv-
+ingsamplingandquantumsimulationsofcomplexscram-
+bling circuits. Future work can explore if these methods
+can be generalized e.g. to more robust, higher-distance
+codes and if such highly entangled, non-Clifford states
+could be utilized in practical algorithms. We note the
+demonstrated logical circuits are approaching the edge
+of exact simulation methods (Fig. 5d), and can readily
+beusedforexploringerror-correctedquantumadvantage.
+Theseexamplesdemonstratethattheuseofnovelencod-
+ing schemes, co-designed with efficient implementations,
+can allow one to implement particular logical algorithms
+at reduced cost.
+Our observations open the door for exploration of
+large-scale logical qubit devices. A key future milestone
+would be to perform repetitive error correction [6] dur-
+ing a logical quantum algorithm to greatly extend its
+accessible depth. This repetitive correction can be di-
+rectly realized using the tools demonstrated here by re-
+peating the stabilizer measurement (Fig. 2) in combina-
+tion with mid-circuit readout (Fig. 4). The use of the
+zoned architecture and logical-level control should allow
+ourtechniquestobereadilyscaledtoover10000physical9
+[1] Preskill, J. Quantum Computing in the NISQ era and [21] Daley,A.J.,Pichler,H.,Schachenmayer,J.&Zoller,P.
+beyond. Quantum 2, 79 (2018). Measuring Entanglement Growth in Quench Dynamics
+[2] Shor, P. W. Fault-tolerant quantum computation. In ofBosonsinanOpticalLattice. PhysicalReviewLetters
+Annual Symposium on Foundations of Computer Sci- 109, 020505 (2012).
+ence - Proceedings, 56–65 (IEEE, 1996). [22] Huang, H. Y. et al. Quantum advantage in learn-
+[3] Steane, A. Multiple-particle interference and quantum ing from experiments. Science 376, 1182–1186 (2022).
+error correction. Proceedings of the Royal Society of arXiv:2112.00778.
+London. Series A: Mathematical, Physical and Engi- [23] Gidney,C.&Eker˚a,M. Howtofactor2048bitRSAin-
+neering Sciences 452, 2551–2577 (1996). tegersin8hoursusing20millionnoisyqubits.Quantum
+[4] Dennis, E., Kitaev, A., Landahl, A. & Preskill, J. 5, 433 (2021).
+Topologicalquantummemory. JournalofMathematical [24] Fowler, A. G., Mariantoni, M., Martinis, J. M. & Cle-
+Physics 43, 4452–4505 (2002). arXiv:0110143 [quant- land,A.N. Surfacecodes: Towardspracticallarge-scale
+ph]. quantum computation. Physical Review A 86, 032324
+[5] Ryan-Anderson, C. et al. Implementing Fault-tolerant (2012).
+EntanglingGatesontheFive-qubitCodeandtheColor [25] Self, C. N., Benedetti, M. & Amaro, D. Protecting Ex-
+Code (2022). arXiv:2208.01863. pressiveCircuitswithaQuantumErrorDetectionCode
+[6] Quantum, G. Suppressing quantum errors by scaling a (2022). arXiv:2211.06703v1.
+surfacecodelogicalqubit. Nature 614,676–681(2023). [26] Honciuc Menendez, D., Ray, A. & Vasmer, M. Im-
+[7] Bluvstein, D. et al. A quantum processor based on co- plementing fault-tolerant non-Clifford gates using the
+herenttransportofentangledatomarrays. Nature 604, [[8,3,2]] color code arXiv:2309.08663v1.
+451–456 (2022). [27] Wang, Y. et al. Fault-Tolerant One-Bit Ad-
+[8] Evered, S. J. et al. High-fidelity parallel entangling dition with the Smallest Interesting Colour Code
+gates on a neutral-atom quantum computer. Nature arXiv:2309.09893v1.
+622, 268–272 (2023). [28] Andersen, T. I. et al. Non-Abelian braiding of graph
+[9] Beugnon,J.etal.Two-dimensionaltransportandtrans- vertices in a superconducting processor. Nature 618,
+fer of a single atomic qubit in optical tweezers. Nature 264–269 (2023).
+Physics 3, 696–699 (2007). [29] Patterson, D. A. & Hennessy, J. L. Computer Organi-
+[10] Deist, E. et al. Mid-Circuit Cavity Measurement in zation and Design: The Hardware Software Interface -
+a Neutral Atom Array. Physical Review Letters 129, RISC-V Edition (2018).
+203602 (2022). [30] Ebadi, S. et al. Quantum phases of matter on a 256-
+[11] Singh, K. et al. Mid-circuit correction of correlated atom programmable quantum simulator. Nature 595,
+phase errors using an array of spectator qubits. Sci- 227–232 (2021).
+ence 380, 1265–1269 (2023). [31] Scholl, P. et al. Quantum simulation of 2D antiferro-
+[12] Graham, T. M. et al. Mid-circuit measure- magnetswithhundredsofRydbergatoms. Nature 595,
+ments on a neutral atom quantum processor (2023). 233–238 (2021).
+arXiv:2303.10051v2. [32] Jaksch,D.et al. Fastquantumgatesforneutralatoms.
+[13] Ma,S.et al. High-fidelitygatesandmid-circuiterasure Physical Review Letters 85, 2208–2211 (2000).
+conversion in an atomic qubit. Nature 622, 279–284 [33] Scholl,P.etal. Erasureconversioninahigh-fidelityRy-
+(2023). dbergquantumsimulator. Nature 622,273–278(2023).
+[14] Lis, J. W. et al. Mid-circuit operations using [34] Graham,T.M.et al. Multi-qubitentanglementandal-
+the omg-architecture in neutral atom arrays (2023). gorithmsonaneutral-atomquantumcomputer. Nature
+arXiv:2305.19266. 604, 457–462 (2022).
+[15] Norcia, M. A. et al. Mid-circuit qubit measurement [35] Cong,I.etal.Hardware-Efficient,Fault-TolerantQuan-
+and rearrangement in a 171 Yb atomic array (2023). tum Computation with Rydberg Atoms. Physical Re-
+arXiv:2305.19119v3. view X 12, 021049 (2022). arXiv:2105.13501.
+[16] Campbell, E. T. The smallest interesting colour code [36] Beverland, M. E., Kubica, A. & Svore, K. M. Cost of
+(2016). URL https://earltcampbell.com/2016/09/ Universality: A Comparative Study of the Overhead of
+26/the-smallest-interesting-colour-code/. StateDistillationandCodeSwitchingwithColorCodes.
+[17] Vasmer, M. & Kubica, A. Morphing Quantum Codes. PRX Quantum 2, 020341 (2021).
+Physical Review Applied 10, 030319 (2022). [37] Bomb´ın, H. Gauge color codes: optimal transversal
+[18] Arute, F. et al. Quantum supremacy using a pro- gates and gauge fixing in topological stabilizer codes.
+grammable superconducting processor. Nature 574, New Journal of Physics 17, 083002 (2015).
+505–510 (2019). [38] Goto, H. Minimizing resource overheads for fault-
+[19] Kuriyattil, S., Hashizume, T., Bentsen, G. & Daley, tolerant preparation of encoded states of the Steane
+A.J. OnsetofScramblingasaDynamicalTransitionin code. Scientific Reports 6, 19578 (2016).
+Tunable-Range Quantum Circuits. PRX Quantum 4, [39] Flammia, S. T. & Liu, Y. K. Direct fidelity estimation
+030325 (2023). from few Pauli measurements. Physical Review Letters
+[20] Bremner, M. J., Montanaro, A. & Shepherd, D. J. 106, 230501 (2011).
+Average-Case Complexity Versus Approximate Simula- [40] Egan, L. et al. Fault-tolerant control of an error-
+tion of Commuting Quantum Computations. Physical corrected qubit. Nature 598, 281–286 (2021).
+Review Letters 117, 080501 (2016). [41] Postler, L. et al. Demonstration of fault-tolerant uni-10
+versal quantum gate operations. Nature 605, 675–680 [63] Jandura, S. & Pupillo, G. Time-Optimal Two- And
+(2022). Three-Qubit Gates for Rydberg Atoms. Quantum 6,
+[42] Eastin, B. & Knill, E. Restrictions on transversal en- 712 (2022).
+codedquantumgatesets. Physical Review Letters 102, [64] Levine, H. et al. Parallel Implementation of High-
+110502 (2009). FidelityMultiqubitGateswithNeutralAtoms.Physical
+[43] Brown, B. J. A fault-tolerant non-clifford gate for the Review Letters 123, 170503 (2019).
+surface code in two dimensions. Science Advances 6 [65] Tan, D. B., Bluvstein, D., Lukin, M. D. & Cong,
+(2020). J. Compiling Quantum Circuits for Dynamically
+[44] Aaronson, S. & Gottesman, D. Improved simulation of Field-Programmable Neutral Atoms Array Processors
+stabilizercircuits.PhysicalReviewA70,052328(2004). arXiv:2306.03487v3.
+[45] Mezher, R., Ghalbouni, J., Dgheim, J. & Markham, D. [66] Wimperis, S. Broadband, Narrowband, and Passband
+Fault-tolerant quantum speedup from constant depth Composite Pulses for Use in Advanced NMR Experi-
+quantum circuits. Physical Review Research 2, 033444 ments. Journal of Magnetic Resonance, Series A 109,
+(2020). arXiv:2005.11539. 221–231 (1994).
+[46] Paletta, L., Leverrier, A., Sarlette, A., Mirrahimi, M. [67] Cummins,H.K.,Llewellyn,G.&Jones,J.A. Tackling
+& Vuillot, C. Robust sparse IQP sampling in constant systematicerrorsinquantumlogicgateswithcomposite
+depth (2023). arXiv:2307.10729v1. rotations. Physical Review A 67, 042308 (2003).
+[47] Wu, Y. et al. Strong Quantum Computational Ad- [68] Barnes, K. et al. Assembly and coherent control of a
+vantage Using a Superconducting Quantum Processor. registerofnuclearspinqubits. Nature Communications
+Physical Review Letters 127, 180501 (2021). 13, 2779 (2022).
+[48] Bravyi,S.,Englbrecht,M.,Ko¨nig,R.&Peard,N. Cor- [69] LeKien,F.,Schneeweiss,P.&Rauschenbeutel,A. Dy-
+rectingcoherenterrorswithsurfacecodes.npjQuantum namical polarizability of atoms in arbitrary light fields:
+Information 4, 55 (2018). General theory and application to cesium. European
+[49] Bravyi,S.etal. Simulationofquantumcircuitsbylow- Physical Journal D 67, 92 (2013).
+rankstabilizerdecompositions. Quantum 3,181(2019). [70] Hutzler,N.R.,Liu,L.R.,Yu,Y.&Ni,K.K. Eliminat-
+[50] Sekino, Y. & Susskind, L. Fast scramblers. Journal of ing light shifts for single atom trapping. New Journal
+High Energy Physics 2008 (2008). of Physics 19, 023007 (2017).
+[51] Hangleiter, D. & Gullans, M. J. Bell sampling from [71] Shea, M. E., Baker, P. M., Joseph, J. A., Kim, J. &
+quantum circuits (2023). arXiv:2306.00083v2. Gauthier, D. J. Submillisecond, nondestructive, time-
+[52] Haug, T. & Kim, M. S. Scalable Measures of Magic resolvedquantum-statereadoutofasingle,trappedneu-
+Resource for Quantum Computers. PRX Quantum 4, tral atom. Physical Review A 102, 053101 (2020).
+010301 (2023). [72] Gidney, C. Stim: a fast stabilizer circuit simulator.
+[53] Kim, Y. et al. Evidence for the utility of quantum Quantum 5, 497 (2021).
+computingbeforefaulttolerance. Nature 618,500–505 [73] Higgott,O.,Bohdanowicz,T.C.,Kubica,A.,Flammia,
+(2023). S.T.&Campbell, E.T. ImprovedDecodingofCircuit
+[54] Bravyi,S.etal. High-thresholdandlow-overheadfault- NoiseandFragileBoundariesofTailoredSurfaceCodes.
+tolerantquantummemory(2023). arXiv:2308.07915v1. Physical Review X 13, 031007 (2023).
+[55] Xu, Q. et al. Constant-Overhead Fault-Tolerant Quan- [74] Gottesman, D. Opportunities and Challenges
+tum Computation with Reconfigurable Atom Arrays in Fault-Tolerant Quantum Computation (2022).
+arXiv:2308.08648v1. arXiv:2210.15844.
+[56] Wu,Y.,Kolkowitz,S.,Puri,S.&Thompson,J.D. Era- [75] Delfosse,N.&Paetznick,A.SpacetimecodesofClifford
+sureconversionforfault-tolerantquantumcomputingin circuits (2023). arXiv:2304.05943v2.
+alkalineearthRydbergatomarrays. Nature Communi- [76] Steane, A. M. Active stabilization, quantum compu-
+cations 13, 1–7 (2022). arXiv:2201.03540. tation, and quantum state synthesis. Physical Review
+[57] Dordevi´c, T. et al. Entanglement transport and a Letters 78, 2252 (1997).
+nanophotonic interface for atoms in optical tweezers. [77] McEwen, M., Bacon, D. & Gidney, C. Relaxing Hard-
+Science 373, 1511–1514 (2021). ware Requirements for Surface Code Circuits using
+[58] Tao, R., Ammenwerth, M., Gyger, F., Bloch, I. & Zei- Time-dynamics (2023). arXiv:2302.02192.
+her,J. High-fidelitydetectionoflarge-scaleatomarrays [78] Gurobi Optimization, L. Gurobi Optimizer Reference
+in an optical lattice (2023). arXiv:2309.04717v2. Manual (2023).
+[59] Xu, W. et al. Fast Preparation and Detection of a Ry- [79] Landahl, A. J., Anderson, J. T. & Rice, P. R. Fault-
+dbergQubitUsingAtomicEnsembles. Physical Review tolerant quantum computing with color codes (2011).
+Letters 127, 050501 (2021). arXiv:1108.5738v1.
+[60] Litinski, D. & Nickerson, N. Active volume: An [80] Cain, M. et al. Correlated decoding of logical qubit al-
+architecture for efficient fault-tolerant quantum com- gorithms with transversal gates, in preparation (2023).
+puters with limited non-local connections (2022). [81] Monz, T. et al. 14-qubit entanglement: Creation and
+arXiv:2211.15465v1. coherence. PhysicalReviewLetters 106,130506(2011).
+[61] Barredo, D., De L´es´eleuc, S., Lienhard, V., Lahaye, T. [82] Gottesman, D. Stabilizer Codes and Quantum Error
+& Browaeys, A. An atom-by-atom assembler of defect- Correction (1997).
+free arbitrary two-dimensional atomic arrays. Science [83] Knill, E. Quantum computing with realistically noisy
+354, 1021–1023 (2016). devices. Nature 434, 39–44 (2005).
+[62] Levine, H. et al. Dispersive optics for scalable Raman [84] Shor, P. W. Scheme for reducing decoherence in quan-
+driving of hyperfine qubits. Physical Review A 105, tum computer memory. Physical Review A 52, R2493
+032618 (2022). (1995).11
+[85] Krinner, S. et al. Realizing repeated quantum error [108] Iverson, J. K. & Preskill, J. Coherence in logical quan-
+correctioninadistance-threesurfacecode. Nature 605, tum channels. New Journal of Physics 22, 073066
+669–674 (2022). (2020).
+[86] Horsman, C., Fowler, A. G., Devitt, S. & Meter, R. V. [109] Iyer, P. & Poulin, D. A Small Quantum Computer is
+Surface code quantum computing by lattice surgery. NeededtoOptimizeFault-TolerantProtocols.Quantum
+New Journal of Physics 14, 123011 (2012). Science and Technology 3, 030504 (2017).
+[87] To´th, G. & Gu¨hne, O. Entanglement detection in the [110] Kaufman,A.M.etal.Quantumthermalizationthrough
+stabilizer formalism. Physical Review A 72, 022340 entanglementinanisolatedmany-bodysystem. Science
+(2005). 353, 794–800 (2016).
+[88] Kubica, A., Yoshida, B. &Pastawski, F. Unfoldingthe [111] Brydges,T.et al. ProbingR´enyientanglemententropy
+color code. New Journal of Physics 17, 083026 (2015). via randomized measurements. Science 364, 260–263
+[89] Chamberland, C., Kubica, A., Yoder, T. J. & Zhu, (2019).
+G. Triangular color codes on trivalent graphs with flag
+qubits. New Journal of Physics 22, 023019 (2020).
+[90] Kubica, A. & Beverland, M. E. Universal transversal
+gateswithcolorcodes: Asimplifiedapproach. Physical
+Review A 91, 032330 (2015).
+[91] Mi, X. et al. Information scrambling in quantum cir-
+cuits. Science 374, 1479–1483 (2021).
+[92] Linke,N.M.et al. Fault-tolerantquantumerrordetec-
+tion. Science Advances 3 (2017).
+[93] Hashizume,T.,Bentsen,G.S.,Weber,S.&Daley,A.J.
+Deterministic Fast Scrambling with Neutral Atom Ar-
+rays. Physical Review Letters 126, 200603 (2021).
+[94] Jia, Y. & Verbaarschot, J. J. Chaos on the hypercube.
+Journal of High Energy Physics 2020, 1–46 (2020).
+[95] Bremner, M. J., Jozsa, R. & Shepherd, D. J. Clas-
+sical simulation of commuting quantum computations
+implies collapse of the polynomial hierarchy. In Pro-
+ceedingsoftheRoyalSocietyA:Mathematical, Physical
+and Engineering Sciences, vol. 467 (2011).
+[96] Hangleiter,D.,Bermejo-Vega,J.,Schwarz,M.&Eisert,
+J. Anticoncentration theorems for schemes showing a
+quantum speedup. Quantum 2, 65 (2018).
+[97] Bouland, A., Fefferman, B., Nirkhe, C. & Vazirani, U.
+Onthecomplexityandverificationofquantumrandom
+circuit sampling. Nature Physics 15, 159–163 (2019).
+[98] Bremner, M. J., Montanaro, A. & Shepherd, D. J.
+Achieving quantum supremacy with sparse and noisy
+commuting quantum computations. Quantum 1, 8
+(2017).
+[99] Kalinowski, M. et al. Quantum Advantage of Logi-
+calQubitsinRandomTransversalCircuitSampling,in
+preparation (2023).
+[100] Gao,X.et al. LimitationsofLinearCross-Entropyasa
+Measure for Quantum Advantage arXiv:2112.01657v1.
+[101] Morvan, A. et al. Phase transition in Random Circuit
+Sampling (2023). arXiv:2304.11119.
+[102] Ware,B.et al. Asharpphasetransitioninlinearcross-
+entropy benchmarking arXiv:2305.04954v1.
+[103] Shepherd, D. & Bremner, M. J. Temporally unstruc-
+tured quantum computation. Proceedings of the Royal
+SocietyA:Mathematical,PhysicalandEngineeringSci-
+ences 465 (2009).
+[104] Pan, F. & Zhang, P. Simulation of Quantum Circuits
+UsingtheBig-BatchTensorNetworkMethod. Physical
+Review Letters 128, 030501 (2022).
+[105] Boixo, S. et al. Characterizing quantum supremacy in
+near-term devices. Nature Physics 14, 595–600 (2018).
+[106] Zhong, H.-S. et al. Quantum computational advantage
+using photons. Science 370, 1460–1463 (2020).
+[107] Madsen,L.S.etal. Quantumcomputationaladvantage
+with a programmable photonic processor. Nature 606,
+75–81 (2022).12
+METHODS
+Programming circuits
+Most of the system parameters used in our approach do not
+System overview
+have hard limits, but instead result from possible trade-offs.
+Our experimental apparatus (ED Fig. 1a) is described pre-
+In what follows we detail some design decisions made for the
+viously in Refs. [7, 8, 30]. To carry out the present experi-
+circuits used in the present work.
+ments, several key upgrades have been made enabling pro-
+grammable quantum circuits on both physical and logical
+Zone parameter choices. For simplicity, we keep the entan-
+qubits. A cloud containing millions of cold 87Rb atoms is
+glingzonefixedforallexperiments. Thisconvenientlyallows
+loaded in a magneto-optical trap inside of a glass vacuum
+to switch between e.g. surface code and [[8,3,2]] code ex-
+cell,whicharethenloadedstochasticallyintoprogrammable,
+periments, without additional calibrations. We choose our
+staticarrangementsof852-nmtrapsgeneratedwithaspatial
+entanglingzoneprofile,realizedby420-nmand1013-nmRy-
+lightmodulator(SLM),andthenrearrangedwithasetof850-
+dberg “tophat” beams generated by SLM phase profiles [30],
+nmmovingtrapsgeneratedbyapairofcrossedacousto-optic
+to be homogeneous over a 35-µm tall region. As the Ryd-
+deflectors(AODs,DTSX-400,AAOpto-Electronic)torealize
+berg beams propagate longitudinally, the entangling zone is
+defect-freearrays[30,31,61]. Atomsareimagedwitha0.65-
+longerthanitistall. Weoptimizetophatstobehomogeneous
+NA objective (Special Optics) onto a CMOS camera (Hama-
+overroughly250-µmhorizontalextent. Tallerregionsarealso
+matsuORCA-QuestC15550-20UP),chosenforfastelectronic
+achievable, with a trade-off with reduced laser intensity and
+readout times. The qubit state is encoded in m = 0 hy-
+F greater challenge in homogenization. The 250-µm width of
+perfine clock states in the 87Rb ground-state manifold, with
+the zones used here is set by the bandwidth of our AOD de-
+T >1s [7], and fast, high-fidelity single-qubit control is exe-
+2 flectionefficiency. Wepositionthereadoutzoneontheother
+cuted by two-photon Raman excitation [7, 62] (ED Fig. 1b).
+side of the storage zone to further minimize decoherence on
+AglobalRamanpathilluminatingtheentirearrayisusedfor
+entangling zone atoms.
+globalrotations(Rabifrequency∼1MHz,resultingin∼1µs
+Our two-qubit gate parameters are similar to our prior
+rotations with composite pulse techniques [7]) as well as for
+workinRef.[8]. Duringtwo-qubitRydberg(n=53)gates,we
+dynamicaldecouplingthroughouttheentirecircuit(typically place atoms ≲ 2 µm apart within a “gate site”, resulting in
+1 global π pulse per movement). Fully programmable local ≳ 450 MHz interaction strength between pairs, significantly
+single-qubitrotationsarerealizedwiththesameRamanlight
+larger than the Rabi frequency of 4.6 MHz. Importantly,
+butredirectedthroughalocalpathwhichisfocusedontotar-
+due to the use of the Rydberg blockade [32, 64], the gate
+geted atoms by an additional set of 2D AODs. Entangling
+is largely independent of the exact distance between atoms.
+gates (270-ns duration) between clock qubits are performed
+Hence, precise inter-atom positioning is not required. Gate
+with fast two-photon excitation using 420-nm and 1013-nm
+sites are separated such that atoms in different gate sites are
+Rydberg beams to n=53 Rydberg states, utilizing a time-
+no closer than 10 µm during the gate, resulting in negligible
+optimaltwo-qubitgatepulse[63]detailedinRef.[8]. During
+long-range interactions. Throughout this work we use 4
+thecomputation,atomsarerearrangedwiththeAODtrapsto
+gate sites vertically (5 for the surface code experiment) and
+enable arbitrary connectivity [7]. Mid-circuit readout is car-
+20 horizontally, performing gates on as many as 160 qubits
+ried out by illuminating from the side with a locally focused
+simultaneously (see ED Fig. 1d). Under various conditions,
+780-nm imaging beam, with scattered photons collected on
+with proper calibration we measure two-qubit gate fidelities
+the CMOS and processed real-time by a field-programmable
+intherangeF =99.3%−99.5%. Wedonotobserveanyerror
+gatearray,FPGA(XilinxZCU102),withfeedforwardcontrol
+on storage-zone atoms when Rydberg gates are executed
+signal outputs.
+in the entangling zone. Even though the tail of the tophat
+The quantum circuits are programmed with a control Rydberg excitation beams is only suppressed to ∼ 0.1x
+infrastructure consisting of five arbitrary waveform gener- intensity, the two-photon drive is far off-resonant due to the
+ators (AWG) (Spectrum Instrumentation), as illustrated ∼ 20 MHz 1013 light shift detuning which is present for the
+in ED 1c, synchronized to < 10-ns jitter. The 2-channel entangling zone atoms [8]. We natively realize physical CZ
+Rearrangement AWG is used for rearranging into defect-free gates; when implementing CNOTs we add physical H gates.
+arrangements [30] before the circuit, the 1 channel of the We find minimal two-qubit cross-talk between gate sites,
+Rydberg AWG is used for entangling gate pulses, the 4 as probed with long benchmarking sequences in Ref. [8].
+channels of the Raman AWG are used for IQ (in-phase Although Ref. [8] appears to find some small cross-talk
+and quadrature) control of a 6.8 GHz source [7, 62] (the seeminglyoriginatingfromdecayintoRydbergP states,this
+global phase reference for all qubits) and pulse-shaping of should be considerably suppressed in the practical operation
+the global and local Raman driving, the 2 channels of the here due to the ∼ 200 µs duration between gates, during
+Raman AOD AWG are used for displaying tones that create which time Rydberg atoms should either fly away or decay
+the programmable light grids for local single-qubit control, back to the ground state.
+and the 2 channels of the Moving AOD AWG are used for
+controlling the positions of all atoms during the circuit. Shuttling and transfers. The SLM tweezers can have arbi-
+AODs are central to our methods of efficient control [61], trary positions, but are static. The AOD tweezers are mo-
+where the two voltage waveforms (one for X-axis and one for bile, but have several constraints [7, 65]. In particular, the
+Y-axis) control many physical or logical qubits in parallel: AOD array creates rectangular grids (but not all sites need
+each row and column of the grid simply corresponds to a to be filled). During the atom moving operations, they are
+singlefrequencytone,andthesetonesarethensuperimposed only used for stretches, compressions and translations of the
+inthewaveformdeliveredtotheAOD(amplifiedbyMinicir- AOD trap array: i.e., atoms move in rows and columns, and
+cuits ZHL-5W-1+). The phase relationship between tones is rows and columns never cross [7, 65]. Arbitrary qubit mo-
+chosen to minimize interference. tionsandpermutationisachievedbyshuttlingatomsaround13
+inAODtweezers,andthentransferringatomsbetweenAOD pulses of the 420-nm laser (when used for entangling zone
+andSLMtweezersasappropriate. Weperformgatesonpairs single-qubit rotations [7]) to echo out small crosstalk experi-
+ofatomsinbothAOD-AODtrapsandAOD-SLMtraps,with encedinthestoragezonebythetailofthe420-nmbeam. For
+no observed difference for gate performance as measured by ourglobaldecouplingpulsesweusebothBB1pulses[66]and
+randomized benchmarking [8]. “SCROFULOUS” pulses [67]. To benchmark and optimize
+We find that free-space shuttling of atoms (i.e., no trans- coherenceduringourcomplexcircuits,weperformaRamsey
+fers) in AOD tweezers comes essentially with no fidelity cost fringe measurement encompassing the entire movement and
+(otherthantimeoverhead),consistentwithourpriorwork[7]. single-qubit gate sequence and optimize the observed con-
+Two additional improvements here are the use of a photodi- trast [7]. When performing properly, our total single-qubit
+odetocalibrateandhomogenizethe2Ddeflectionefficiencyof errorisconsistentwithSPAM[8],aneffectivecoherencetime
+our2DAODstopercent-levelhomogeneityacrossourusedre- of 1-2 s, and the Raman scattering error of all the Raman
+gion, and engineering atomic trajectories and echo sequences pulses [7, 62]. We note that these measured coherence time
+to cancel out residual path-dependent inhomogeneities. For includethemovementwithinandbetweenzones;althoughwe
+example, we move an atom 100 µm away to realize a dis- use fewer pulses (typically 1 per movement) than the XY16-
+tantentanglinggate,andthenbeforereturningtheatom,we 128 sequence used to benchmark 1.5s coherence in Ref. [7],
+perform a Raman π pulse, so that differential light shifts ac- the coherence times here are naturally longer due to further-
+cumulated during the return trip cancel with the first trip. detuned tweezers used (852 nm rather than 830 nm.
+MotionisrealizedwithacubicprofileasinRef.[7],thechar-
+Localsingle-qubit gates [34, 68]with theRaman AOD are
+acteristicfree-spacemovementtimebetweengatesisroughly
+realizedinarbitrarypositionsinspaceonbothAODandSLM
+200 µs, and acoustic lensing effects from the AOD are esti-
+atoms. Targeted logical qubit blocks are addressed by a grid
+mated to be negligible. We pulse the 1013 laser off during
+illumination of the logical block. Arbitrary patterns of rota-
+motiontoremovelosseffectsfromthelargelightshifts. Note
+tions on the qubit grid (e.g., during color code preparation)
+that the 1013-induced differential light shift on the hyperfine
+are realized with row-by-row serializing, with the targeted x
+qubitisonlykHz-scalebutwestillensureitseffectsareprop-
+coordinates in each row simultaneously illuminated. The du-
+erly echoed out.
+ration of each row is 5-8 µs (i.e., several 10s of µs for an
+Transferring atoms between tweezers [9] presents addi- arbitrary pattern of rotations), which can be sped up con-
+tional challenges. We measure the infidelity of each transfer, siderably as discussed in the next section. For simplicity we
+encompassing both dephasing and loss, to be ≲ 0.1%. To carefullycalibraterotationson80-160specificsitesacrossthe
+achieve this performance, in our transfer from SLM to AOD, array, but also perform rotations in arbitrary spots utilizing
+we ramp up the AOD tones’ intensity (with quadratic inten- the nearest calibrated values.
+sity profile when possible) corresponding to the appropriate
+Withthelocalsingle-qubitgatesandentanglingzonetwo-
+sites over a time of 100-200 µs to a trap depth ∼2x larger
+qubit gates calibrated, the entire circuit is simply defined by
+than the SLM trap depth, and then move the AOD trap
+the appropriate trapping SLM phase profile, and waveforms
+1−2 µm away over a time of 50-100 µs. These time scales
+for our several AWG channels and TTL pulse generator.
+can likely be shortened considerably while suppressing errors
+Theseseveralchannelsthenprogramcomplex,variedcircuits
+using optimal control techniques. During subsequent motion
+on hundreds of physical qubits. Animations of all of our
+weleavetheAODtrapdepthatthis2xvalue. Totransferan
+programmed circuits are attached as Supplementary Movies.
+atom AOD to SLM we perform the reversed process. During
+these transfer processes, the differential light shifts on the
+transferred atoms are dynamically changing, and can result Programmable single-qubit gates
+in large unechoed phase shifts. As such, whenever possible To enable individual single-qubit gates, we use the same Ra-
+we engineer circuits such that pairs of transfers will echo manlasersystemasourglobalrotationschemeandilluminate
+with appropriately chosen π pulses. When echoing pairs onlychosenatomsusingapairofcrossedAODs. Thefocused
+of transfers is not possible, we perform 1 cycle of XY4 or beamwaistintheplaneoftheatomsis1.9µm,whichislarge
+XY8 dynamical decoupling during the transfer. Finally, we enough to be robust to fluctuations in atomic positions, and
+note that low-loss transfer is highly sensitive to alignment smallenoughtopreventcross-talktoneighboringatomssep-
+of the AOD and SLM grid. We fix small optical distortions arated by ≳6 µm. For Raman excitation, polarization needs
+betweentheAODandSLMtweezergridsbyfineadjustment to be carefully considered. Unlike the global path, the lo-
+of individual SLM grid tweezers, which can be arbitrarily cal beam propagation direction is perpendicular to the atom
+positioned, to overlap with the AOD traps as seen on an quantizationaxis(setbytheexternalmagneticfield). There-
+image plane reference camera. It is important to adjust the fore the fictitious magnetic field B⃗ responsible for driving
+fict
+SLM and not the AOD, as small adjustments of individual thetransitions,asdescribedinRef.[62],preferentiallydrives
+AOD tones deviating from a frequency comb causes beating σ± hyperfinetransitionsratherthanthedesiredπclocktran-
+and atom loss. sition[69]. Thereexisttwopossibleapproachestosingle-qubit
+gates, as illustrated in ED Fig. 2a. First, off-resonant σ±
+Dynamical decoupling and local gates. In our circuit design, dressinggeneratesdifferentiallightshiftsbetweenqubitstates
+we engineer our echo sequences in order to cancel out as as enabling fast local Z(θ) gates. Global π/2 rotations convert
+many deleterious aspects as possible. We ensure that in our thesetolocalX(θ)gates. Second,onecandirectlyapplylocal
+dynamical decoupling we have an odd number of π pulses X(θ) gates with direct π transitions by slightly rotating the
+between CZ gates (whenever possible), as this echoes out quantizationaxistowardsthelocalbeamdirection;thiscould
+bothsystematicandspuriouscontributionstothesingle-qubit beachievedwithanexternalfieldbut,conveniently,B⃗ has
+fict
+phase [7, 8]. We apply appropriate X(π) and Z(π) rotations a DC component that naturally rotates the axis. Note that,
+between local addressing with the local Raman to cancel out ifthelocalbeamisquicklyturnedon,thissamefictitiousDC
+errors induced by the global π/2 pulses, as well as between field causes leakage out of the m = 0 subspace, therefore
+F14
+Gaussian-smoothed pulses are used throughout this work. locally imaged atoms as well as beam reflections and tails of
+Although we realize both the π and σ± versions above, the local imaging beam hitting the data qubits. As shown in
+in the present experiments we use the off-resonant σ± dress- Fig. 1c, for the 500-µs midcircuit imaging used in this work,
+ing procedure due to reduced polarization sensitivity, since weareabletoachieveunchangedcoherence(identicalwithin
+ourpolarizationhomogeneitywasaffectedbythesharpwave- theerrorbars)ofthedataqubitswiththelocalimaginglight
+length edge of a dichroic after the AOD. Furthermore, as for on as without it. To understand these effects more quantita-
+mostcircuitsweperformlocalrotationsrow-by-row(only1Y tively, we measure the error probability of the data qubits in
+toneatatime);thisenablesarbitraryfine-tuningofXcoordi- theentanglingzonewhilethelocalimagingbeamisoninthe
+nates and powers at each site for homogenizing and calibrat- readoutzoneforupto20msandwithhigherintensitiesthan
+ingrotations(EDFig.2b). Wecalibrateusingtheprocedure usedforlocalimaginginthiswork. Wesuppressdecoherence
+inEDFig.2candfindthesecalibrationsarestableonmonth bylightshiftingthedataqubits’780-nmtransitiontobedif-
+timescales. ferentfromthatofthelocallyimagedqubitsbyseveral10sof
+To quantify the fidelity, we perform randomized bench- MHz, as studied in ED Fig. 3f-g. Data qubit decoherence is
+marking using 0, 10, 20, 30, 40, and 50 local Z(π/2) furthersuppressedbythelargespatialseparationbetweenthe
+rotations (per site) on 16 sites, obtaining F = 99.912(7)% readout zone and the entangling zone, where intensity from
+as shown in ED Fig. 2d (note that the single-qubit gates the local imaging beam’s Gaussian tail should theoretically
+we execute globally have fidelity closer to 99.99% [7, 8]). fall off rapidly. Even at large separations, we find that stray
+This approaches the Raman scattering limit for our σ± beam reflections (e.g. from the glass cell window and other
+scheme (error of ∼ 7×10−4 per π/2 pulse), but when not optical elements) can hit the data qubit region. To mitigate
+well-calibrated is limited by inhomogeneity, in particular, this effect, we displace reflections away from the atom array
+associated with distortions of the y position of the rows. In byanglingthelocalimagingbeamasithitstheglasscellwin-
+thefuture,theperformancecanbefurtherimprovedbyusing dow. The estimated effects of re-scattered photons from the
+X(θ) gates, which enables robust composite sequences such imagedatoms,especiallywiththeaddedrelativedetuning,is
+asBB1[66],hasanimprovedRamanscatteringcontribution, negligible. With all these considerations, we find that we are
+and is faster (∼ 1 µs duration). able to suppress data qubit decoherence rates to ≲0.1% per
+500µsoflocalimagingexposure,asillustratedinEDFig.3h.
+Midcircuit readout and feedforward The full mid-circuit readout and feedforward cycle occurs
+Toperformmidcircuitreadout[10–15]ofselectedqubitswith- in slightly less than 1 ms, including local pushout, local
+outaffectingtheothers,weusealocalimagingbeamfocused imaging,readoutofthecamerapixels,decodingofthelogical
+on the readout zone which is roughly 100 µm spatially sep- qubit state on the FPGA, and a local Raman pulse which
+arated from the entangling zone [7, 35]. The local imaging is gated on or off by a conditional trigger (ED Fig. 3d). In
+beam consists of 780-nm circularly polarized light, with a future work, this approach to midcircuit readout and feed-
+near-resonant component from F =2 to F′ =3 and a small forward can be considerably improved to enable mid-circuit
+repumpcomponent. Thisbeamissentthroughthesideofour readout close to 100-µs scale [71]. This method can directly
+glassvacuumcell,co-propagatingwiththeglobalRamanand be extended to perform many rounds of measurement and
+1013-nm Rydberg beams (ED Fig. 1a). We use cylindrical feedforward, where groups of ancilla atoms are consecutively
+lensestoshapethebeamwithfocusedbeamwaistsof30µm brought to the readout zone throughout a deep quantum
+in the plane of the atom array and 80 µm out of the plane. circuit.
+Aftermovingsomeoftheatomstothisreadoutzone,wefirst
+perform local pushout of population in the F = 2 ground Correlated decoding
+state manifold (by turning off the repump laser frequency), During transversal CNOT operations, physical CNOT gates
+followedbylocalimagingoftheremainingF =1population. areappliedbetweenthecorrespondingdataqubitsoftwolog-
+As depicted in ED Fig. 3a, we collect an average of about icalqubits. ThesephysicalCNOTgatespropagateerrorsbe-
+50 photons per imaged atom. To avoid losing the atoms too tween the data qubits in a deterministic way: X errors on
+quickly during mid-circuit imaging (which, unlike our global thecontrolqubitarecopiedtothetargetqubit,andZ errors
+imaging scheme, does not have multi-axis cooling), we use on the target qubit are copied to the control qubit (see ED
+deep (roughly 5-mK) traps (helping retain the atoms), and Fig. 4b). As a result, the syndrome of a particular logical
+stroboscopicallypulsethemonandoffoutofphaseofthelo- qubit can contain information about the errors that have oc-
+calimaginglighttoavoiddeleteriouseffectsofthedeeptraps cured on another logical qubit, at the point in time in which
+suchasinhomogeneouslightshiftsandfluctuatingdipoleforce the pair underwent a transversal CNOT operation. We can
+heating(EDFig.3b)[70]. Fromadouble-Gaussianfittothe leveragetheinformationaboutthesecorrelationsandimprove
+two distributions in Fig. 3a, we extract an imaging fidelity the circuit fidelity by jointly decoding the logical qubits in-
+of over 99.9%. Because this fit can lead to an overestimate volved in the algorithm. We note that this is closely related
+of the imaging fidelity (for example due to atom loss during to other recent developments in decoding entire circuits, or
+imaging), we compare the total SPAM error (measured by so-called space-time decoding [72–75]. It is also related to
+amplitude of Ramsey fringe) with local imaging versus with Steane error correction [76], where errors are intentionally
+global imaging for the same state preparation sequence, ex- propagated from a data logical qubit onto an ancilla logical
+tracting0.14(5)%highererrorwithlocalimaging;withthese qubit,whichisthenprojectivelymeasuredtoextractthesyn-
+considerations we conservatively estimate a local imaging fi- drome of the data logical qubit.
+delity of around 99.8%. To perform correlated decoding, we solve the problem of
+A number of design considerations facilitate local imaging finding the most likely error given the measured syndrome.
+in the readout zone while preserving coherence of the data We start by constructing a decoding hypergraph based on
+qubits in the entangling zone (ED Fig. 3e-g) [35]. The main a description of the logical algorithm, which describes how
+sources of decoherence are rescattering of photons from the each physical error mechanism (e.g. a Pauli-error channel15
+after a two-qubit gate) propagates onto the measured sta- each variable K ensures that the sum of the error vari-
+i
+bilizers [72, 77]. The hypergraph vertices correspond to the ables in f(D ) matches D , modulo 2. Finally, we solve
+i i
+stabilizermeasurementresults. Eachedgeorhyperedgecorre- the mixed-integer program to optimality using Gurobi, a
+spondstoaphysicalerrormechanismthataffectsthestabiliz- state-of-the-art solver [78], and apply the correction string
+ersitconnects,withanedgeweightrelatedtotheprobability associated with the error indices j for which E = 1 in the
+j
+of that error. Each hyperedge can connect stabilizers both optimal assignment. We explore this correlated decoding in
+within and between logical qubit blocks (see Fig. 2b). We more detail, including its consequences on error-corrected
+then run a decoding algorithm which uses this hypergraph, circuits and the asymptotic runtimes of different decoders,
+alongwitheachexperimentalsnapshot,tofindthemostlikely in Ref. [80]. See Methods sections Surface code and its
+physicalerrorconsistentwiththemeasurements. Thiscorrec- implementation and Correlated decoding in the surface code
+tionisthenappliedinsoftware(withtheexceptionofFig.4e, for additional discussion on the surface code in particular.
+which is decoded real-time).
+Concretely,toconstructthehypergraphforagivenlogical
+Direct fidelity estimation and tomography
+circuit, we perform the following procedure. For each logi-
+One challenge with logical qubit circuits is that convenient
+calalgorithm(inthissectionconsideringonlyCliffordgates),
+probesthatareaccessiblewithphysicalqubitsmaynolonger
+we identify a set of N detectors (vertices of the hypergraph)
+be accessible. The GHZ state studied here provides such an
+D ∈ {0,1} for i = 1,...,N, which are sensitive to physical
+i example, since conventional parity oscillation measurements
+errorsoccuringduringthelogicalcircuit. Adetectoriseither
+cannotbeperformed[81]. Instead,weuseatechniqueknown
+on (1) or off (0) to indicate the presence of an error. For
+as direct fidelity estimation [39], which can be understood as
+the general case, we let D = 0 if the ith stabilizer measure-
+i follows. The target state ψ is the simultaneous eigenstate
+ment matches the measurement of its backwards-propagated
+of the N stabilizer generators {S }, and so the projector
+Pauli operator at a previous time, and 1 otherwise (the lat-
+onto the target state is |ψ⟩⟨ψ| =
+i (cid:81)N(S
++1)/2 (which is
+ter indicates that an error has occured). In particular, for i i
+1 if S = 1 ∀i, and 0 otherwise). One can thereby directly
+oursurfacecodeexperiments,detectorsinthefinalprojective i
+measure fidelity by measuring the expectation values of
+measurementarecomputedbycomparingthefinalprojective
+all terms in this product, which in other words refers to
+measurement of the stabilizers with the value of the ancilla-
+measuring the expectation values of all elements of the
+basedstabilizermeasurementthatoccuredbeforetheCNOT
+stabilizer group given by the exponentially many products
+(notethatduetoourstate-preparationprocedure,theinitial
+of all the S . The logical GHZ fidelity is defined as the
+stabilizer measurement is randomly ±1, but the detector is i
+average expectation value of all measured elements of the
+deterministically zero in the absence of noise). For our two-
+stabilizer group. With our 4-qubit GHZ state, with 4
+dimensionalcolorcodeexperiments,theinitialstabilizersare
+stabilizer generators {XXXX,ZZII,IZZI,IIZZ}, the
+deterministically +1, so each detector is equal to zero if the
+16-element stabilizer group is given by all possible products:
+corresponding stabilizer in the final projective measurement
+{IIII,ZZII,IZZI,IIZZ,ZIIZ,IZIZ,ZIZI,ZZZZ,
+is +1. To construct the concrete hypergraph and hyperedge
+XXXX,XYYX,YXXY,XXYY,YYXX,YXYX,
+weights, we then use Stim [72] to identify the probability p
+j XYXY,YYYY}. We measure the expectation values of all
+(j =1,...,M)ofeacherrormechanismE inthecircuitusing
+j 16 of these operators; for each element, we simply rotate
+a Pauli-channel noise model with approximate experimental
+each logical qubit into the appropriate logical basis and then
+error rates, along with the detectors that are affected by E .
+j calculate the average parity of the four logical qubits in
+To find the most likely physical error, we encode it as
+this measurement configuration. We then directly average
+the optimal solution of a mixed-integer program, a canonical
+all 16 elements equally (with appropriate signs, as as some
+probleminoptimizationwithcommercialsolversreadilyavail-
+of the stabilizer products should have -1 values), and in
+able[78],similartopriorworkinRef.[79]. Weassociateeach
+this way compute the logical GHZ state fidelity. This is an
+errormechanismE withabinaryvariablethatisequaltoone
+j exact measurement of the logical state fidelity [39]. Scaling
+ifthaterroroccured,andzerootherwise. Ourgoalisthento
+to larger states can be achieved by measuring elements
+find the error assignment {0,1}M with maximum total error
+of the stabilizer group at random [39]. To perform full
+probability (alternatively, the error with the minimum total
+tomography in Fig. 3e, we measure in all 34 = 81 bases,
+weight, where the weight of error i is w = log[(1−p )/p ]),
+i i i thereby measuring the expectation values of all 256 logical
+subjecttotheconstraintthattheerrorisconsistentwiththe
+Pauli strings, and reconstruct the density matrix by solving
+measured detectors. To be consistent with the measured de-
+the system of equations with optimization methods.
+tectors,theparityoftheerrorvariablesforallthehyperedges
+connectedtoagivendetectorshouldmatchtheparityofthat
+detector. Concretely, let f be a map from each detector D Sliding-scale error detection
+i
+to the subset of error mechanisms that flip its parity. The Hereweprovideadditionalinformationaboutthesliding-scale
+mostlikelyerroristhentheoptimalsolutiontothefollowing errordetectionprotocolappliedforFigs.3,5,6. Typically,er-
+mixed-integer program: ror detection refers to discarding (or postselecting) measure-
+ments where any stabilizer errors occured. In the context of
+an algorithm, however, discarding the result of an entire al-
+maximize (cid:80) (cid:80) M j=1 log(p j )E j +log(1−p j )(1−E j ) gorithm if just one physical qubit error occurred may be too
+subject to Ej∈f(Di) E j −2K i =D i ∀i=1,...,N wasteful, and one may want to only discard measurements
+E ∈{0,1} ∀j =1,...,M where many physical qubits fail and the probability of al-
+j
+K ∈Z ∀i=1,...,N gorithm success is greatly reduced. For this reason, for the
+i ≥0
+algorithms here we explore error detection on a sliding-scale,
+The objective function evaluates to the logarithm of where one can set a desired “confidence threshold”, where
+the probability of the assigned error configuration, and based on the syndrome outcomes one determines whether to16
+accept a given measurement. Sliding this confidence thresh- est logical operator [82]. In the case of the two-dimensional
+old enables a continuous trade-off (in data analysis) between surface and color codes studied here, d is equivalent to the
+the fidelity of the algorithm and the acceptance probability. linear dimension of the system [24].
+Whensliding-scaleerrordetectionisapplied,inallapplicable Following this definition, quantum codes of distance d can
+caseswealsoapplyerrorcorrectiontoreturntothecodespace. detect any arbitrary error of weight up to d−1. Such errors
+Weapplysuchasliding-scaleerrordetectionforthecolor- cause stabilizer violations, indicating that errors occurred.
+code logical GHZ fidelity measurements in Fig. 3d. One pos- Postselectingontheresultswithnosuchstabilizerviolations
+siblemethodwouldbetodiscardmeasurementsbasedonthe correspondstoperformingerrordetection,whichprotectsthe
+number of detected stabilizer errors. However, this is subop- quantum information up to d−1 errors at the cost of posts-
+timal, both because on the color code a single physical qubit election overhead. Conversely, codes can correct fewer errors
+errorcanresultfromanywherebetween1and3stabilizerer- than they detect (but without any postselection overhead).
+rors, and also because errors deterministically propagate be- The correction procedure brings the system back to the clos-
+tween codes during the transversal CNOT gates, such that a est logical state (codeword); thus, if more than d/2 errors
+single physical error on one code can lead to detected errors occur, theresulting state may becloser to acodeword differ-
+onallcodes,butwhicharestillallcorrectableerrors. Assuch, ent from the initial one, resulting in a logical error [82]. For
+we perform the sliding-scale error detection utilizing the cor- thisreason,codesofdistancedcancorrectanyarbitraryerror
+related decoding technique, and set the confidence threshold ofweightupto(d−1)/2(roundeddownifdiseven[24]). The
+as a threshold weight of the overall correction weight on the process of decoding refers to analyzing the observed pattern
+decoding hypergraph. For example, in the color code GHZ of errors and determining what correction to apply to return
+experiment, a stabilizer error on all 4 logical qubits which is back to the original code state and undo the physical errors
+just consistent with a single physical qubit error that propa- created. Inmanycases,suchaswiththe2Dsurfaceandcolor
+gated to all 4 logical qubits, is in fact a low-weight (or, high- codes,onedoesnotneedtoapplythecorrectioninhardware
+probability) error as it corresponds to just a single physical (physicallyflippingthequbits);insteaditissufficienttoundo
+qubiterror. Iftheweightofhypergraphcorrection(inversely anunintendedX /Z operatorthatwasappliedbyhardware
+L L
+relatedtologoftheprobabilitythatagivenerrormechanism errors by simply applying a “software” X /Z operator [24],
+L L
+would have occurred leading to the observed syndrome out- also described as Pauli frame tracking [83].
+come)isbelowthecut-offthresholdweight,thenthemeasure- As the size of an error correcting code and the corre-
+ment is accepted; otherwise, it is rejected. For each thresh- sponding code distance is increased, so are the opportunities
+old we then calculate the average algorithm result (y-axis of for errors to occur as the number of physical qubits in-
+Fig. 3d), as well as the fraction of accepted data (x-axis of creases. This leads to a threshold behavior in quantum
+Fig. 3d). error correction: if the density of errors p is above a (pos-
+In Fig. 5 with [[8,3,2]] codes, for 3, 6, 24, and 48 logical sibly circuit-dependent) characteristic error rate p , then
+th
+qubits we apply our sliding-scale detection simply as given increasing code distance will worsen performance. However,
+bythetotalnumberofstabilizererrorsdetected,althoughas if p < p , then increasing code distance will improve
+th
+illustrated above this can likely be improved by considering performance [24]. Theoretically, since one requires (d+1)/2
+which stabilizer error patterns are more likely to cause an errors to create a logical error, the logical error rate will be
+algorithmic failure. For the 12 logical qubits, in order to exponentially suppressed as ∝ (p/p )(d+1)/2 at sufficiently
+th
+haveamorefine-grainedsliding-scale,foreachofthe24 =16 low error rates [24]. The performance improvement with
+possible stabilizer outcomes we calculate the XEB to rank increasing code distance, observed for the preparation and
+the likelihood that each of the observed stabilizer outcomes entangling operation in Fig. 2, implies that we surpass
+leads to an algorithmic failure, and then use this ranking the threshold of this circuit. We note that in this regime,
+when deciding whether a given measurement is above/below improving fidelities by e.g. a factor of 2x can then lead
+the cut-off threshold. In Fig. 6b we set the threshold by to an error reduction of 24 = 16x for the distance-7 code
+the number of stabilizer errors, and in Fig. 6d, to have studied, and further exponential suppression with increasing
+more fine-grained sliding-scale information we take different code distance. This rapid suppression of errors with reduced
+subsets of stabilizer outcome events that are all below the errorrateandincreasedcodedistanceisthetheoreticalbasis
+thresholdofallowednumberofstabilizererrors,andcalculate for realizing large-scale computation. We emphasize that
+the y-axis (Pauli expectation value) and x-axis (purity) for thresholds can be circuit-dependent, as discussed in detail in
+all of them. Broadly, there are many ways to perform this the surface code section below.
+sliding-scale error detection, and this can be useful both
+as continuous trade-offs between fidelity and acceptance Fault-tolerance and transversal gates. A common definition
+probability,aswellasforuseintechniquessuchaszero-noise of fault-tolerance in quantum circuits [82] (which we use in
+extrapolation in data analysis (Fig. 6d). thiswork)isthataweight-1error(i.e. anerroraffectingone
+physical qubit), cannot propagate into a weight-2 error (now
+Overview of QEC methods affecting two physical qubits) within a logical block. This
+Here we provide a brief overview of key QEC methods used property implies that errors cannot spread within a logical
+in our work. block, and thereby prevents a single error from growing un-
+controllably and causing a logical error.
+Code distance, decoding, and thresholds. [[n,k,d]] notation Distance-3codes,whichareofsignificanthistoricalimpor-
+describes a code with a number of physical qubits n, a num- tance [3, 84], can correct any weight-1 error. Fault-tolerance
+ber of logical qubits k, and a code distance d. The code is particularly important for these codes, since otherwise a
+distancedsetshowmanyerrorsacodecandetectorcorrect. weight-1errorcanleadtoaweight-2errorandtherebycause
+ThecodedistanceistheminimumHammingdistancebetween alogicalfault. Animportantcharacteristicofafault-tolerant
+valid codewords (logical states), i.e. the weight of the small- circuitthatusesdistance-3codes[82]isthat(inthelowerror17
+rate regime), physical errors of probability p lead to logical were larger during this measurement and are dominating the
+errors with probability ∝ p2. We emphasize that the notion error budget here.
+offault-tolerancereferstocircuitstructuringtocontrolprop-
+agation of errors, but a circuit can be fault-tolerant with low Surface code and its implementation. In 2D planar ar-
+fidelity, or non-fault-tolerant with high fidelity. For example, chitectures, such as those associated with superconducting
+even if a weight-1 error can lead to a weight-2 error, but the qubits [6, 85], stabilizer measurement is the most important
+code has high distance, or if this error propagation sequence buildingblockoferror-correctedcircuits[24]. Insuchsystems,
+ispossiblebuthighlyunlikely,thenthispropertymaynotbe stabilizersneedtobeconstantlymeasuredinordertocorrect
+of practical importance (for this reason definitions of fault- qubitdephasingandincreasecoherencetime,asdemonstrated
+tolerance may vary). In practice, the goal of QEC is to exe- recently [6]. Logic operations are implemented by changing
+cute specific algorithms with high fidelity, and fault-tolerant stabilizermeasurementpatterns,enablingrealizationoftech-
+structuringofacircuitisoneofmanytoolsinthedesignand niques such as braiding [24] and lattice surgery [86]. Similar
+execution of high-fidelity logical algorithms. techniques can be used to move logical degrees of freedom
+Transversalgates,definedhereasbeingcomposedofinde- in order to implement nonlocal logical gates [23]. Due to
+pendent gates on the qubits within the code block (i.e., en- this gate execution strategy, d rounds of stabilizer measure-
+tangling gates are not performed between qubits within the mentarerequiredforeachentanglinggateforensuringfault-
+same code block) [42], constitute a direct approach to en- tolerance [24].
+sure fault-tolerant structuring of a logical algorithm. Since Neutral atom quantum computers feature different chal-
+transversal gates imply performing independent operations lengesandopportunities. Specifically,theyfeaturelongqubit
+on the physical constituents of a code block, errors cannot coherence times (T >1s), which can be further increased to
+2
+spreadwithintheblock,andfault-toleranceisguaranteed. In the scale of 10 - 100s with well-established techniques [68].
+the present work, all logical circuits we realize (following the By using the storage zone, qubits can be idly, safely stored
+logical state preparation) are fault-tolerant, as all logical op- for long periods without repeated stabilizer measurements.
+erationsweperformaretransversal. Note,inparticular,that Hence,fromapracticalperspectiveincreasingqubitcoherence
+eventhoughthetransversalCNOTallowserrorstopropagate byusingalogicalencodingdoesnotprovideimmediategains
+between code blocks, this is still fault-tolerant as it does not inimprovingquantumalgorithms,andthegainswillbefrom
+lead to a higher weight error within the block, and thereby a improving the fidelity of entangling operations. Moreover,
+single physical error can neither lead to a logical failure nor logicgatesandqubitmovementdonothavetobeperformed
+analgorithmicfailure. Importantly,thelargefamilyofcodes with stabilizer measurements. Instead, they can be executed
+referredtoasCalderbank-Shor-Steane(CSS)codesallhavea with nonlocal atom transport and transversal gates. Since
+transversal CNOT [2], all of which can be implemented with such transveral gates are intrinsically fault-tolerant, they do
+the single-step, parallel-transport approach here. notnecessarilyrequiredroundsofcorrectionaftereachoper-
+Although all the logical circuits we implement are fault- ation. Even syndrome measurement may be better executed
+tolerant, the logical qubit state preparation is fault-tolerant in certain cases by techniques such as Steane error correc-
+for our d = 3 color code (Figs. 3,4) and d = 3 surface code tion[76](similartoourancillalogicalflagwithcolorcodesas
+(part of Fig. 2), but is non-fault-tolerant for the state prepa- usedinFig.3)asopposedtorepeatedstabilizermeasurement.
+ration of our d=5,7 surface codes and [[8,3,2]] codes. Thus, For these reasons, the transversal CNOT is among the most
+all of our experiments with the d = 3 color codes are fault- important building blocks in error-corrected circuits. Hence,
+tolerantfrombeginningtoend,andsotheentirealgorithmis weherefocusonimprovingthetransversalCNOTbyscaling
+fault-tolerant and theoretically has a failure probability that code distance.
+scales as p2. However, we note that having a fault-tolerant Specifically, we use the so-called rotated surface code [6],
+algorithm also does not imply that errors do not build up whichhascodeparameters[[d2,1,d]]. Ourdistance-7surface
+during execution of the circuit. For this reason deep circuits codes(asdrawninFig.2d)arecomposedof49physicaldata
+requirerepetitiveerrorcorrection[6,85]toconstantlyremove qubits, with 24 X stabilizers (light blue squares) and 24 Z
+errorsandcontinuouslybenefitfromthe,e.g.,p2 suppression. stabilizers (dark blue squares), and 1 encoded logical qubit
+Our logical GHZ state theoretically has a failure probabil- describedbyanticommutingweight-7operators,thehorizon-
+ity scaling as p2. Nevertheless, the error build-up (increasing tallyorientedX andtheverticallyorientedZ . TheX and
+L L
+p) during the operations of the circuit and the spreading Z stabilizerscommutewiththeX andZ logicaloperators,
+L L
+of errors through transversal gates, limits our logical GHZ allowingonetomeasurethestabilizerswithoutdisturbingthe
+fidelity to 72%. This is consistent with numerical modeling. underlyinglogicaldegreesoffreedom. Inourexperiments,we
+Similar to the surface code modeling (ED Fig. 4) we use prepare one surface code in |+ ⟩ and one surface code in
+L
+empirical error rates consistent with 99.4% two-qubit gate |0 ⟩. In the first code, this is realized by preparing all phys-
+L
+fidelity as well as roughly 4% data qubit decoherence error ical data qubits in |+⟩, thereby preparing an eigenstate of
+(including SPAM) over the entire circuit. We simulate the X andthe24X stabilizers,andthenprojectivelymeasuring
+L
+experimentalcircuit(includingtheFTstatepreparationwith the 24 Z stabilizers with 24 ancilla qubits (Fig. 2d red dots)
+the ancilla logical flag) and measurements of all 16 elements using four entangling gate pulses [24]. The second code is
+ofthestabilizergroup(seedirectfidelityestimationsection), prepared similarly, but with all physical qubits initialized in
+and extract a simulated logical GHZ fidelity of 79%. This is |0⟩,thuspreparinganeigenstateofZ andthe24Z stabiliz-
+L
+slightly higher than our measured 72% logical GHZ fidelity, ers,andthenprojectivelymeasuringthe24X stabilizerswith
+possibly originatingfromimperfectexperimentalcalibration. 24 ancillas. The CNOT is directly transversal because these
+This modeling indicates that our logical GHZ fidelity is two surface code blocks have the same orientation, and does
+limited by residual physical errors, which will be reduced not require rotation of the lattice to implement a H. The
+quadratically as p2 with reduction in physical error rate p, projective measurement of the ancillas defines the values of
+in particular by reducing residual single-qubit errors which the stabilizers. During the transversal CNOT, the values of18
+the stabilizers are copied onto the other code as well, and is parity oscillations. In the language of stabilizers, the parity
+tracked in software. oscillation amplitude is given by the average of ⟨XX⟩ and
+Since we only perform a single round of stabilizer mea- −⟨YY⟩ [87]. With the surface code we cannot conveniently
+surement, our state preparation scheme is non-fault-tolerant measuretheY operatorsfault-tolerantly(andiswhyweuse
+L
+(nFT) for the d = 5,7 codes. Consider, for instance, the color codes for programmable Clifford algorithms and full
+case when all stabilizers are defined as +1, and no errors are tomography, see next section). For this reason, we estimate
+presentinthesystem,butanancillameasurementerrorinthe the logical coherences as ⟨X X ⟩, which we then average
+L L
+middleofthesurfacecodelatticeyieldsastabilizermeasure- with the populations for calculating the Bell pair error. To
+ment = -1. Correction then causes a large-weight pairing of supportthevalidityofthisanalysis,wecaninsteadcalculate
+this apparent stabilizer violation to the boundary [4]. Hence alowerboundontheBellstatefidelity[87],whichalsoshows
+thissingleancillameasurementerrorcanleadtoseveraldata the same improvement in performance as we increase code
+qubit errors, resulting in nFT operation. The d = 3 code distance (ED Fig. 4d).
+initialization is a special case which does not suffer from this
+issue [38]. Higher-order considerations about fault-tolerance Correlated decoding in the surface code. Following the above
+givenbygateorderingduringstabilizermeasurementcanalso discussion, we provide additional insights related to the cor-
+be considered [6]. related decoding in the case of the surface code transversal
+TheeffectofthesenFTerrorsfromnoisysyndromeextrac- CNOT. Consider a circuit where perfect (noiseless) surface
+tion is to cause X physical errors on the |+ ⟩ state, and Z codes are initialized, a transversal CNOT is executed, and
+L
+physical errors on the |0 ⟩ state. Thus in performing just then projective readout is performed. If errors occur before
+L
+statepreparationandmeasurement,thepresenceoftheseer- the transversal CNOT, then these errors can propagate; e.g.,
+rorswouldnotbedirectlyapparent,astheseerrorscommute anXphysicalerroronthecontrollogicalqubitwillpropagate
+with measuring the |+ ⟩ in the X-basis and |0 ⟩ in the Z onto the target logical qubit, and thereby double the density
+L L
+basis. As such this circuit would not be a good benchmark of errors on the target logical qubit. By multiplying the
+of surface code state preparation. Conversely, the transver- projectivelymeasuredZstabilizersofthetargetlogicalqubit
+sal CNOT experiment is sensitive to the various aspects of with those of the control logical qubit, the propagation is
+the circuit and a good probe of performance. Since we mea- undone. Now the target logical qubit only has to decode its
+sure the Bell state in both the X1X2 and Z1Z2 bases, the original density of X errors. The same considerations can be
+L L L L
+nFT errors in both bases will propagate through the logical madeforZerrorsoriginatingonthetargetlogicalqubitthat
+CNOTandcauseerrorsonbothlogicalqubitsinboththeX propagate onto the control logical qubit. However, if there
+and Z bases. For these reasons, unlike a surface code SPAM are errors after the transversal CNOT, then multiplying
+measurement, this experiment is a good probe of logical per- the stabilizers instead doubles the density of such errors.
+formance. Infact,theeffectofthesenFTerrorsissuchthatif Thus, the optimal decoding strategy if errors are only after
+wejustapplyconventionaldecodingwithineachlogicalblock, the transversal CNOT is to perform independent matching
+then we find that the Bell state degrades substantially with withinbothcodes. Thegeneralcasewhereerrorsarepresent
+increased code distance (Fig. 2d). both before and after the transversal CNOT corresponds to
+The effects of this nFT preparation are suppressed (but neither case, and is modeled by our decoding hypergraph
+are not entirely removed) by using the correlated decoding that has edges and hyperedges connecting the two logical
+technique. For example, consider a nFT-induced apparent qubits, with edgeweights informed by our experimental error
+stabilizerviolationtotheleftofthemiddlelineinthelattice model. Fig. 5 explores decoding performance with different
+of the d = 7 |+ ⟩ state, corresponding to a chain of 3 phys- values of the scaled weights of the edges and hyperedges
+L
+ical X errors to the boundary. These errors will propagate that connect the stabilizers of the two logical qubits. These
+throughthelogicalCNOTontothesecondlogicalqubit,and results illustrate that the correlated decoding is robust (but
+affect the independent measurement of bothlogical qubits in not completely insensitive) to the nFT errors associated
+the Z basis when probing the Z1Z2 stabilizer. When de- with ancilla measurement errors. This feature would also be
+L L
+coded independently, if another single X error occurs on the recoveredbythesimplermultiplicationdecoder,whichwould
+first block after the CNOT moving the stabilizer violation to be entirely insensitive to errors from ancilla measurement,
+the right of the middle line, becoming a chain of 4 X phys- but however is more sensitive to errors after the CNOT.
+ical errors, this will cause an incorrect pairing and lead to Specifically, ED Fig. 5c shows that our optimized decoder
+an independent X1 error on this code only and thereby cor- is not simply a “multiplication decoder” as the ancilla
+L
+rupt the Z1Z2 stabilizer, and would correspond to a total measurement values indeed contribute to the correction
+L L
+weight-6 correction between the two codes. However, when procedure and make the correlated decoding more robust
+decodedjointlywithcorrelateddecoding,theseerrorscanbe to decoder parameters. For a given logical circuit, our
+effectivelydecodedsincetheywillappearonthestabilizersof correlated decoding procedure generates a decoding hyper-
+bothlogicalqubits. Inthisexample,thelowestweightpairing graph which we then solve using most likely error methods,
+would remove this chain of 3 X errors from both codes, and which is done here for both surface code and color code
+leave only the 1 remaining X error on the first block, which experiments, and can generically be applied to any stabilizer
+can also successfully be decoded (total pairing weight here is codes and Clifford circuits [75]. More theoretical details and
+only 2). Our correlated decoding technique is thus essential discussionofcorrelateddecodingwillbepresentedinRef.[80].
+to our observation of improved Bell performance with code
+distance. 2D color codes. Two-dimensional color codes are topological
+Finally, we elaborate on our evaluation of Bell pair codes,whicharesimilartosurfacecodes[88]. Oftenportrayed
+error. Bell state fidelity is given by the average of the inatriangulargeometry,thecolorcodesusedhereareatiling
+populations and the coherences, which for physical qubits of three colors of weight-4 and weight-6 stabilizers, with X
+L
+canbemeasuredastheZZ populationsandtheamplitudeof and Z operator strings running along the boundary of the
+L19
+code [88]. In this work we study two-dimensional d=3 color statesandCliffordgatescanbesimulatedinpolynomialtime
+codes, as portrayed in Fig. 3a, which only contain weight-4 duetotheGottesman-Knilltheorem[44]. Thiscanbeunder-
+stabilizers given by the products of X and Z on the qubits stood as stabilizer tracking: for example, consider a 3-qubit
+of each colored plaquette. This d = 3 color code is identical system where a stabilizer of the state is X ⊗I ⊗I, where
+to the 7-qubit Steane code. However, we emphasize that the X stabilizes the |+⟩ state and I is the identity. Applying
+techniques used here directly apply to larger-distance color two CZ entangling gates CZ ⊗ CZ transforms this sta-
+1,2 1,3
+codes [89]. bilizer to X ⊗Z ⊗Z, since an X flip before the CZ simply
+Although the color codes are similar to surface codes, an changes whether a Z flip will be applied to the other qubits.
+important difference is that in the color code, the X and Z EventhoughCliffordcircuitscreatesuperpositionandentan-
+stabilizers lie directly on top of the same qubits (as opposed glement between qubits, the N initial stabilizers of the state
+tobeingonduallatticeswithrespecttoeachother),andsim- can simply be tracked as they propagate through the circuit
+ilarly the X and Z operators lie on top of each other (as (so-calledoperatorspreading[91]),andtherebysimulationof
+L L
+opposed to propagating in the orthogonal directions on the the circuit can be easily accomplished.
+surface code). In other words, the operators here are sym- The effect of non-Clifford gates, however, is significantly
+metric and related by a global basis transformation. This more complex. For example, passing the stabilizer X⊗I⊗I
+has important consequences for the allowed transversal gate throughaCCZmapsintoasuperpositionofPaulistrings,i.e.
+set [41, 90]. In particular, although the surface code techni- X⊗I⊗I →1/4(X⊗I⊗I+X⊗Z⊗I+X⊗I⊗Z−X⊗Z⊗Z),
+cally has a transversal H which transforms X ↔ Z , it re- as an X flip now changes whether a CZ operator will be
+L L
+quires aphysical90-degree rotationof the code block. While applied on the other qubits, resulting in 4x more operators
+such lattice rotations are possible using atom motion tech- to track after the single CCZ. (The CZ operator matrix is
+niques,formanycircuitsitisinconvenient. Conversely,inthe simplyequalto1/4[I⊗I+Z⊗I+I⊗Z−Z⊗Z]). Thiscauses
+color code H is transversal: it directly exchanges X ↔ Z not only operator spreading, but also so-called operator
+L L
+as well as the X and Z stabilizers. This difference is even entanglement[91]. Asweapplyadditionalnon-Cliffordgates,
+more important for the transversal S gate which is possible the number of operators to track will grow exponentially,
+for the color code. Here, transversal S exchanges X ↔ Y andeventuallywillbecomecomputationallyintractable. E.g.
+L L
+(where Y is given by the product of X and Z which lie state-of-the-art Clifford + T simulators can handle roughly
+L L L
+on top of each other) as intended, and the X stabilizer of a 16 CCZ gates [49]. This is the basis behind our complex
+given plaquette returns back to itself by multiplying the Z sampling circuits, where the 48 CCZs on the 48 logical
+stabilizer of that same plaquette. (This is in contrast to the qubits create a high degree of scrambling and magic (defined
+surface code, which does not have a transversal S, where the below), rendering Clifford + T simulation impractical.
+Y operatorisaproductofhorizontallypropagatingX and
+L L
+vertically propagating Z [24].) Since the color code has the [[8,3,2]] circuit implementation
+L
+entire transversal gate set of {H,S, CNOT} and also does Here we provide additional detail about our [[8,3,2]] circuit
+not require tracking any lattice rotations, it is well-suited to implementations. The [[8,3,2]] code blocks are initialized in
+exploration of programmable logical Clifford algorithms. the |− ,+ ,− ⟩ state with the circuit in ED Fig. 6, which
+L L L
+For fault-tolerant preparation of the d = 3 color code we canbeunderstoodaspreparingtwo4-qubitGHZstates(cor-
+useamodifiedversionoftheschemesummarizedinRef.[38], responding to [[4,2,2]] codes [92]), i.e.
+where instead of the 8-gate encoding circuit, we use a 9-gate GHZ1,3,5,7(cid:78) GHZ2,4,6,8, and subsequently entangling them
+Z X
+encodingcircuitthatismoreconvenientlymappedtospecific as illustrated in ED Fig. 6a (as well as applying Z gates). In
+atommovementsinoursystem(correspondingtographstate our circuit implementations, for system sizes of 3 to 24 logi-
+preparation similar to Ref. [7]), followed by a transversal calqubitsbothforsamplingandtwo-copymeasurements,we
+CNOT with an ancilla logical flag. The logical SPAM prepare 8 blocks encoded over 64 physical qubits. For the 48
+fidelity is then calculated as the probability of observing logical qubit circuit (128 physical qubits total) we encode 8
+|0 ⟩ after decoding. We note that in Fig. 3 we could also blocks and entangle them, and then drop them into storage;
+L
+have made a 5-qubit GHZ state but made a 4-qubit GHZ then,wepickup64newphysicalqubitsfromstorage,encode
+state for simplicity of performing full tomography. In Fig. 4, theminto8blocksintheentanglingzoneandentanglethem.
+when Bell state fidelities with feedforward are reported we Finally,webringtheoriginal8blocksfromstorageandentan-
+estimatethelogicalcoherencesastheaverageof⟨X X ⟩and gle them with the second group of 8 blocks in the entangling
+L L
+−⟨Y Y ⟩,whichwethenaveragewiththeZ Z populations zone (ED Fig. 6) (see Supplementary Movie).
+L L L L
+(notplotted)forcalculatingtheBellpairfidelity. Finally,we The transversal gate set of the [[8,3,2]] code is enabled
+note that the feedforward Bell state in Fig. 4e could also be as follows (see also Refs. [16, 17, 26, 27]). The transversal
+performed with a software Z rotation on either one of the CNOTbetweenblocksimmediatelyfollowsfromthefactthat
+L
+two qubits allowing one to correct to the appropriate Bell the [[8,3,2]] code is a CSS code. In-block CZ gates between
+state, but here we do the feedforward S on both qubits to two logical qubits L and L (CZ ) can be realized by
+i j Li,Lj
+test our feedforward capabilities; this technique is directly S, S† gates on the face corresponding to logical qubit L .
+k
+compatible with performing magic state teleportation [24]. For example, consider applying the pattern of S, S† gates
+to the top face in Fig. 5, i.e., S S†S†S , which transforms
+1 3 5 7
+Cliffordandnon-Cliffordgates,anduniversality. 2Dtopolog- X =X X X X to X′ =−Y X Y X , which is equal to
+L1 1 2 3 4 L1 1 2 3 4
+ical codes such as the surface and color codes have transver- X′ =X Z ,andthesameappliestogiveX′ =X Z ;
+L1 L1 L2 L2 L2 L1
+sal implementation of Clifford gates (e.g., {H,S, CNOT}). i.e.,aCZisrealizedbetweenlogicalqubits1and2. Thispro-
+This gate set is not universal, i.e. it cannot alone be used cedure can also be used to understand why the pattern of T,
+to realize an arbitrary quantum computation, and requires a T† realizes a CCZ between the three encoded qubits. CCZ
+non-Clifford gate such as {T, CCZ} for achieving universal gates should map X to X ⊗CZ . By applying the
+L3 L3 L1,L2
+computation. Moreover,circuitscomposedsolelyofstabilizer pattern of T, T† in Fig. 5a, each X face maps to itself mul-20
+tiplied by a pattern of S, S†, e.g. X = X X X X maps Z} that apply -1 signs to the bitstrings, but is made non-
+L3 1 3 5 7
+to X′ = X S S†S†S , or then X′ = X ⊗ CZ . diagonal by the application of CNOTs, which permute bit-
+L3 L3 1 3 5 7 L3 L3 L2,L3
+This happens for all three X faces, thereby realizing a CCZ strings. Since this bitstring permutation does not break the
+L
+gate. Finally we detail the permutation CNOT, which was IQP framework, these circuits are equivalent to an effective
+also developed in Ref. [27]. Physically permuting atoms to IQP circuit, but which is significantly more complex: e.g.,
+swap qubits 4 ↔ 8 and 3 ↔ 7 takes X = X X X X to circuits with 48 CCZs and 96 CNOTs map to effective IQP
+L1 1 2 3 4
+X′ = X X X X or instead X′ = X X (also by mul- circuits with roughly 1000 CCZ gates. Nevertheless, since
+L1 1 2 7 8 L1 L1 L2
+tiplying the global X stabilizer), and similarly it can be seen IQPcircuitsareawell-understoodframeworkwecandiscuss
+by tracking the qubit permutations that Z′ = Z Z , i.e. our circuit properties with this toolset.
+L2 L2 L1
+realizing a CNOT. Finally, although these 3D codes do not WeexperimentallyprobethesecircuitswiththeXEB[18],
+have a transversal H, as they are CSS codes they can be ini- defined as XEB = 2NLΣ
+i
+p(xi
+L
+)q(xi
+L
+)−1, where N
+L
+is the
+tialized and measured in either the X or Z basis, effectively number of logical qubits, q(xi) is the measured probability
+L
+allowing H gates at the beginning or end of the circuit. distributionforourlogicalqubitsandp(xi)isthecalculated
+L
+In-block logical entangling gates are applied block-by- probability distribution; here, we normalize the XEB by its
+block, and any in-block gate combination can be realized. ideal value such that the XEB for the noiseless circuit is 1.
+For conceptual simplicity we apply only two particular local Intypicalcases,ifnoiseoverwhelmsthecircuit,themeasured
+Raman patterns in layers. The first is the gate combination distributionwillbeuniform[18],andthemeasuredXEBwill
+CCZ ·CZ ·CZ ·CZ ·Z ·Z ·Z be 0.
+L1,L2,L3 L1,L2 L1,L3 L2,L3 L1 L2 L3
+, given by applying T† on the entire physical qubit The IQP circuits are a good setting for quantum-
+block, and the second gate combination we apply is advantage-type experiments, as the bitstring distribution of
+CCZ ·CZ ·CZ ·Z , given by applying T IQPcircuitswithrandomlyapplied{CCZ,CZ,Z}gates(ran-
+L1,L2,L3 L2,L3 L1,L3 L3
+onthetoprowandT† onthebottomrow. Inourcircuitswe domdegree-3polynomials)isknowntobeclassicallyhardto
+alternate layers of in-block transversal entangling gates and simulate [20, 98]. In Ref. [99], we show that the ensemble of
+out-block transversal CNOTs, entangling logical blocks on random hypercube IQP circuits (hIQP), whose instances are
+up to 4D hypercubes (see ED Fig. 6) [19, 93, 94]. We keep experimentally explored here, converges to the uniform IQP
+thecontrolandtargetqubitsthesamethroughoutthecircuit ensembleasthedepthandsizeofthehypercubeisincreased.
+for conceptual simplicity, allowing the local physical H gates In ED Fig. 8a, we show that hIQP circuits with random in-
+on the target qubits to be compiled with the in-block gate block operations and randomized control-targets on the out-
+layers, but the control-target direction can also be chosen blockCNOTlayers(realizingthehypercube)anti-concentrate
+arbitrarily. We ensure that in-block logical entangling gates quickly as the dimension of the hypercube is increased, with
+are applied such that they do not trivially commute through XEBeventuallyreachingtheuniform-IQPvalueof2. Wealso
+and cancel with earlier entangling gate applications. As find that the presence of non-Clifford CCZ gates, which are
+an experimental note, we note that for the Clifford states criticalforthecomputationalhardnesshere,furtherimproves
+realized in the other parts of this work, stabilizers take on anti-concentrationproperties,asweobservetheidealXEBof
+values of either +1 or -1 (due to, e.g., use of physical π/2 experimental circuits approach 2 as well, even without much
+rotations instead of H), which is then simply re-defined randomization.
+in software. Since for our [[8,3,2]] circuits we implement Moreover, XEB turns out to be a better benchmark
+non-Cliffords on the physical level, it is important to ensure for IQP circuits than for generic random circuit sampling
+all stabilizers are initialized and maintained as +1; e.g., if settings (such as Haar-random circuits) [100–102]. For IQP,
+a Z stabilizer is -1, then the logical CCZ implementation XEB is close to the many-body fidelity and the difference
+sends the X stabilizer expectation value to 0. This can be canbetheoreticallyboundedunderreasonablenoiseassump-
+understood as a physical X √ on a single site transforming to tions [99]. Intuitively, this fact is related to the diagonal
+a superposition (X +Y)/ 2 by physical T’s, going into an structure of the IQP circuits, which allows XEB to capture
+equal superposition of X stabilizer being +1 and -1. errors in a manner closer to fidelity, despite being defined
+only in the computational basis. In other words, a Z error
+Classically hard circuits with [[8,3,2]] codes willalwayscorrupttheX basismeasurement,andanX error
+Our implemented circuits are equivalent to Instantaneous (except one immediately before measurement) will create
+QuantumPolynomial(IQP)circuits[95],whichgivesatheo- new Z errors that also corrupt the X basis measurement.
+reticalbasisforunderstandingwhyourcircuitscouldinprin- Thus, in the fully postselected regime, where errors at the
+ciple be classically hard to simulate, for which we also pro- end of the circuit are well-described by logical errors, we
+videnumericalevidenceofso-calledanticoncentration[96,97]. expect the XEB to be a good measure of fidelity. We further
+IQPcircuitsaredefinedasinitializing|+⟩⊗n onnqubits,ap- note that, in addition to the efficient generation of complex
+plying a diagonal entangling unitary such as those composed IQP circuits here, the [[8,3,2]] gate set presented here can
+by{CCZ,CZ,Z},andthenmeasuringintheX-basis[20,95]. realize arbitrary IQP circuits composed of {CCZ, CZ, Z}
+Auniformsuperpositionof2nbitstringsiscreated,thediago- gates [103]. The in-block {CCZ, CZ, Z} operations can be
+nalgatesapply-1signsinacomplicatedfashiontotheexpo- applied to any groupings of qubits by noting that combining
+nentially many bit strings, and then “undoing the superposi- the in-block and out-block CNOTs allow us to compose
+tion” with the final H before measurement now results in an arbitrarytransversalSWAPoperationsoftargetedindividual
+intricate “speckle” interference pattern [18]. Sampling from logical qubits between different blocks.
+theoutputdistributionofthisspecklepatterncanbedoneef-
+ficientlyonaquantumdevicethatimplementsthecircuit,but Simulation of bitstring probabilities
+isexponentiallycostlyonaclassicaldeviceforcertainchoices To calculate the logical bitstring probabilities necessary for
+of IQP circuits [20]. The transversal gate-set of the [[8,3,2]] evaluating XEB and benchmarking our circuits, we employ
+code, as described above, contains diagonal gates {CCZ, CZ, a hybrid simulation approach combining wavefunction and21
+tensor-network [104] methods. It works best only when per- Physical qubit circuit implementations
+forming all of the entangling gates of the hypercube a single To compare our logical qubit algorithms with analogous cir-
+time, and relies on the fact that the final round of CNOTs cuitsonphysicalqubits,weworkoutaconcreteimplementa-
+is immediately followed by a measurement, simplifying net- tion of our sampling / scrambling circuits on physical qubits
+workcontraction. Concretely,foraD-dimensionallogicalhy- usingthesamephysicalgateset,Clifford+T,asusedinthe
+percube, the two subsystems consisting of 2D−1 blocks are logical circuit, which we also then attempt to realize exper-
+simulated independently and then the final layer of CNOTs imentally. We replace each [[8,3,2]] block with a 3-physical-
+and in-block operations is combined with the measurement qubit block, decomposing the “in-block” CCZ gates into 6
+outcomes (the bitstring of interest), which results in a con- CNOTs and 7 {T,T†} gates, and implement “transversal”
+traction of two 82D−1 tensors (see ED Fig. 8b). This is a CNOTs directly between the 3-qubit blocks. We note that
+square-root reduction in the memory requirement compared the CZ can be compiled into the CCZ implementation, but
+tothefullwavefunctionsimulationwhichusesO(82D
+)space.
+this has minor effect on our analysis and estimates. These
+physical circuits are complex: 48 qubits with 48 CCZs and
+TheidealXEBvalueiscalculatedbysamplingbitstringsfrom
+228 two-qubit gates (as realized with our logical qubits) de-
+the ideal output distribution and then averaging the corre-
+composesintoaneffective516two-qubitgates(384iftheCZ
+sponding probabilities. The bitstrings are sampled using a
+gates are compiled into the CCZs). In trying to implement
+marginal sampling algorithm, which utilizes the same con-
+these circuits in practice, the build-up of coherent errors re-
+traction scheme described above.
+sulted in a vanishing XEB for our physical circuits. These
+We next consider if the finite XEB scores in this prob-
+experiments made it clear the logical circuit equivalent was
+lem can be easily “spoofed” by foregoing exact simulation of
+greatly outperforming the physical circuit, thereby providing
+the implemented circuit and using a classical algorithm with
+direct evidence that our logical algorithm outperforms our
+fewer resources, similar in spirit to the algorithm introduced
+physical algorithm for this specific sampling circuit.
+in Ref. [100]. For the circuits studied in Fig. 5 of the main
+More quantitatively, with a concrete physical implemen-
+text, containing only a single layer of gates on the hyper-
+tation, we calculate an upper-bound by assuming optimistic
+cube, there is only a single round of CNOTs connecting the
+performance. Weassumeourbest-measuredfidelities: SPAM
+two2D−1-blockpartitions;thus,removingthemfromthecir-
+of 99.4% [8], local single-qubit gate fidelity of 99.91% (ED
+cuitandsamplingfromthetwoindependenthalvesmightnot
+Fig. 2), two-qubit gate fidelity of 99.55% [8], and T = 2s.
+2
+decrease the XEB substantially while reducing the memory
+Wethencountthetotalnumberofentanglinggatepulsesfor
+requirement to
+82D−2
+. In ED Fig. 8c, we study the perfor- theCZgates,thetotalnumberofcompiledlocalsingle-qubit
+manceofthisspoofingattackandfindthattheobtainedXEB gates,andtheestimatedcircuitduration,andusethistocal-
+rapidly decreases, once additional gate layers are introduced, culate the estimate presented in Fig. 5f. We further confirm
+for a particular extension of our circuit. this analysis for small-scale circuit implementations. For a
+The contraction scheme above, utilized both for the ideal short3-qubitcircuit,webenchmarktheXEBforthephysical
+simulation and the XEB spoofing, scales exponentially with circuitas≈0.87,belowtheestimated3-qubitupper-boundof
+the number of qubits. However, the exponent is significantly ≈0.92. We note that in Fig. 5f we plot estimates of physical
+reduced,byutilizingthefactthatthehypercubecircuitscan qubit fidelity and not XEB, but we expect XEB and fidelity
+benaturallypartitionedintosmallerblocks,withonlyasingle to be closely related as discussed previously.
+inter-partitionlayerofCNOT’sattheendofthecircuit. This We note several observations made in comparing physical
+simulationmethodthereforebecomeslessefficientifweintro- and logical implementations of these complex circuits. First,
+duceadditionalCNOTlayers(withinasinglepartition)after empirically it appears that the logical circuit is significantly
+the inter-partition layer, as we estimate in Fig. 5d. Applying more tolerant to coherent errors [48, 108, 109], and under-
+l={0,...,D−1}additionalintra-partitionCNOTlayersforces standing the manifestations of this is a subject of ongoing
+the CNOT tensors in ED Fig. 8b to be blocked into groups investigation. Specifically, it appears that the logical circuit
+of 2l, which results in the execution time to scale roughly as realizes inherently digital operation, where the small coher-
+O(82l /2l), where the numerator comes from the tensor con- ent errors do not significantly shift / distort the bitstring
+distribution, but just reduce the overall fidelity [48, 108] (see
+tractioncomplexityandthedenominatoraccountsforthere-
+e.g. the agreement in ED Fig. 7a). This is in contrast to
+duced number of contractions due to blocking. The explicit
+the physical implementation, where coherent errors are seen
+timesquotedinFig.5dasafunctionofadditionalCNOTlay-
+to dramatically alter the shape of the bitstring distribution,
+ersarebasedontheabovematrix-multiplicationestimateand
+e.g. changing relative amplitudes. Second, we note that we
+fitted such that the depth-1 hypercube time matches 1.44s,
+optimize our [[8,3,2]] circuits only by optimizing the stabi-
+which corresponds to our implementation. In practice, the
+lizer expectation values and not by optimizing the XEB or
+actual run-times might differ due to hardware and software
+two-copyresultdirectly. Whenrunningcomplexcircuits,the
+optimization,andadditionalfactorssuchasthecostoftensor
+stabilizers serve as useful intermediate fidelity benchmarks,
+permutations; however, we expect the general trend to hold.
+Finally, if the 2l blocked tensors were to be stored directly, both for optimizing circuit design and ensuring proper
+thememoryrequirementofthisapproachwouldgrowas82l+1
+,
+execution, especially in regimes where output distributions
+or other observables cannot be calculated. Overall, we find
+recovering the full
+82D
+memory complexity for l=D−1. that these complex circuits appear to perform significantly
+In this work, we use these circuits and XEB results better with logical qubits than physical qubits.
+for benchmarking our logical encoding, which requires the
+ability to simulate these circuits. Future logical algorithm Two-copy measurements
+experimentationcanexplorequantum-advantage[18,47,105– A powerful method to extract various quantities of interest
+107]testswithencodedqubits,aswillbedetailedinRef.[99]. are Bell basis measurements between two copies of the same
+state [21, 22, 51]. First, we use these measurements to cal-22
+culate the purity or entanglement entropy of the resulting string r. The Pauli string σ is of length N, and the ith
+r
+state [7, 21, 51, 110, 111]. Measuring the occurrences of the element is I, X, Z, Y when the target and control qubit at
+singletstate |01⟩ √ −|10⟩ (|11⟩outcomeforourmeasurementsaf- site i read 00, 01, 10, 11, respectively. We convert this result
+2 toadditiveBellmagicviatheformulaB =−log (1−B). We
+terapplyingthefinalpair-wiseentanglingoperations)probes a 2
+use approximately 107 samples to estimate the additive Bell
+the eigenvalue of the SWAP operator sˆ at a given pair of
+i
+magicforeachdataset. Theresultsfortheestimatedadditive
+sites i. This is in turn related to the purity of the state
+by observing that Tr[ρ2] = Tr[Π sˆρ ⊗ρ ] for any sub- Bell magic as a function of the number of non-Clifford gates
+A i∈A i A A applied (circuits shown in ED Fig. 9f) are shown in Fig. 6c.
+system A. Thus, the average purity can be estimated by
+the average parity Tr[ρ2] = ⟨(−1)#observedsinglets⟩ within A, Theseresultsadditionallyleveragethepurityestimatesinthe
+A same dataset, which is used for error mitigation as described
+and thus also the second-order Renyi entanglement entropy
+S (A)=−log Tr[ρ2]. inEq.(13-15)ofRef.[52]. AlladditiveBellmagicdatashown
+2 2 A is with full error detection applied.
+Theentanglemententropycalculationonlyinvolvesthesin-
+The same experiments we perform here can also be
+glet outcomes. By making use of the full outcome distri-
+interpreted as a physical Bell basis measurement. Using this
+bution, we can also evaluate the absolute value of all 4N
+insight, in ED Fig. 9c,d, we show the entanglement entropy
+Pauli strings, from a single data set, where N is the num-
+for different subsystem sizes, when analyzing the data as
+ber of qubits involved in each copy of the state [22]. More
+(cid:81) physical Bell pair measurements, and applying different
+concretely, consider a given Pauli string O = P , where
+i i levels of stabilizer-based postselection. Interestingly, the
+P ∈ {X ,Y ,Z ,I } are individual Pauli operators on site
+i i i i i full-system parity when postselecting on all stabilizers being
+i (and the identity), and a given observed bit string {⃗a,⃗b},
+correct is identical when analyzing the outcomes as either
+where⃗a,⃗b label the outcomes in the control and target copy. a physical or logical circuit. This is because in this limit,
+The rules of reconstructing the Pauli strings through these the results of the physical circuit analysis can be viewed as
+Bell basis bit strings can be worked out through considering taking the (imperfect) logical state and running a perfect
+the computational states that the Bell states are mapped to encoding circuit, hence giving identical results.
+and considering which operators of XX,YY,ZZ have +1 or
+-1 eigenvalue for the various Bell states. We explicitly list Data Availability
+the analysis procedure: for Pauli term X i , we assign parity Thedatathatsupportsthefindingsofthisstudyareavailable
++1 if a i = 0 and −1 otherwise; for Pauli term Y i , we assign from the corresponding author on request.
+parity +1 if a ̸=b and −1 otherwise; for Pauli term Z , we
+i i i
+assign parity +1 if b i =0 and −1 otherwise; for I i we assign Acknowledgements We thank A. Kubica for pointing us
+parity +1 always. The contribution of the bit string {⃗a,⃗b} to the connection between our transversal gate set and IQP
+to |tr(Oρ)|2 is then given by the product of the individual circuits, J. Campo, S. Haney, T. Wong, T. T. Wang, P.
+parities. Stroganov,andespeciallyJ.Amato-Grillforcontributionsin
+We can perform the same analysis as a function of the the development of the FPGA technology and fast CMOS
+amount of error detection applied. As shown in ED Fig. 9a, readout. We gratefully acknowledge useful discussions with
+as more error detection is applied, the distribution of Pauli B. Braverman, H. Briegel, S. Cantu, S. Choi, J. Cong,
+expectation values that are expected to be zero and nonzero M. Devoret, H.-Y. Huang, A. Keesling, H. Levine, A.
+separateapartfurther. Thisalsoprovidesanaturalmethodto Lukin, K. V. Kirk, N. Meister, H. Pichler, H. Poulsen, J.
+performerrormitigationviazeronoiseextrapolation: byper- Ramette, J. Sinclair, D. Tan and all members of the Lukin
+formingsliding-scaleerrordetection,wecanextractthePauli group. We acknowledge financial support from the DARPA
+expectationvaluesquaredforgroupsofPaulistringswiththe ONISQ program (grant number W911NF2010021), the US
+same expected value, as a function of the logical purity. We Department of Energy (DOE Quantum Systems Accelerator
+perform a linear fit of the Pauli expectation value squared Center, contract number 7568717 and DE-SC0021013),
+vs. the logical purity, and extrapolate to purity tr(ρ2) = 1, the Center for Ultracold Atoms (an NSF Physics Frontier
+correspondingtothecaseofzeronoise,toestimatetheerror- Center), the National Science Foundation, the Army Re-
+mitigated values. The choice of a linear fit is motivated by search Office MURI (grant number W911NF-20-1-0082), the
+thefactthatboth|tr(Oρ)|2 and|tr(ρ2)|scalewithpower2of Army Research Office (award number W911NF2320219),
+the density matrix. We expect that more detailed consider- and QuEra Computing. D.B. acknowledges support from
+ations of the noise model, using knowledge about the weight the NSF Graduate Research Fellowship Program (grant
+of each operator, as well as whether detected errors in each DGE1745303) and The Fannie and John Hertz Foundation.
+shotoverlapwithagivenPaulioperator,canfurtherimprove S.J.E. acknowledges support from the National Defense Sci-
+the error mitigation results. ence and Engineering Graduate (NDSEG) fellowship. T.M.
+We can also compute measures of distance from stabi- acknowledges support from the Harvard Quantum Initiative
+lizer states, also known as “magic”, using the additive Bell Postdoctoral Fellowship in Science and Engineering. M.C.
+magic measure in Ref. [52], which only requires O(1) num- acknowledges support from Department of Energy Compu-
+ber of samples and O(N) classical post-processing time. To tational Science Graduate Fellowship under Award Number
+do so, we randomly sample subsets of 4 measured Bell ba- DE-SC0020347. D.H. acknowledges support from the US
+sis bit strings r,r′,q,q′ and calculate their contribution to Department of Defense through a QuICS Hartree fellowship.
+theBellmagicusingthecheck-commutemethodofRef.[52]: J.P.B.A. acknowledges support from the Generation Q G2
+B= (cid:80) r,r′,q,q′ P(r)P(r′)P(q)P(q′)∥[σ r⊕r′,σ q⊕q′]∥ ∞ , with fellowship and the Ramsay Centre for Western Civilisation.
+∈{0,1}2N N.M. acknowledges support by the Department of Energy
+∥[σ r⊕r′,σ q⊕q′]∥
+∞
+being 0 when the two Pauli strings com- Computational Science Graduate Fellowship under award
+mute and 2 otherwise. r⊕r′ denotes bitwise XOR between number DE-SC0021110. I.C. acknowledges support from
+the two bitstrings. P(r) is the probability of observing bit- the Alfred Spector and Rhonda Kost Fellowship of the23
+Hertz Foundation, the Paul and Daisy Soros Fellowship, and
+NDSEG. M.J.G. and D.H. acknowledge support from NSF
+QLCI (award No. OMA-2120757). The commercial equip-
+mentusedinthisworkdoesnotreflectendorsementbyNIST.
+Author contributions D.B., S.J.E, A.A.G., S.H.L., H.Z.,
+T.M., S.E., and G.S. contributed to the building of the
+experimental setup, performed the measurements, and
+analyzed the data. M.C., M.K., D.H., J.P.B.A., N.M., I.C.,
+and X.G. performed theoretical analysis. P.S.R. and T.K.
+developed the FPGA electronics. All work was supervised
+by M.J.G., M.G., V.V., and M.D.L. All authors contributed
+to the logical processor vision, discussed the results, and
+contributed to the manuscript.
+Competing interests: M.G., V.V., M.D.L. are co-founders
+and shareholders and H.Z., P.S.R., T.K. are employees of
+QuEra Computing.
+Correspondence and requests for materials should be
+addressed to M.D.L.24
+a b d
+C ca M m O e S ra Local 53S1/2 r R st y a d te berg Entangling zone 80 total parallel gate sites (up to 160 qubits in parallel)
+FPGA 1013-nm imaging Rydberg 2 um 10 um
+Imaging Rydberg beam beam 1013 nm 35 um
+420-nm objective 6P3/2
+Rydberg beam V ch ac a u m u b m e r Atoms Dichroic PBS G R be a lo a m b m a a n l R 42 y 0 d b n e m rg 20 um Storage zone 2-6 um
+Trapping 5P3/2
+2D local objective Local imaging
+Raman AOD Dichroic 780 nm
+5P1/2
+Raman 100 um
+PBS Static SLM traps 795 nm
+5S1/2 1 Hyperfine
+2D Moving AOD traps 6.8 GHz qubit
+0 T2 > 1s
+c x y x y 20 um
+Global Local 6.8 GHz 420-nm 1013-nm AOD SLM Readout zone
+switch AOM AOM signal AOM AOM traps traps
+TTL TTL 30 um
+Raman AOD AWG RearrangementMoving AWG Raman AWG Rydberg AWG
+AWG (FIFO) & TTL generator 230 um
+Extended Data Fig. 1. Neutral atom quantum computer architecture. a, Experimental layout, featuring optical tools
+including static SLM and 2D moving AOD traps, global and local Raman single-qubit laser beams, 420-nm and 1013-nm
+Rydberg beams, and imaging system for both global and local imaging. b, Level structure for 87Rb atoms, with the relevant
+atomic transitions employed in this work. c, Control infrastructure used for programming quantum circuits, featuring several
+arbitrarywaveformgenerators(AWGs). Inparticular,themovingandRaman2DAODsareeachcontrolledbytwowaveforms
+(one for x axis and one for y axis). An additional AWG is used in first-in-first-out (FIFO) mode for rearrangement before
+the circuit begins, and then the moving AOD control is switched to the Moving AWG. See Ref. [30] for additional SLM and
+pre-circuit rearrangement details, Ref. [8] for additional Rydberg AWG details and Rydberg excitation details, Refs. [7, 62]
+for additional Raman laser and microwave control infrastructure details, and Ref. [7] for additional moving AWG details. All
+AWGs(otherthanrearrangementAWG)aresynchronizedto<10nsjitter. DuringRydberggatesthetrapsarebrieflypulsed
+offbyaTTL.TheFPGAprocessesimagesfromthecamerareal-timeandinthisworksendscontrolsignalstotheRaman2D
+AOD for local single-qubit control. d, Example array layout featuring entangling, storage, and readout zones. Zones can be
+directlyreprogrammedandrepositionedfordifferentapplications,aswellasspecifictweezersitelocations. Tweezerbeamsand
+local Raman control are projected from out-of-plane. The entire objective field-of-view is 400-µm diameter, and consequently
+wedonotexpectorobservesubstantialtweezerdeformationneartheedgesofourprocessor. Duringtwo-qubitRydberggates,
+we place atoms ≲ 2 µm apart within a gate site, and gate sites are separated such that atoms in different gate sites are no
+closer than 10 µm during the gate. At our present n=53 and two-photon Rabi frequency of 4.6 MHz, the blockade radius is
+roughly 4.3 µm, such that adjacent atoms are well-within blockade and distant atoms are well-outside blockade.25
+iterate
+Iteration number
+rotcaf
+elacs
+rewop
+dettiF
+F =2 γB/2π = 24 MHz
+Z
+Raman
+X 5S
+1/2 Raman
+Z
+Raman
+F =1
+2 MHz
+Tone vertical displacement
+etats
+tibuQ
+a d
+Number of local gates
+c
+1
+0
+1
+0
+1
+0
+1
+0
+3.2 µm
+ytilibaborp
+nruteR
+0 C Z(π/2) C Z(π/2) Z(π/2) C
+1 2 f
+0 C Z(π/2) C Z(π/2) Z(π/2) C
+1 2 f
+Y(-π/2) Y(π) Y(-π/2)
+b Global Raman 5µs 3µs 5µs
+Z(π/2) Z(π/2) Z(π/2) Z(π/2)
+Local Raman
+AOD waveform
+Row 1 Row 2 Row n-1 Row n
+C = Random global Clifford
+1 n
+Non-addressed site
+2
+Addressed site 3 Z(π/2) = Local gate
+4
+AOD deflection Calibrate y Calibrate x Calibrate tone
+efficiency position of position of power at each
+correction rows each site site
+Extended Data Fig. 2. Single-qubit Raman addressing. a, 5S hyperfine level diagram illustrating the two possible
+1/2
+implementations of local single-qubit gates: resonant X(θ) (purple) and off-resonant Z(θ) (turquoise) rotations with two-
+photon Rabi frequencies Ω . In this work, we use the Z rotation scheme and are blue-detuned by 2 MHz from the
+Raman √
+two-photon resonance. Due to Clebsch-Gordan coefficients, Ω(cid:101)Z
+Raman
+= − 3ΩZ
+Raman
+. b, Schematic showing the conversion of
+local Z(π/2) into local X(±π/2) gates, where the pulses before (after) the central Y(π) have positive (negative) sign, while
+leaving non-addressed qubit states unchanged. The Gaussian-smoothed local pulses have duration 2.5 µs for π/4 pulses and
+5 µs for π/2 pulses, and are performed on single rows at a time with a 3 µs gap between subsequent gates to allow the RF
+tones in the AODs to be changed (including this, duration is 5-8 µs per row). In this way, arbitrary patterns of qubits, such
+as the example drawn, can be addressed. c, Calibration procedure used to homogenize the Rabi frequency over a 220 µm
+× 35 µm array. The position calibration is illustrated for 80 sites: approximate X(π/2) gates are locally performed and the
+horizontal/verticalpositionofalltonesisscannedinparallelsuchthataGaussianfitreturnstheoptimalalignment. Afterthis,
+powers are iteratively calibrated until the fitted scale factors for the individual RF tones converge to unity. d, Single-qubit
+randomizedbenchmarkingoflocalZ(π/2)gates. Thelocalgatesareinterleavedwithrandomglobalsingle-qubitCliffordgates
+andthefinaloperationC ischosentoreturntotheinitialstate. Eachdatapointistheaverageof100randomsetsofClifford
+f
+gates, and fitting an exponential decay to the return probability quantifies the fidelity F per local gate. Note that we apply
+all51globalCliffordgatesforeachdatapoint,suchthaterrorsfromtheglobalCliffordgates(inadditiontoSPAMerrors)do
+not contribute to the fitted value.26
+0.05
+0.04
+0.03
+0.02
+0.01
+0
+No local Long (10.5 ms)
+beam local illumination
+)8YX(
+rreP
+tibuq
+ataD
+a Single-shot 500us image Conditional
+CCaammeerraa FPGA TTL AOD
+Local Raman
+feedforward
+L
+1
+L
+Atom detection Logical state
+decoding
+FPGA Conditional Local
+decoding local Raman
+pushout
+Local imaging Camera readout
+0 100 600 900
+Time (us)
+e f 1.0 g 0.8
+0.6
+0.4
+0.2
+0.0
+-50 0 50 100
+Relative detuning (MHz)
+rreP
+tibuq
+ataD
+0.8 20-ms exposure
+0.6
+0.4
+0.2
+0.0
+0 5 10 15 20
+Exposure time (ms)
+rreP
+tibuq
+ataD
+b Ancilla qubits Data qubits c
+5P3/2 e e T sh ra if p t light
+780 nm
+5S1/2 g g
+200 ns 400 ns
+Local imaging
+300 ns 300 ns
+Ancilla qubit
+5x depth
+trap depth
+Data qubit
+2x depth
+trap depth
+d
+h
+0.034(5)% per 500us
+Characterization after long local imaging exposure
+error rate
+0.7 0.6
+0.5
+0.4
+0.3
+0.2
+10 20 30
+Data qubit trap light shift (MHz)
+rreP
+tibuq
+ataD
+Camera
+500-us exposure
+exposure
+20-ms exposure
+Exposure
+used = 500 us
+ExtendedDataFig.3. Midcircuit readout and feedforward. a,Single-shot500µslocalimageinthereadoutzone,where
+thepeakcorrespondstoroughly50photonscollectedbytheCMOScamera. b,Atomictransitionandpulsesequenceusedfor
+local imaging of ancilla qubits. The data qubit trap light shift suppresses data qubit errors, in addition to the large spatial
+separation between entangling and readout zones. We avoid quickly losing the readout zone atoms during local imaging by
+usinga5xhighertrapdepth,andwepulsetheancillaqubittrapsandlocalimaginglighttoimagedirectlyonresonancewhile
+avoiding negative effects of large trap light shifts. c, Diagram of components involved in midcircuit readout and feedforward
+steps. Atom detection and logical state decoding occur using the FPGA, which then outputs a conditional TTL to gate
+local Raman pulses performed on logical qubits in the entangling zone. d, Diagram of approximate timings for a midcircuit
+feedforward cycle. First, F = 2 population is pushed out (in 10 µs), and then the remaining F = 1 population is imaged
+locallyfor500µs. The24rowsofpixelscoveringthereadoutzonearereadouttotheFPGAin200µs,afterwhichprocessing
+is performed. Finally, a conditional TTL output based on the decoded state gates on or off local Raman pulses. The whole
+readout and feedforward cycle takes less than 1 ms, and can be sped up in the future by optimizing local imaging and camera
+readout. e-g,Characterizationoferrorprobabilityofdataqubitsduringlocalimaging. e,Dataqubiterrorprobability(fraction
+of population depumped from F =2 to F =1) as a function of local imaging duration out to 20 ms to quantify the effect of
+thelocalimagingbeamondataqubitcoherenceforverylongillumination. f,Dataqubiterrorprobabilityafter20msoflocal
+imaging,asafunctionofdetuningofthelocalimagingbeam,showingsuppressionoferrorbothred-orblue-detunedfromthe
+data qubit transition. g, Equivalently, increasing the trap depth of the data qubits enables suppression of decoherence due to
+thelocalimagingbeam. Sincequbitsinthereadoutzoneareimagedwhiletheirtrapsarepulsedoff,anylightshiftofthedata
+qubit transition from the traps contributes directly to the relative detuning. h, For a long 10.5 ms local beam illumination
+withoptimallocalimagingparameters,weobservea0.7(1)%increaseindataqubiterrorduringanXY8dynamicaldecoupling
+sequence. This suggests a roughly 0.034(5)% error probability for the data qubits during the 500 µs midcircuit readout image
+employed in this work.27
+48
+24
+1
+1 24 48
+xedni
+rezilibatS
+0.20
+0.15
+0.10
+0.05
+0.00
+Covariance
+48 0.20
+0.15
+24 0.10
+0.05
+1 0.00
+1 24 48
+Stabilizer index
+Covariance
+a
++
+L X/Z
+L X/Z
+d = 7
+c
+XX basis ZZ basis
+e
+X basis logical 1 Z basis logical 1
+Data
+Theory
+X basis logical 2 Z basis logical 2
+1+
+=
+rezilibatS
+ytilibaborP
+Z stabilizer X stabilizer Z L b Transversal CNOT and physical error propagation
+Z Z X X Z
+Z Z X X Z X X
+Z X
+X X X XZ X X X X L
+Z Z
+Z
+Z Z
+Z
+1
+0
+0.11
+0.09
+0.07
+0.05
+0.03
+3 5 7 9 11 13
+Surface code distance d
+rorre
+riap
+lleB
+lacigoL
+0.5
+0.4
+0.3
+0.14
+0.12
+0.1
+3 5 7
+Surface code distance d
+Data
+Theory
+dnuob
+reppu
+ytiledifni
+riap
+lleB
+lacigoL
+d Number of physical qubits per Bell pair
+Stabilizers in Stabilizer correlations (data) 26 74 146
+other logical block
+Conventional decoding
+Correlated decoding
+Logical 1 Logical 2
+Infidelity upper bound
+f
+2
+lacigoL
+1
+lacigoL
+Logical 1 Logical 2
+2
+lacigoL
+1
+lacigoL
+Data Ancilla X stab. Z stab.
+ExtendedDataFig.4. Additionalsurfacecodedata. a,DepictionofBellstatecircuitandd=7surfacecodes. b,Diagram
+showingthetransversalCNOTandphysicalerrorpropagationrules. c,Covarianceofthe48measuredstabilizersinbothbases.
+Thecorrelationsnearthediagonalcorrespondstoadjacentstabilizerswithineachblock. Strongcorrelationsarealsoobserved
+withthestabilizersoftheotherblockduetotheerrorpropagationinthetransversalCNOT.d,Bellpairinfidelityupperbound
+(as opposed to estimated Bell pair error in Fig. 2d of Main Text, see Methods text), showing improvement with increasing
+code distance. e, Probability of no detected error for each of the 96 measured stabilizers, showing agreement when compared
+to the theoretical values from empirically chosen error rates (experiment average = 77%, theory average = 82%). Note that
+X basis logical 1 and Z basis logical 2 have higher stabilizer error probability due to the error propagation in the transversal
+CNOT (reducing expectation values relative to if the transversal CNOT is not performed). f, Using the empirical error rates
+thatcorrespondtodata-theoryagreementforthemeasuredstabilizersine,oursimulationsforimprovementinBellpairerror,
+asafunctionofcodedistance,areingoodagreementwithexperiments. Theempiricalerrorratesusedareconsistentwiththe
+99.3%two-qubitgatefidelity,measuredforthislargerarray,aswellastheroughly4%dataqubitdecoherenceerror(integrated
+over the entire circuit and measured by Ramsey method). These dephasing error rates are dominated by a complex moving
+sequenceaswepreparethetwosurfacecodesinaserialfashion(seeSupplementaryMovie),andwouldbesignificantlysmaller
+for a repetitive error correction experiment.28
+a Data X basis logical 1 Z basis logical 1
+X basis logical 2 Z basis logical 2
+1+
+=
+rezilibatS
+ytilibaborP
+1
+0 0.6
+0.4
+0.2
+0.18
+0.14
+0.1
+rorre
+riap
+lleB
+lacigoL
+Number of physical qubits per Bell pair
+26 74 146
+0.4
+0.3
+0.2
+0.11
+0.1
+0.09
+No ancilla
+0.07 With ancilla
+3 5 7 3 5 7
+Surface code distance d Surface code distance d
+rorre
+riap
+lleB
+lacigoL
+b c
+0x inter-logical
+0.5x inter-logical
+1x inter-logical
+(inter-logical
+scaling)
+Optimizing
+decoder
+ExtendedDataFig.5. Surface code preparation and decoding data. a,Surfacecodestabilizersforthetwoindependent
+d=7 codes following state preparation. The entire movement circuit corresponding to the transversal CNOT is implemented,
+and the transversal entangling gate pulse is simply turned off. The mean stabilizer probability of success across the 96 total
+stabilizers is 83%. The high probability of stabilizer success of the two independent codes in both the X and Z bases shows
+that topological surface codes were prepared (and ED Fig. 4 shows that they were preserved during the transversal CNOT).
+Wenotethatphysicalfidelitieswereslightlylowerduringthismeasurementduetocalibrationdriftandsotheseresultsslightly
+underestimateperformancerelativetothedatainFig.2andEDFig.4. b,LogicalBellpairerrorwhileoptimizingthedecoder
+by(inversely)scalingtheweightsoftheinter-logicaledgesandhyperedgesthatconnectthestabilizersofthetwologicalqubits
+(higher values correspond to lower pairing weights). More concretely, the probability p of the error mechanism corresponding
+totheinter-logicaledges/hyperedgesisscaledandtheweightsarecalculatedaslog((1−p)/p).Qualitatively,optimizingthis
+scaling value optimizes with respect to the probability that errors are before or after the transversal CNOT, as errors before
+the CNOT will lead to correlations between the two logical qubits, corresponding to the inter-logical edges. As the decoder is
+optimized by tuningthe inter-logical scaling factor, the performance for allthree codedistances improves, and thelarger code
+distances improve faster when approaching the optimal decoding configuration, as expected. This data is consistent with the
+decoder being properly optimized for all three code distances, consistent with the fact that our improvement with code size
+does not originate from suboptimal decoder performance for low distance. Note the y-axis is log-scale. c, Logical Bell pair
+error when using (black) and not using (gray) the ancilla stabilizer measurement values, as a function of the scaling of the
+inter-logical edges and hyperedges that connect the stabilizers of the two logical qubits. The ancilla measurements contribute
+tothecorrectionprocedure,andcontributemoreforsmallervaluesoftheinter-logicalscalingastheycorrespondtoerrorsthat
+happenbeforethetransversalCNOT.0xinter-logicalscalingcorrespondstoconventionaldecodingwithinthetwoindependent
+surface codes. Forthe 1xinter-logicalscaling plottedhere, the d=7 inter-logical scalingparameter is chosenslightly different
+thaninFig.2dinordertohaveconsistencyacrossthethreecodedistances(whichproducesmeasuredvalueswithinerrorbars).29
+Global T†
+1 A H
+L1 2 A B A A B H
+L3 L2 3 A B A A B H
+4 A H
+A C -Z C L1 Z -Z -C L2 Z -ZL1 L , 3 L2-CZL2,L3-CZL1,L3 5 6 A A B A A B H H
+Local control:
+Z 7 A H
+= Z 8 A B A A B H
+Z
+B CCZ-CZ L2,L3 -CZ L1,L3 -Z L3 9 A B B A B H
+Local control: 10 A H
+11 A H
+=
+Z 12 A B B A B H
+13 A H
+= T = T† 14 A B B A B H
+15 A B B A B H
+16 A H
+enoz
+egarotS
+enoz
+gnilgnatnE
+a b
+GHZ1Z357 GHZ2X468
+1 H
+3
+5 H Z 7 H
+2 Z
+4 H
+6
+8
+Encoded state:
+L1
+L3 L2
+c
+1.Encode group 1 2. Transversal CNOT 1 on group 1 3. Transversal CNOT 2 on group 1 4. Transversal CNOT 3 on group 1 5. Swap groups and encode group 2
+6. Transversal CNOT 1 on group 2 7. Transversal CNOT 2 on group 2 8. Transversal CNOT 3 on group 2 9. Transversal CNOT 4 between groups 10. Readout
+Extended Data Fig. 6. [[8,3,2]] and hypercube encoding. a, State preparation circuit for the [[8,3,2]] code, in which two
+4-qubitGHZstatesaresimultaneouslypreparedandsubsequentlyentangled. Thisinitializesan[[8,3,2]]codewithlogicalstates
+|− ,+ ,− ⟩. b, 4D hypercube circuit performed on 48 logical qubits (128 physical qubits). The circuit is drawn on the
+L1 L2 L3
+block-level, where each block consists of 3 logical qubits and 8 physical qubits. The first in-block gate layer is performed with
+a global T†. The local gate patterns, and the corresponding logical gates they execute within each code block, are illustrated
+in the inset. c, Diagram illustrating the code block movements and use of the processor’s zoned architecture throughout the
+circuit. Initially, eight [[8,3,2]] code blocks are prepared in the entangling zone and atoms for later state preparation of eight
+additionalcodeblocksareloadedinthestoragezone. Thecodeblocksintheentanglingzonearethenpickedupandinterlaced
+with adjacent blocks to perform three transversal CNOT layers. The two groups of eight code blocks are then swapped and
+the same procedure is repeated with the second group of code blocks. The first group of code blocks are then moved back
+into the entangling zone and interleaved with the atoms of the first group to perform a final parallel transversal CNOT. The
+layersofCNOTgatesconnectthecodeblockssuchthata4Dhypercubeon16blocksof[[8,3,2]]codesisconstructed. Seealso
+Supplementary Movie.30
+Extended Data Fig. 7. Additional [[8,3,2]] circuit sampling data. a, Overlap of error-detected 12-qubit sampling data
+withthetheoreticaldistribution(samedataasfullyerror-detectedcaseinFig.5b). Progressivezoom-in’sshowtheagreement
+betweentheoryandexperiment,downtothelevelof10−4 probabilityperbitstring. Thiserror-detecteddatasetiscomposed
+of23,545shots(rawdatasetis138,626shots). Notethatwesimultaneouslymeasureontwogroupsof12logicalqubits;plotted
+here is only one of the two 12-logical groups with an XEB of 0.69(1), while in plots Figs. 5e,f and ED Fig. 7b we average the
+twologicalgroups,whichgivesameasuredXEBof0.616(7). b,SamedataasFig.5fofMainTextbutwithpurity(orange),as
+measuredbytwo-copymeasurement,additionallyplotted. ThemeasuredXEBisslightlybelowthemeasuredpurity,providing
+evidence that XEB is a faithful fidelity proxy. We further note that under error detection, the logical XEB for these IQP
+circuitsshouldbeagoodfidelityproxy. Interestingly,thebehaviorcanbedifferentfortheraw,uncorrecteddata,asthecircuit
+we apply on the physical level is not IQP. Without applying error detection, not all errors are logical errors and therefore
+the circuit differs from IQP behavior and can lend itself to a different scaling. For systems of 3, 6, and 12 logical qubits,
+multiple systems are measured in parallel and their results are averaged together. We note that although our preparation of
+[[8,3,2]] code states makes these states on a cube, it does not have CNOTs between two pairs of qubits in the first step and,
+therefore, does not have the full gate connectivity of a cube. Instead, one can interpret these CNOTs as having been included
+but then compiled away as they commute with the state. We neglect this in plotting our physical qubit connectivity, which
+is derived from entangling 3D cubes on a 4D hypercube connectivity, realizing a 7D hypercube. c, 48-qubit XEB sliding-scale
+error-detectiondata. Thepointwithfullpostselectiononallstabilizersbeingperfectreturnedonly8samples, soweomitthis
+point from the Main Text plot for clarity.31
+a b c
+8
+6
+4
+2
+1 2 3 4 5
+Hypercube dimension
+BEX
+laedI
+Circuits used
+in experiment
+Random
+hypercube
+1
+metsysbuS
+2
+metsysbuS
+1
+0
+0
+1
+=
+0
+0
+1
+0
+1 metsysbuS 2 metsysbuS
+100
+Non-unitary tensor
+1 0
+0 0
+0 1
+10−1
+1 0
+Tensor contraction
+0 1 2
+Additional CNOT layers
+BEX
+defoopS
+Extended Data Fig. 8. Theoretical exploration of hypercube IQP circuits. a, Anti-concentration property of our
+circuits. Thecircuitissaidtobeanti-concentratedifitsoutputdistributionisspreadalmostuniformlyamongstalloutcomes,
+without the probability being concentrated on a subset of bitstrings. This property is crucial for many proofs of classical
+hardness [20, 97] and, thus, it is desired for our sampling circuits to anti-conconcentrate. The plot shows that the output
+distributionofrandomhypercubecircuits(randomizedin-blockoperationsandrandomizedcontrol/targetinout-blockCNOT
+layers) anti-concentrates as the dimension of the hypercube is increased and the XEB (which captures the output collision
+probability) converges totheuniform-IQPvalueof2(hereusing Cliffordcircuits; i.e., circuits comprised ofrandomCZandZ
+only)[20]. Thissuggeststhatsamplingfromtheidealoutputdistributioncanbeclassicallyhard. Ingeneral,thehypercubeIQP
+circuit ensemble converges to the uniform IQP ensemble in total variation distance as the depth and hypercube dimension are
+increased[99]. Thespecificcircuitinstancesimplementedinexperimentalsoanticoncentratequicklywithincreasinghypercube
+dimension. b,Asinglelayerofthehypercubecircuitadmitsanefficienttensor-networkcontractionscheme,whichallowsusto
+evaluatetheidealandexperimentalXEBvalues. Thefinalout-blockCNOTlayerisimmediatelyfollowedbythemeasurement,
+which can be incorporated into a non-unitary tensor that is contracted between the two halves of the system (controls and
+targets of the final CNOT layer). This contraction scheme reduces the memory requirements to half the system size, which
+enables bitstring amplitude evaluation for the 48-qubit experiment. This simulation approach can be made significantly more
+expensive by applying additional out-block operations within the two subsystems, forcing the blocking of the intra-partition
+tensors,whichincreasesthememoryandruntimerequirements(Fig.5d). c,TounderstandtheeffectsoffiniteXEBonrequired
+classicalsimulationtime,weexploreifourcircuitfamiliescanbe“spoofed”withcheaper,approximatesimulationthatachieves
+moderatelyhighXEBscores[100],studiedherefora24-qubitsystemwithfullstate-vectorsimulation. Thespoofingalgorithm
+works by independently sampling from the two halves of the system (two groups of 12 qubits), effectively removing the final
+layer of CNOTs. This further reduces the simulation complexity, as each of the halves can, in principle, be independently
+simulated with the efficient approach from b. The plot shows that the spoofed XEB for the 24-qubit non-Clifford circuit can
+be exponentially reduced by extending the circuit with additional gate layers (similarly to the approach used to decrease the
+performanceoftheefficienthypercubecontraction),foraparticularextensionofourcircuit. Thisresultshowsthatfuturework
+can consider adding additional CNOT layers into these circuits to demonstrate quantum advantage (in the presence of finite
+experimental noise).32
+0.16
+0.14
+0.12
+y
+c
+0.10n
+e u
+0.08q
+e
+0.06Fr
+0.04
+0.02
+0.00
+-0.10
+-0.05 10
+0.00 8
+|Tr(Pρ)|2 0.05
+0.10
+0
+2
+4
+Thres
+6 hold
+15
+10
+5
+0
+0 10 20 30
+Subsystem Size
+yportnE
+tnemelgnatnE
+lacisyhP
+a b
+8
+6
+4
+2
+0
+0 5 10 15
+Subsystem Size
+yportnE
+tnemelgnatnE
+lacisyhP
+c d
+noitceted
+rorre
+gnisaercnI
+noise floor
+e f
+Subsystem Size
+yportnE
+tnemelgnatnE
+lacigoL
+1000
+Subsytem size 1
+100
+Subsystem size 12
+10
+1
+10-2 10-1 100
+Accepted fraction
+16x2 physical qubits 32x2 physical qubits
+12
+3
+10 6 Logical system size
+12
+8
+6
+4
+2
+0
+0 2 4 6 8 10 12
+)RNS(
+oitar
+esion-ot-langiS
+ExtendedDataFig.9. Additional Bell basis measurement results. a,Histogramof|tr(Pρ)|2 forall46 PaulistringsP in
+the 6 logical qubit circuit, as a function of stabilizer postselection threshold (i.e. number of correct stabilizers across the 6x2
+logicalqubits). Blue(red)indicatePaulistringsthatareexpectedtohave|tr(Pρ)|2 =0.0625(0). Theseparationbetweenthe
+histogramsimprovesasmorepostselectionisapplied. b,Signal-to-noise(puritydividedbystatisticaluncertaintyofpurity)as
+a function of sliding-scale error detection (converted into accepted fraction), for the 12 logical qubit two-copy measurements,
+where subsystem size 1 indicates a single logical qubit in one copy, and subsystem size 12 indicates all logical qubits. For
+subsystem size 1, the signal-to-noise ratio gets worse as data is discarded, since the signal does not change (maximally mixed)
+but the number of repetitions decreases. In contrast, for the global purity, the signal-to-noise increases as near-unity purities
+are faster to measure [111]. c,d, Entanglement entropy when analyzing the circuit as a physical Bell basis measurement
+as opposed to a logical Bell basis measurement. For logical entanglement entropy calculations we average over all possible
+subsystems of that given subsystem size, which we find behaves very similarly to e.g. contiguous subsystems due to the high-
+dimensional hypercube connectivity. In the physical qubit entanglement entropy calculations, we randomly choose from the
+possible subsystems as there are many. c, 6 logical (16 physical) qubits per copy; d, 12 logical (32 physical) qubits per copy.
+The finite sampling imposes a noise floor for very high entanglement entropy values. e, Entanglement entropy measurements,
+as in Fig. 6b of main text, but as a function of logical subsystem size. f, Logical circuits used for benchmarking magic. For 1
+CCZ, we include U and omit U ; for 2 CCZ, we include U and omit U ; for the 3 CCZ, we include both U and U .
+1 0 0 1 0 1

@@ -1,0 +1,923 @@
+PublishedasaconferencepaperatICLR2015
+NEURAL MACHINE TRANSLATION
+BY JOINTLY LEARNING TO ALIGN AND TRANSLATE
+DzmitryBahdanau
+JacobsUniversityBremen,Germany
+KyungHyunCho YoshuaBengio∗
+Universite´ deMontre´al
+ABSTRACT
+Neural machine translation is a recently proposed approach to machine transla-
+tion. Unlike the traditional statistical machine translation, the neural machine
+translation aims at building a single neural network that can be jointly tuned to
+maximize the translation performance. The models proposed recently for neu-
+ralmachinetranslationoftenbelongtoafamilyofencoder–decodersandencode
+a source sentence into a fixed-length vector from which a decoder generates a
+translation. Inthispaper, weconjecturethattheuseofafixed-lengthvectorisa
+bottleneckinimprovingtheperformanceofthisbasicencoder–decoderarchitec-
+ture,andproposetoextendthisbyallowingamodeltoautomatically(soft-)search
+forpartsofasourcesentencethatarerelevanttopredictingatargetword,without
+havingtoformthesepartsasahardsegmentexplicitly. Withthisnewapproach,
+we achieve a translation performance comparable to the existing state-of-the-art
+phrase-based system on the task of English-to-French translation. Furthermore,
+qualitative analysis reveals that the (soft-)alignments found by the model agree
+wellwithourintuition.
+1 INTRODUCTION
+Neuralmachinetranslationisanewlyemergingapproachtomachinetranslation,recentlyproposed
+by Kalchbrenner and Blunsom (2013), Sutskever et al. (2014) and Cho et al. (2014b). Unlike the
+traditional phrase-based translation system (see, e.g., Koehn et al., 2003) which consists of many
+small sub-components that are tuned separately, neural machine translation attempts to build and
+trainasingle,largeneuralnetworkthatreadsasentenceandoutputsacorrecttranslation.
+Most of the proposed neural machine translation models belong to a family of encoder–
+decoders (Sutskever et al., 2014; Cho et al., 2014a), with an encoder and a decoder for each lan-
+guage,orinvolvealanguage-specificencoderappliedtoeachsentencewhoseoutputsarethencom-
+pared(HermannandBlunsom,2014). Anencoderneuralnetworkreadsandencodesasourcesen-
+tenceintoafixed-lengthvector. Adecoderthenoutputsatranslationfromtheencodedvector. The
+wholeencoder–decodersystem,whichconsistsoftheencoderandthedecoderforalanguagepair,
+isjointlytrainedtomaximizetheprobabilityofacorrecttranslationgivenasourcesentence.
+A potential issue with this encoder–decoder approach is that a neural network needs to be able to
+compress all the necessary information of a source sentence into a fixed-length vector. This may
+makeitdifficultfortheneuralnetworktocopewithlongsentences,especiallythosethatarelonger
+thanthesentencesinthetrainingcorpus. Choetal.(2014b)showedthatindeedtheperformanceof
+abasicencoder–decoderdeterioratesrapidlyasthelengthofaninputsentenceincreases.
+Inordertoaddressthisissue,weintroduceanextensiontotheencoder–decodermodelwhichlearns
+to align and translate jointly. Each time the proposed model generates a word in a translation, it
+(soft-)searches for a set of positions in a source sentence where the most relevant information is
+concentrated. The model then predicts a target word based on the context vectors associated with
+thesesourcepositionsandallthepreviousgeneratedtargetwords.
+∗CIFARSeniorFellow
+1
+6102
+yaM
+91
+]LC.sc[
+7v3740.9041:viXraPublishedasaconferencepaperatICLR2015
+Themostimportantdistinguishingfeatureofthisapproachfromthebasicencoder–decoderisthat
+itdoesnotattempttoencodeawholeinputsentenceintoasinglefixed-lengthvector. Instead,iten-
+codestheinputsentenceintoasequenceofvectorsandchoosesasubsetofthesevectorsadaptively
+whiledecodingthetranslation. Thisfreesaneuraltranslationmodelfromhavingtosquashallthe
+informationofasourcesentence, regardlessofitslength, intoafixed-lengthvector. Weshowthis
+allowsamodeltocopebetterwithlongsentences.
+Inthispaper,weshowthattheproposedapproachofjointlylearningtoalignandtranslateachieves
+significantlyimprovedtranslationperformanceoverthebasicencoder–decoderapproach. Theim-
+provement is more apparent with longer sentences, but can be observed with sentences of any
+length. OnthetaskofEnglish-to-Frenchtranslation,theproposedapproachachieves,withasingle
+model, a translation performance comparable, or close, to the conventional phrase-based system.
+Furthermore, qualitative analysis reveals that the proposed model finds a linguistically plausible
+(soft-)alignmentbetweenasourcesentenceandthecorrespondingtargetsentence.
+2 BACKGROUND: NEURAL MACHINE TRANSLATION
+From a probabilistic perspective, translation is equivalent to finding a target sentence y that max-
+imizes the conditional probability of y given a source sentence x, i.e., argmax p(y | x). In
+y
+neural machine translation, we fit a parameterized model to maximize the conditional probability
+ofsentencepairsusingaparalleltrainingcorpus. Oncetheconditionaldistributionislearnedbya
+translationmodel,givenasourcesentenceacorrespondingtranslationcanbegeneratedbysearching
+forthesentencethatmaximizestheconditionalprobability.
+Recently,anumberofpapershaveproposedtheuseofneuralnetworkstodirectlylearnthiscondi-
+tionaldistribution(see,e.g.,KalchbrennerandBlunsom,2013;Choetal.,2014a;Sutskeveretal.,
+2014;Choetal.,2014b;ForcadaandN˜eco,1997). Thisneuralmachinetranslationapproachtyp-
+ically consists of two components, the first of which encodes a source sentence x and the second
+decodes to a target sentence y. For instance, two recurrent neural networks (RNN) were used by
+(Cho et al., 2014a) and (Sutskever et al., 2014) to encode a variable-length source sentence into a
+fixed-lengthvectorandtodecodethevectorintoavariable-lengthtargetsentence.
+Despitebeingaquitenewapproach,neuralmachinetranslationhasalreadyshownpromisingresults.
+Sutskeveretal.(2014)reportedthattheneuralmachinetranslationbasedonRNNswithlongshort-
+term memory (LSTM) units achieves close to the state-of-the-art performance of the conventional
+phrase-basedmachinetranslationsystemonanEnglish-to-Frenchtranslationtask.1 Addingneural
+components to existing translation systems, for instance, to score the phrase pairs in the phrase
+table(Choetal.,2014a)ortore-rankcandidatetranslations(Sutskeveretal.,2014),hasallowedto
+surpassthepreviousstate-of-the-artperformancelevel.
+2.1 RNNENCODER–DECODER
+Here, we describe briefly the underlying framework, called RNN Encoder–Decoder, proposed by
+Choetal.(2014a)andSutskeveretal.(2014)uponwhichwebuildanovelarchitecturethatlearns
+toalignandtranslatesimultaneously.
+In the Encoder–Decoder framework, an encoder reads the input sentence, a sequence of vectors
+x=(x ,··· ,x ),intoavectorc.2 ThemostcommonapproachistouseanRNNsuchthat
+1 Tx
+h =f(x ,h ) (1)
+t t t−1
+and
+c=q({h ,··· ,h }),
+1 Tx
+where h ∈ Rn is a hidden state at time t, and c is a vector generated from the sequence of the
+t
+hiddenstates. f andqaresomenonlinearfunctions. Sutskeveretal.(2014)usedanLSTMasf and
+q({h ,··· ,h })=h ,forinstance.
+1 T T
+1 Wemeanbythestate-of-the-artperformance,theperformanceoftheconventionalphrase-basedsystem
+withoutusinganyneuralnetwork-basedcomponent.
+2Althoughmostofthepreviousworks(see,e.g.,Choetal.,2014a;Sutskeveretal.,2014;Kalchbrennerand
+Blunsom,2013)usedtoencodeavariable-lengthinputsentenceintoafixed-lengthvector,itisnotnecessary,
+andevenitmaybebeneficialtohaveavariable-lengthvector,aswewillshowlater.
+2PublishedasaconferencepaperatICLR2015
+The decoder is often trained to predict the next word y given the context vector c and all the
+t(cid:48)
+previouslypredictedwords{y ,··· ,y }. Inotherwords,thedecoderdefinesaprobabilityover
+1 t(cid:48)−1
+thetranslationybydecomposingthejointprobabilityintotheorderedconditionals:
+T
+(cid:89)
+p(y)= p(y |{y ,··· ,y },c), (2)
+t 1 t−1
+t=1
+(cid:0) (cid:1)
+wherey= y ,··· ,y . WithanRNN,eachconditionalprobabilityismodeledas
+1 Ty
+p(y |{y ,··· ,y },c)=g(y ,s ,c), (3)
+t 1 t−1 t−1 t
+wheregisanonlinear,potentiallymulti-layered,functionthatoutputstheprobabilityofy ,ands is
+t t
+thehiddenstateoftheRNN.ItshouldbenotedthatotherarchitecturessuchasahybridofanRNN
+andade-convolutionalneuralnetworkcanbeused(KalchbrennerandBlunsom,2013).
+3 LEARNING TO ALIGN AND TRANSLATE
+Inthissection,weproposeanovelarchitectureforneuralmachinetranslation. Thenewarchitecture
+consists of a bidirectional RNN as an encoder (Sec. 3.2) and a decoder that emulates searching
+throughasourcesentenceduringdecodingatranslation(Sec.3.1).
+3.1 DECODER: GENERALDESCRIPTION
+Inanewmodelarchitecture,wedefineeachconditionalprobability
+inEq.(2)as: y y
+t-1 t
+p(y |y ,...,y ,x)=g(y ,s ,c ), (4)
+i 1 i−1 i−1 i i s s
+t-1 t
+wheres isanRNNhiddenstatefortimei,computedby
+i
+s =f(s ,y ,c ). +
+i i−1 i−1 i
+It should be noted that unlike the existing encoder–decoder ap- α t,1 αt,T
+proach(seeEq.(2)),heretheprobabilityisconditionedonadistinct αt,2 αt,3
+contextvectorc foreachtargetwordy .
+i i
+h h h h
+1 2 3 T
+The context vector c depends on a sequence of annotations
+i
+(h ,··· ,h )towhichanencodermapstheinputsentence. Each
+ann 1 otation T h x i containsinformationaboutthewholeinputsequence h 1 h 2 h 3 h T
+with a strong focus on the parts surrounding the i-th word of the
+x x x x
+inputsequence. Weexplainindetailhowtheannotationsarecom- 1 2 3 T
+putedinthenextsection.
+Figure1: Thegraphicalillus-
+Thecontextvectorc i is,then,computedasaweightedsumofthese trationoftheproposedmodel
+annotationsh i : tryingtogeneratethet-thtar-
+get word y given a source
+c i = (cid:88)
+Tx
+α ij h j . (5) sentence(x 1
+t
+,x 2 ,...,x T ).
+j=1
+Theweightα ofeachannotationh iscomputedby
+ij j
+exp(e )
+α = ij , (6)
+ij (cid:80)Tx
+exp(e )
+k=1 ik
+where
+e =a(s ,h )
+ij i−1 j
+isanalignmentmodelwhichscoreshowwelltheinputsaroundpositionjandtheoutputatposition
+imatch. ThescoreisbasedontheRNNhiddenstates (justbeforeemittingy ,Eq.(4))andthe
+i−1 i
+j-thannotationh oftheinputsentence.
+j
+Weparametrizethealignmentmodelaasafeedforwardneuralnetworkwhichisjointlytrainedwith
+alltheothercomponentsoftheproposedsystem.Notethatunlikeintraditionalmachinetranslation,
+3PublishedasaconferencepaperatICLR2015
+thealignmentisnotconsideredtobealatentvariable. Instead,thealignmentmodeldirectlycom-
+putesasoftalignment,whichallowsthegradientofthecostfunctiontobebackpropagatedthrough.
+Thisgradientcanbeusedtotrainthealignmentmodelaswellasthewholetranslationmodeljointly.
+We can understand the approach of taking a weighted sum of all the annotations as computing an
+expectedannotation,wheretheexpectationisoverpossiblealignments.Letα beaprobabilitythat
+ij
+thetargetwordy isalignedto,ortranslatedfrom,asourcewordx . Then,thei-thcontextvector
+i j
+c istheexpectedannotationoveralltheannotationswithprobabilitiesα .
+i ij
+Theprobabilityα , oritsassociatedenergye , reflectstheimportanceoftheannotationh with
+ij ij j
+respecttotheprevioushiddenstates indecidingthenextstates andgeneratingy . Intuitively,
+i−1 i i
+thisimplementsamechanismofattentioninthedecoder. Thedecoderdecidespartsofthesource
+sentence to pay attention to. By letting the decoder have an attention mechanism, we relieve the
+encoder from the burden of having to encode all information in the source sentence into a fixed-
+length vector. With this new approach the information can be spread throughout the sequence of
+annotations,whichcanbeselectivelyretrievedbythedecoderaccordingly.
+3.2 ENCODER: BIDIRECTIONALRNNFORANNOTATINGSEQUENCES
+The usual RNN, described in Eq. (1), reads an input sequence x in order starting from the first
+symbol x to the last one x . However, in the proposed scheme, we would like the annotation
+1 Tx
+of each word to summarize not only the preceding words, but also the following words. Hence,
+we propose to use a bidirectional RNN (BiRNN, Schuster and Paliwal, 1997), which has been
+successfullyusedrecentlyinspeechrecognition(see,e.g.,Gravesetal.,2013).
+→−
+ABiRNNconsistsofforwardandbackwardRNN’s. TheforwardRNN f readstheinputsequence
+→− →−
+asitisordered(fromx tox )andcalculatesasequenceofforwardhiddenstates(h ,··· , h ).
+←−
+1 Tx 1 Tx
+The backward RNN f reads the sequence in the reverse order (from x to x ), resulting in a
+←− ←−
+Tx 1
+sequenceofbackwardhiddenstates(h ,··· , h ).
+1 Tx
+→−
+We obtain an annotation for each word x by concatenating the forward hidden state h and the
+j j
+←− (cid:104)→− ←− (cid:105)(cid:62)
+backwardone h ,i.e.,h = h(cid:62); h(cid:62) . Inthisway,theannotationh containsthesummaries
+j j j j j
+of both the preceding words and the following words. Due to the tendency of RNNs to better
+represent recent inputs, the annotation h will be focused on the words around x . This sequence
+j j
+ofannotationsisusedbythedecoderandthealignmentmodellatertocomputethecontextvector
+(Eqs.(5)–(6)).
+SeeFig.1forthegraphicalillustrationoftheproposedmodel.
+4 EXPERIMENT SETTINGS
+WeevaluatetheproposedapproachonthetaskofEnglish-to-Frenchtranslation. Weusethebilin-
+gual, parallel corpora provided by ACL WMT ’14.3 As a comparison, we also report the perfor-
+mance of an RNN Encoder–Decoder which was proposed recently by Cho et al. (2014a). We use
+thesametrainingproceduresandthesamedatasetforbothmodels.4
+4.1 DATASET
+WMT ’14 contains the following English-French parallel corpora: Europarl (61M words), news
+commentary(5.5M),UN(421M)andtwocrawledcorporaof90Mand272.5Mwordsrespectively,
+totaling850Mwords.FollowingtheproceduredescribedinChoetal.(2014a),wereducethesizeof
+thecombinedcorpustohave348MwordsusingthedataselectionmethodbyAxelrodetal.(2011).5
+Wedonotuseanymonolingualdataotherthanthementionedparallelcorpora,althoughitmaybe
+possibletouseamuchlargermonolingualcorpustopretrainanencoder. Weconcatenatenews-test-
+3http://www.statmt.org/wmt14/translation-task.html
+4Implementationsareavailableathttps://github.com/lisa-groundhog/GroundHog.
+5Availableonlineathttp://www-lium.univ-lemans.fr/˜schwenk/cslm_joint_paper/.
+4PublishedasaconferencepaperatICLR2015
+30
+25
+20
+15
+10
+5
+0
+0 10 20 30 40 50 60
+Sentencelength
+erocsUELB
+Figure2: TheBLEUscores
+of the generated translations
+on the test set with respect
+to the lengths of the sen-
+RNNsearch-50 tences. The results are on
+RNNsearch-30 the full test set which in-
+RNNenc-50 cludes sentences having un-
+RNNenc-30 knownwordstothemodels.
+2012andnews-test-2013tomakeadevelopment(validation)set,andevaluatethemodelsonthetest
+set (news-test-2014) from WMT ’14, which consists of 3003 sentences not present in the training
+data.
+After a usual tokenization6, we use a shortlist of 30,000 most frequent words in each language to
+trainourmodels. Anywordnotincludedintheshortlistismappedtoaspecialtoken([UNK]). We
+donotapplyanyotherspecialpreprocessing,suchaslowercasingorstemming,tothedata.
+4.2 MODELS
+Wetraintwotypesofmodels. ThefirstoneisanRNNEncoder–Decoder(RNNencdec,Choetal.,
+2014a),andtheotheristheproposedmodel,towhichwereferasRNNsearch. Wetraineachmodel
+twice: firstwiththesentencesoflengthupto30words(RNNencdec-30,RNNsearch-30)andthen
+withthesentencesoflengthupto50word(RNNencdec-50,RNNsearch-50).
+The encoder and decoder of the RNNencdec have 1000 hidden units each.7 The encoder of the
+RNNsearchconsistsofforwardandbackwardrecurrentneuralnetworks(RNN)eachhaving1000
+hiddenunits. Itsdecoderhas1000hiddenunits. Inbothcases,weuseamultilayernetworkwitha
+singlemaxout(Goodfellowetal.,2013)hiddenlayertocomputetheconditionalprobabilityofeach
+targetword(Pascanuetal.,2014).
+We use a minibatch stochastic gradient descent (SGD) algorithm together with Adadelta (Zeiler,
+2012) to train each model. Each SGD update direction is computed using a minibatch of 80 sen-
+tences. Wetrainedeachmodelforapproximately5days.
+Onceamodelistrained,weuseabeamsearchtofindatranslationthatapproximatelymaximizesthe
+conditional probability (see, e.g., Graves, 2012; Boulanger-Lewandowski et al., 2013). Sutskever
+etal.(2014)usedthisapproachtogeneratetranslationsfromtheirneuralmachinetranslationmodel.
+Formoredetailsonthearchitecturesofthemodelsandtrainingprocedureusedintheexperiments,
+seeAppendicesAandB.
+5 RESULTS
+5.1 QUANTITATIVERESULTS
+InTable1,welistthetranslationperformancesmeasuredinBLEUscore. Itisclearfromthetable
+that in all the cases, the proposed RNNsearch outperforms the conventional RNNencdec. More
+importantly,theperformanceoftheRNNsearchisashighasthatoftheconventionalphrase-based
+translation system (Moses), when only the sentences consisting of known words are considered.
+Thisisasignificantachievement,consideringthatMosesusesaseparatemonolingualcorpus(418M
+words)inadditiontotheparallelcorporaweusedtotraintheRNNsearchandRNNencdec.
+6Weusedthetokenizationscriptfromtheopen-sourcemachinetranslationpackage,Moses.
+7Inthispaper,bya’hiddenunit’,wealwaysmeanthegatedhiddenunit(seeAppendixA.1.1).
+5PublishedasaconferencepaperatICLR2015
+ehT
+tnemeerga
+no eht
+naeporuE cimonocE
+aerA saw
+dengis
+ni
+tsuguA
+2991 .
+>dne<
+L'
+accord
+sur
+la
+zone
+économique
+européenne
+a
+été
+signé
+en
+août
+1992
+.
+<end>
+tI dluohs eb deton taht eht eniram
+tnemnorivne
+si eht tsael nwonk fo
+stnemnorivne
+. >dne<
+Il
+convient
+de
+noter
+que
+l'
+environnement
+marin
+est
+le
+moins
+connu
+de
+l'
+environnement
+.
+<end>
+(a) (b)
+noitcurtseD
+fo eht
+tnempiuqe
+snaem taht airyS nac on regnol
+ecudorp
+wen
+lacimehc snopaew
+. >dne<
+La
+destruction
+de
+l'
+équipement
+signifie
+que
+la
+Syrie
+ne
+peut
+plus
+produire
+de
+nouvelles
+armes
+chimiques
+.
+<end>
+"
+sihT lliw egnahc ym erutuf htiw ym ylimaf
+, "
+eht nam dias
+.
+>dne<
+"
+Cela
+va
+changer
+mon
+avenir
+avec
+ma
+famille
+"
+,
+a
+dit
+l'
+homme
+.
+<end>
+(c) (d)
+Figure 3: Four sample alignments found by RNNsearch-50. The x-axis and y-axis of each plot
+correspond to the words in the source sentence (English) and the generated translation (French),
+respectively. Eachpixelshowstheweightα oftheannotationofthej-thsourcewordforthei-th
+ij
+target word (see Eq. (6)), in grayscale (0: black, 1: white). (a) an arbitrary sentence. (b–d) three
+randomlyselectedsamplesamongthesentenceswithoutanyunknownwordsandoflengthbetween
+10and20wordsfromthetestset.
+Oneofthemotivationsbehindtheproposedapproachwastheuseofafixed-lengthcontextvector
+in the basic encoder–decoder approach. We conjectured that this limitation may make the basic
+encoder–decoderapproachtounderperformwithlongsentences. InFig.2, weseethattheperfor-
+manceofRNNencdecdramaticallydropsasthelengthofthesentencesincreases.Ontheotherhand,
+bothRNNsearch-30andRNNsearch-50aremorerobusttothelengthofthesentences. RNNsearch-
+50,especially,showsnoperformancedeteriorationevenwithsentencesoflength50ormore. This
+superiorityoftheproposedmodeloverthebasicencoder–decoderisfurtherconfirmedbythefact
+thattheRNNsearch-30evenoutperformsRNNencdec-50(seeTable1).
+6PublishedasaconferencepaperatICLR2015
+Table 1: BLEU scores of the trained models com-
+Model All NoUNK◦ putedonthetestset. Thesecondandthirdcolumns
+showrespectivelythescoresonallthesentencesand,
+RNNencdec-30 13.93 24.19
+onthesentenceswithoutanyunknownwordinthem-
+RNNsearch-30 21.50 31.44
+selves and in the reference translations. Note that
+RNNencdec-50 17.82 26.71
+RNNsearch-50(cid:63) was trained much longer until the
+RNNsearch-50 26.75 34.16
+performanceonthedevelopmentsetstoppedimprov-
+RNNsearch-50(cid:63) 28.45 36.15
+ing.(◦)Wedisallowedthemodelstogenerate[UNK]
+Moses 33.30 35.63
+tokenswhenonlythesentenceshavingnounknown
+wordswereevaluated(lastcolumn).
+5.2 QUALITATIVEANALYSIS
+5.2.1 ALIGNMENT
+Theproposedapproachprovidesanintuitivewaytoinspectthe(soft-)alignmentbetweenthewords
+inageneratedtranslationandthoseinasourcesentence. Thisisdonebyvisualizingtheannotation
+weights α from Eq. (6), as in Fig. 3. Each row of a matrix in each plot indicates the weights
+ij
+associated with the annotations. From this we see which positions in the source sentence were
+consideredmoreimportantwhengeneratingthetargetword.
+WecanseefromthealignmentsinFig.3thatthealignmentofwordsbetweenEnglishandFrench
+islargelymonotonic. Weseestrongweightsalongthediagonalofeachmatrix. However,wealso
+observe a number of non-trivial, non-monotonic alignments. Adjectives and nouns are typically
+ordered differently between French and English, and we see an example in Fig. 3 (a). From this
+figure, we see that the model correctly translates a phrase [European Economic Area] into [zone
+e´conomique europe´en]. The RNNsearch was able to correctly align [zone] with [Area], jumping
+over the two words ([European] and [Economic]), and then looked one word back at a time to
+completethewholephrase[zonee´conomiqueeurope´enne].
+The strength of the soft-alignment, opposed to a hard-alignment, is evident, for instance, from
+Fig.3(d). Consider thesourcephrase[theman]whichwastranslatedinto[l’homme]. Anyhard
+alignment will map [the] to [l’] and [man] to [homme]. This is not helpful for translation, as one
+mustconsiderthewordfollowing[the]todeterminewhetheritshouldbetranslatedinto[le], [la],
+[les]or[l’].Oursoft-alignmentsolvesthisissuenaturallybylettingthemodellookatboth[the]and
+[man],andinthisexample,weseethatthemodelwasabletocorrectlytranslate[the]into[l’]. We
+observesimilarbehaviorsinallthepresentedcasesinFig.3. Anadditionalbenefitofthesoftalign-
+mentisthatitnaturallydealswithsourceandtargetphrasesofdifferentlengths,withoutrequiringa
+counter-intuitivewayofmappingsomewordstoorfromnowhere([NULL])(see,e.g.,Chapters4
+and5ofKoehn,2010).
+5.2.2 LONGSENTENCES
+AsclearlyvisiblefromFig.2theproposedmodel(RNNsearch)ismuchbetterthantheconventional
+model(RNNencdec)attranslatinglongsentences. ThisislikelyduetothefactthattheRNNsearch
+does not require encoding a long sentence into a fixed-length vector perfectly, but only accurately
+encodingthepartsoftheinputsentencethatsurroundaparticularword.
+Asanexample,considerthissourcesentencefromthetestset:
+Anadmittingprivilegeistherightofadoctortoadmitapatienttoahospitalor
+amedicalcentretocarryoutadiagnosisoraprocedure,basedonhisstatusasa
+healthcareworkeratahospital.
+TheRNNencdec-50translatedthissentenceinto:
+Un privile`ge d’admission est le droit d’un me´decin de reconnaˆıtre un patient a`
+l’hoˆpital ou un centre me´dical d’un diagnostic ou de prendre un diagnostic en
+fonctiondesone´tatdesante´.
+7PublishedasaconferencepaperatICLR2015
+TheRNNencdec-50correctlytranslatedthesourcesentenceuntil[amedicalcenter].However,from
+thereon(underlined),itdeviatedfromtheoriginalmeaningofthesourcesentence. Forinstance,it
+replaced[basedonhisstatusasahealthcareworkeratahospital]inthesourcesentencewith[en
+fonctiondesone´tatdesante´](“basedonhisstateofhealth”).
+On the other hand, the RNNsearch-50 generated the following correct translation, preserving the
+wholemeaningoftheinputsentencewithoutomittinganydetails:
+Un privile`ge d’admission est le droit d’un me´decin d’admettre un patient a` un
+hoˆpitalouuncentreme´dicalpoureffectuerundiagnosticouuneproce´dure,selon
+sonstatutdetravailleurdessoinsdesante´ a` l’hoˆpital.
+Letusconsideranothersentencefromthetestset:
+This kind of experience is part of Disney’s efforts to ”extend the lifetime of its
+series and build new relationships with audiences via digital platforms that are
+becomingevermoreimportant,”headded.
+ThetranslationbytheRNNencdec-50is
+Cetyped’expe´riencefaitpartiedesinitiativesduDisneypour”prolongerladure´e
+deviedesesnouvellesetdede´velopperdesliensavecleslecteursnume´riquesqui
+deviennentpluscomplexes.
+As with the previous example, the RNNencdec began deviating from the actual meaning of the
+source sentence after generating approximately 30 words (see the underlined phrase). After that
+point, the quality of the translation deteriorates, with basic mistakes such as the lack of a closing
+quotationmark.
+Again,theRNNsearch-50wasabletotranslatethislongsentencecorrectly:
+Cegenred’expe´riencefaitpartiedeseffortsdeDisneypour”prolongerladure´e
+de vie de ses se´ries et cre´er de nouvelles relations avec des publics via des
+plateformesnume´riquesdeplusenplusimportantes”,a-t-ilajoute´.
+In conjunction with the quantitative results presented already, these qualitative observations con-
+firm our hypotheses that the RNNsearch architecture enables far more reliable translation of long
+sentencesthanthestandardRNNencdecmodel.
+InAppendixC,weprovideafewmoresampletranslationsoflongsourcesentencesgeneratedby
+theRNNencdec-50,RNNsearch-50andGoogleTranslatealongwiththereferencetranslations.
+6 RELATED WORK
+6.1 LEARNINGTOALIGN
+A similar approach of aligning an output symbol with an input symbol was proposed recently by
+Graves (2013) in the context of handwriting synthesis. Handwriting synthesis is a task where the
+model is asked to generate handwriting of a given sequence of characters. In his work, he used a
+mixture of Gaussian kernels to compute the weights of the annotations, where the location, width
+andmixturecoefficientofeachkernelwaspredictedfromanalignmentmodel. Morespecifically,
+hisalignmentwasrestrictedtopredictthelocationsuchthatthelocationincreasesmonotonically.
+Themaindifferencefromourapproachisthat, in(Graves,2013), themodesoftheweightsofthe
+annotationsonlymoveinonedirection. Inthecontextofmachinetranslation,thisisaseverelimi-
+tation,as(long-distance)reorderingisoftenneededtogenerateagrammaticallycorrecttranslation
+(forinstance,English-to-German).
+Our approach, on the other hand, requires computing the annotation weight of every word in the
+source sentence for each word in the translation. This drawback is not severe with the task of
+translationinwhichmostofinputandoutputsentencesareonly15–40words. However,thismay
+limittheapplicabilityoftheproposedschemetoothertasks.
+8PublishedasaconferencepaperatICLR2015
+6.2 NEURALNETWORKSFORMACHINETRANSLATION
+SinceBengioetal.(2003)introducedaneuralprobabilisticlanguagemodelwhichusesaneuralnet-
+worktomodeltheconditionalprobabilityofawordgivenafixednumberoftheprecedingwords,
+neural networks have widely been used in machine translation. However, the role of neural net-
+workshasbeenlargelylimitedtosimplyprovidingasinglefeaturetoanexistingstatisticalmachine
+translationsystemortore-rankalistofcandidatetranslationsprovidedbyanexistingsystem.
+Forinstance,Schwenk(2012)proposedusingafeedforwardneuralnetworktocomputethescoreof
+apairofsourceandtargetphrasesandtousethescoreasanadditionalfeatureinthephrase-based
+statisticalmachinetranslationsystem.Morerecently,KalchbrennerandBlunsom(2013)andDevlin
+etal.(2014)reportedthesuccessfuluseoftheneuralnetworksasasub-componentoftheexisting
+translationsystem. Traditionally,aneuralnetworktrainedasatarget-sidelanguagemodelhasbeen
+usedtorescoreorrerankalistofcandidatetranslations(see,e.g.,Schwenketal.,2006).
+Althoughtheaboveapproacheswereshowntoimprovethetranslationperformanceoverthestate-
+of-the-art machine translation systems, we are more interested in a more ambitious objective of
+designingacompletelynewtranslationsystembasedonneuralnetworks.Theneuralmachinetrans-
+lationapproachweconsiderinthispaperisthereforearadicaldeparturefromtheseearlierworks.
+Ratherthanusinganeuralnetworkasapartoftheexistingsystem,ourmodelworksonitsownand
+generatesatranslationfromasourcesentencedirectly.
+7 CONCLUSION
+Theconventionalapproachtoneuralmachinetranslation,calledanencoder–decoderapproach,en-
+codes a whole input sentence into a fixed-length vector from which a translation will be decoded.
+Weconjecturedthattheuseofafixed-lengthcontextvectorisproblematicfortranslatinglongsen-
+tences, basedonarecentempiricalstudyreportedbyChoetal.(2014b)andPouget-Abadieetal.
+(2014).
+In this paper, we proposed a novel architecture that addresses this issue. We extended the basic
+encoder–decoderbylettingamodel(soft-)searchforasetofinputwords,ortheirannotationscom-
+putedbyanencoder,whengeneratingeachtargetword. Thisfreesthemodelfromhavingtoencode
+awholesourcesentenceintoafixed-lengthvector,andalsoletsthemodelfocusonlyoninformation
+relevant to the generation of the next target word. This has a major positive impact on the ability
+of the neural machine translation system to yield good results on longer sentences. Unlike with
+the traditional machine translation systems, all of the pieces of the translation system, including
+thealignmentmechanism, arejointlytrainedtowardsabetterlog-probabilityofproducingcorrect
+translations.
+Wetestedtheproposedmodel,calledRNNsearch,onthetaskofEnglish-to-Frenchtranslation. The
+experiment revealed that the proposed RNNsearch outperforms the conventional encoder–decoder
+model (RNNencdec) significantly, regardless of the sentence length and that it is much more ro-
+bust to the length of a source sentence. From the qualitative analysis where we investigated the
+(soft-)alignment generated by the RNNsearch, we were able to conclude that the model can cor-
+rectlyaligneachtargetwordwiththerelevantwords,ortheirannotations,inthesourcesentenceas
+itgeneratedacorrecttranslation.
+Perhapsmoreimportantly,theproposedapproachachievedatranslationperformancecomparableto
+theexistingphrase-basedstatisticalmachinetranslation. Itisastrikingresult,consideringthatthe
+proposed architecture, or the whole family of neural machine translation, has only been proposed
+asrecentlyasthisyear. Webelievethearchitectureproposedhereisapromisingsteptowardbetter
+machinetranslationandabetterunderstandingofnaturallanguagesingeneral.
+Oneofchallengesleftforthefutureistobetterhandleunknown,orrarewords.Thiswillberequired
+for the model to be more widely used and to match the performance of current state-of-the-art
+machinetranslationsystemsinallcontexts.
+9PublishedasaconferencepaperatICLR2015
+ACKNOWLEDGMENTS
+The authors would like to thank the developers of Theano (Bergstra et al., 2010; Bastien et al.,
+2012). Weacknowledgethesupportofthefollowingagenciesforresearchfundingandcomputing
+support: NSERC,CalculQue´bec,ComputeCanada,theCanadaResearchChairsandCIFAR.Bah-
+danauthanksthesupportfromPlanetIntelligentSystemsGmbH.WealsothankFelixHill,Bartvan
+Merrie´nboer,JeanPouget-Abadie,ColineDevinandTae-HoKim.
+REFERENCES
+Axelrod, A., He, X., andGao, J.(2011). Domainadaptationviapseudoin-domaindataselection.
+In Proceedings of the ACL Conference on Empirical Methods in Natural Language Processing
+(EMNLP),pages355–362.AssociationforComputationalLinguistics.
+Bastien, F., Lamblin, P., Pascanu, R., Bergstra, J., Goodfellow, I. J., Bergeron, A., Bouchard, N.,
+and Bengio, Y. (2012). Theano: new features and speed improvements. Deep Learning and
+UnsupervisedFeatureLearningNIPS2012Workshop.
+Bengio, Y., Simard, P., and Frasconi, P. (1994). Learning long-term dependencies with gradient
+descentisdifficult. IEEETransactionsonNeuralNetworks,5(2),157–166.
+Bengio,Y.,Ducharme,R.,Vincent,P.,andJanvin,C.(2003).Aneuralprobabilisticlanguagemodel.
+J.Mach.Learn.Res.,3,1137–1155.
+Bergstra,J.,Breuleux,O.,Bastien,F.,Lamblin,P.,Pascanu,R.,Desjardins,G.,Turian,J.,Warde-
+Farley, D., and Bengio, Y. (2010). Theano: a CPU and GPU math expression compiler. In
+ProceedingsofthePythonforScientificComputingConference(SciPy). OralPresentation.
+Boulanger-Lewandowski, N., Bengio, Y., and Vincent, P. (2013). Audio chord recognition with
+recurrentneuralnetworks. InISMIR.
+Cho, K., van Merrienboer, B., Gulcehre, C., Bougares, F., Schwenk, H., and Bengio, Y. (2014a).
+Learning phrase representations using RNN encoder-decoder for statistical machine translation.
+In Proceedings of the Empiricial Methods in Natural Language Processing (EMNLP 2014). to
+appear.
+Cho, K., vanMerrie¨nboer, B., Bahdanau, D., andBengio, Y.(2014b). Onthepropertiesofneural
+machine translation: Encoder–Decoder approaches. In Eighth Workshop on Syntax, Semantics
+andStructureinStatisticalTranslation. toappear.
+Devlin, J., Zbib, R., Huang, Z., Lamar, T., Schwartz, R., andMakhoul, J.(2014). Fastandrobust
+neuralnetworkjointmodelsforstatisticalmachinetranslation. InAssociationforComputational
+Linguistics.
+Forcada, M. L. and N˜eco, R. P. (1997). Recursive hetero-associative memories for translation. In
+J.Mira,R.Moreno-D´ıaz,andJ.Cabestany,editors,BiologicalandArtificialComputation: From
+NeurosciencetoTechnology,volume1240ofLectureNotesinComputerScience,pages453–462.
+SpringerBerlinHeidelberg.
+Goodfellow, I., Warde-Farley, D., Mirza, M., Courville, A., and Bengio, Y. (2013). Maxout net-
+works. InProceedingsofThe30thInternationalConferenceonMachineLearning,pages1319–
+1327.
+Graves, A. (2012). Sequence transduction with recurrent neural networks. In Proceedings of the
+29thInternationalConferenceonMachineLearning(ICML2012).
+Graves, A. (2013). Generating sequences with recurrent neural networks. arXiv:1308.0850
+[cs.NE].
+Graves, A., Jaitly, N., andMohamed, A.-R.(2013). Hybridspeechrecognitionwithdeepbidirec-
+tional LSTM. In Automatic Speech Recognition and Understanding (ASRU), 2013 IEEE Work-
+shopon,pages273–278.
+10PublishedasaconferencepaperatICLR2015
+Hermann,K.andBlunsom,P.(2014). Multilingualdistributedrepresentationswithoutwordalign-
+ment.InProceedingsoftheSecondInternationalConferenceonLearningRepresentations(ICLR
+2014).
+Hochreiter,S.(1991). UntersuchungenzudynamischenneuronalenNetzen.Diplomathesis,Institut
+fu¨rInformatik,LehrstuhlProf.Brauer,TechnischeUniversita¨tMu¨nchen.
+Hochreiter, S. and Schmidhuber, J. (1997). Long short-term memory. Neural Computation, 9(8),
+1735–1780.
+Kalchbrenner,N.andBlunsom,P.(2013). Recurrentcontinuoustranslationmodels. InProceedings
+oftheACLConferenceonEmpiricalMethodsinNaturalLanguageProcessing(EMNLP),pages
+1700–1709.AssociationforComputationalLinguistics.
+Koehn, P. (2010). Statistical Machine Translation. Cambridge University Press, New York, NY,
+USA.
+Koehn, P., Och, F. J., and Marcu, D. (2003). Statistical phrase-based translation. In Proceedings
+of the 2003 Conference of the North American Chapter of the Association for Computational
+LinguisticsonHumanLanguageTechnology-Volume1,NAACL’03,pages48–54,Stroudsburg,
+PA,USA.AssociationforComputationalLinguistics.
+Pascanu, R., Mikolov, T., and Bengio, Y. (2013a). On the difficulty of training recurrent neural
+networks. InICML’2013.
+Pascanu, R., Mikolov, T., and Bengio, Y. (2013b). On the difficulty of training recurrent neural
+networks. In Proceedings of the 30th International Conference on Machine Learning (ICML
+2013).
+Pascanu,R.,Gulcehre,C.,Cho,K.,andBengio,Y.(2014). Howtoconstructdeeprecurrentneural
+networks. In Proceedings of the SecondInternational Conference on Learning Representations
+(ICLR2014).
+Pouget-Abadie,J.,Bahdanau,D.,vanMerrie¨nboer,B.,Cho,K.,andBengio,Y.(2014).Overcoming
+the curse of sentence length for neural machine translation using automatic segmentation. In
+EighthWorkshoponSyntax,SemanticsandStructureinStatisticalTranslation. toappear.
+Schuster,M.andPaliwal,K.K.(1997). Bidirectionalrecurrentneuralnetworks. SignalProcessing,
+IEEETransactionson,45(11),2673–2681.
+Schwenk, H. (2012). Continuous space translation models for phrase-based statistical machine
+translation.InM.KayandC.Boitet,editors,Proceedingsofthe24thInternationalConferenceon
+ComputationalLinguistics(COLIN),pages1071–1080.IndianInstituteofTechnologyBombay.
+Schwenk, H., Dchelotte, D., and Gauvain, J.-L. (2006). Continuous space language models for
+statistical machine translation. In Proceedings of the COLING/ACL on Main conference poster
+sessions,pages723–730.AssociationforComputationalLinguistics.
+Sutskever,I.,Vinyals,O.,andLe,Q.(2014). Sequencetosequencelearningwithneuralnetworks.
+InAdvancesinNeuralInformationProcessingSystems(NIPS2014).
+Zeiler, M. D. (2012). ADADELTA: An adaptive learning rate method. arXiv:1212.5701
+[cs.LG].
+11PublishedasaconferencepaperatICLR2015
+A MODEL ARCHITECTURE
+A.1 ARCHITECTURALCHOICES
+TheproposedschemeinSection3isageneralframeworkwhereonecanfreelydefine,forinstance,
+theactivationfunctionsf ofrecurrentneuralnetworks(RNN)andthealignmentmodela. Here,we
+describethechoiceswemadefortheexperimentsinthispaper.
+A.1.1 RECURRENTNEURALNETWORK
+For the activation function f of an RNN, we use the gated hidden unit recently proposed by Cho
+et al. (2014a). The gated hidden unit is an alternative to the conventional simple units such as an
+element-wisetanh. Thisgatedunitissimilartoalongshort-termmemory(LSTM)unitproposed
+earlierbyHochreiterandSchmidhuber(1997),sharingwithittheabilitytobettermodelandlearn
+long-termdependencies. ThisismadepossiblebyhavingcomputationpathsintheunfoldedRNN
+for which the product of derivatives is close to 1. These paths allow gradients to flow backward
+easilywithoutsufferingtoomuchfromthevanishingeffect(Hochreiter,1991;Bengioetal.,1994;
+Pascanuetal.,2013a). ItisthereforepossibletouseLSTMunitsinsteadofthegatedhiddenunit
+describedhere,aswasdoneinasimilarcontextbySutskeveretal.(2014).
+Thenewstates oftheRNNemployingngatedhiddenunits8iscomputedby
+i
+s =f(s ,y ,c )=(1−z )◦s +z ◦s˜,
+i i−1 i−1 i i i−1 i i
+where◦isanelement-wisemultiplication,andz istheoutputoftheupdategates(seebelow). The
+i
+proposedupdatedstates˜ iscomputedby
+i
+s˜ =tanh(We(y )+U[r ◦s ]+Cc ),
+i i−1 i i−1 i
+where e(y ) ∈ Rm is an m-dimensional embedding of a word y , and r is the output of the
+i−1 i−1 i
+resetgates(seebelow). Wheny isrepresentedasa1-of-K vector,e(y )issimplyacolumnofan
+i i
+embeddingmatrixE ∈ Rm×K. Wheneverpossible,weomitbiastermstomaketheequationsless
+cluttered.
+Theupdategatesz alloweachhiddenunittomaintainitspreviousactivation,andtheresetgatesr
+i i
+controlhowmuchandwhatinformationfromthepreviousstateshouldbereset. Wecomputethem
+by
+z =σ(W e(y )+U s +C c ),
+i z i−1 z i−1 z i
+r =σ(W e(y )+U s +C c ),
+i r i−1 r i−1 r i
+whereσ(·)isalogisticsigmoidfunction.
+At each step of the decoder, we compute the output probability (Eq. (4)) as a multi-layered func-
+tion(Pascanuetal.,2014). Weuseasinglehiddenlayerofmaxoutunits(Goodfellowetal.,2013)
+andnormalizetheoutputprobabilities(oneforeachword)withasoftmaxfunction(seeEq.(6)).
+A.1.2 ALIGNMENTMODEL
+ThealignmentmodelshouldbedesignedconsideringthatthemodelneedstobeevaluatedT ×T
+x y
+timesforeachsentencepairoflengthsT andT . Inordertoreducecomputation,weuseasingle-
+x y
+layermultilayerperceptronsuchthat
+a(s ,h )=v(cid:62)tanh(W s +U h ),
+i−1 j a a i−1 a j
+where W ∈ Rn×n,U ∈ Rn×2n and v ∈ Rn are the weight matrices. Since U h does not
+a a a a j
+dependoni,wecanpre-computeitinadvancetominimizethecomputationalcost.
+8 Here, we show the formula of the decoder. The same formula can be used in the encoder by simply
+ignoringthecontextvectorc andtherelatedterms.
+i
+12PublishedasaconferencepaperatICLR2015
+A.2 DETAILEDDESCRIPTIONOFTHEMODEL
+A.2.1 ENCODER
+Inthissection,wedescribeindetailthearchitectureoftheproposedmodel(RNNsearch)usedinthe
+experiments(seeSec.4–5). Fromhereon,weomitallbiastermsinordertoincreasereadability.
+Themodeltakesasourcesentenceof1-of-Kcodedwordvectorsasinput
+x=(x ,...,x ), x ∈RKx
+1 Tx i
+andoutputsatranslatedsentenceof1-of-Kcodedwordvectors
+y=(y ,...,y ), y ∈RKy,
+1 Ty i
+whereK andK arethevocabularysizesofsourceandtargetlanguages,respectively. T andT
+x y x y
+respectivelydenotethelengthsofsourceandtargetsentences.
+First,theforwardstatesofthebidirectionalrecurrentneuralnetwork(BiRNN)arecomputed:
+(cid:40) →− →− →− →−
+→− (1− z )◦ h + z ◦ h ,ifi>0
+h = i i−1 i i
+i
+0 ,ifi=0
+where
+→− (cid:16)−→ →− (cid:104)→− →− (cid:105)(cid:17)
+h =tanh WEx + U r ◦ h
+i i i i−1
+→− (cid:16)−→ →− →− (cid:17)
+z =σ W Ex + U h
+i z i z i−1
+→− (cid:16)−→ →− →− (cid:17)
+r =σ W Ex + U h .
+i r i r i−1
+−→ −→ −→ →− →− →−
+E ∈ Rm×Kx is the word embedding matrix. W,W
+z
+,W
+r
+∈ Rn×m, U,U
+z
+,U
+r
+∈ Rn×n are
+weightmatrices. mandnarethewordembeddingdimensionalityandthenumberofhiddenunits,
+respectively. σ(·)isasusualalogisticsigmoidfunction.
+←− ←−
+Thebackwardstates(h ,··· , h )arecomputedsimilarly. Wesharethewordembeddingmatrix
+1 Tx
+E betweentheforwardandbackwardRNNs,unliketheweightmatrices.
+We concatenate the forward and backward states to to obtain the annotations (h ,h ,··· ,h ),
+1 2 Tx
+where
+(cid:34) →− (cid:35)
+h
+h i = ←− i (7)
+h
+i
+A.2.2 DECODER
+Thehiddenstates ofthedecodergiventheannotationsfromtheencoderiscomputedby
+i
+s =(1−z )◦s +z ◦s˜,
+i i i−1 i i
+where
+s˜ =tanh(WEy +U[r ◦s ]+Cc )
+i i−1 i i−1 i
+z =σ(W Ey +U s +C c )
+i z i−1 z i−1 z i
+r =σ(W Ey +U s +C c )
+i r i−1 r i−1 r i
+E isthewordembeddingmatrixforthetargetlanguage. W,W ,W ∈ Rn×m,U,U ,U ∈ Rn×n,
+z r z r
+and C,C ,C ∈ Rn×2n are weights. Again, m and n are the word embedding dimensionality
+z r
+and the number of hidden units, respectively. The initial hidden state s is computed by s =
+0 0
+(cid:16) ←− (cid:17)
+tanh W h ,whereW ∈Rn×n.
+s 1 s
+Thecontextvectorc arerecomputedateachstepbythealignmentmodel:
+i
+(cid:88)
+Tx
+c = α h ,
+i ij j
+j=1
+13PublishedasaconferencepaperatICLR2015
+Model Updates(×105) Epochs Hours GPU TrainNLL Dev. NLL
+RNNenc-30 8.46 6.4 109 TITANBLACK 28.1 53.0
+RNNenc-50 6.00 4.5 108 QuadroK-6000 44.0 43.6
+RNNsearch-30 4.71 3.6 113 TITANBLACK 26.7 47.2
+RNNsearch-50 2.88 2.2 111 QuadroK-6000 40.7 38.1
+RNNsearch-50(cid:63) 6.67 5.0 252 QuadroK-6000 36.7 35.2
+Table 2: Learning statistics and relevant information. Each update corresponds to updating the
+parametersonceusingasingleminibatch. Oneepochisonepassthroughthetrainingset. NLLis
+theaverageconditionallog-probabilitiesofthesentencesineitherthetrainingsetorthedevelopment
+set. Notethatthelengthsofthesentencesdiffer.
+where
+exp(e )
+α = ij
+ij (cid:80)Tx
+exp(e )
+k=1 ik
+e =v(cid:62)tanh(W s +U h ),
+ij a a i−1 a j
+and h is the j-th annotation in the source sentence (see Eq. (7)). v ∈ Rn(cid:48),W ∈ Rn(cid:48)×n and
+j a a
+U ∈ Rn(cid:48)×2n are weight matrices. Note that the model becomes RNN Encoder–Decoder (Cho
+a →−
+etal.,2014a),ifwefixc to h .
+i Tx
+Withthedecoderstates ,thecontextc andthelastgeneratedwordy ,wedefinetheprobability
+i−1 i i−1
+ofatargetwordy as
+i
+p(y |s ,y ,c )∝exp (cid:0) y(cid:62)W t (cid:1) ,
+i i i−1 i i o i
+where
+t = (cid:2) max (cid:8) t˜ ,t˜ (cid:9)(cid:3)(cid:62)
+i i,2j−1 i,2j j=1,...,l
+andt˜ isthek-thelementofavectort˜ whichiscomputedby
+i,k i
+t˜ =U s +V Ey +C c .
+i o i−1 o i−1 o i
+W
+o
+∈RKy×l,U
+o
+∈R2l×n,V
+o
+∈R2l×m andC
+o
+∈R2l×2n areweightmatrices. Thiscanbeunder-
+stoodashavingadeepoutput(Pascanuetal.,2014)withasinglemaxouthiddenlayer(Goodfellow
+etal.,2013).
+A.2.3 MODELSIZE
+For all the models used in this paper, the size of a hidden layer n is 1000, the word embedding
+dimensionality m is 620 and the size of the maxout hidden layer in the deep output l is 500. The
+numberofhiddenunitsinthealignmentmodeln(cid:48)is1000.
+B TRAINING PROCEDURE
+B.1 PARAMETERINITIALIZATION
+←− ←− ←− →− →− →−
+WeinitializedtherecurrentweightmatricesU,U ,U ,U,U ,U ,U,U and U asrandomor-
+z r z r z r
+thogonalmatrices.ForW andU ,weinitializedthembysamplingeachelementfromtheGaussian
+a a
+distributionofmean0andvariance0.0012. AlltheelementsofV andallthebiasvectorswereini-
+a
+tializedtozero. AnyotherweightmatrixwasinitializedbysamplingfromtheGaussiandistribution
+ofmean0andvariance0.012.
+B.2 TRAINING
+We used the stochastic gradient descent (SGD) algorithm. Adadelta (Zeiler, 2012) was used to
+automatically adapt the learning rate of each parameter ((cid:15) = 10−6 and ρ = 0.95). We explicitly
+14PublishedasaconferencepaperatICLR2015
+normalized the L -norm of the gradient of the cost function each time to be at most a predefined
+2
+threshold of 1, when the norm was larger than the threshold (Pascanu et al., 2013b). Each SGD
+updatedirectionwascomputedwithaminibatchof80sentences.
+Ateachupdateourimplementationrequirestimeproportionaltothelengthofthelongestsentencein
+aminibatch. Hence,tominimizethewasteofcomputation,beforeevery20-thupdate,weretrieved
+1600sentencepairs,sortedthemaccordingtothelengthsandsplittheminto20minibatches. The
+trainingdatawasshuffledoncebeforetrainingandwastraversedsequentiallyinthismanner.
+InTables2wepresentthestatisticsrelatedtotrainingallthemodelsusedintheexperiments.
+C TRANSLATIONS OF LONG SENTENCES
+Source Anadmittingprivilegeistherightofadoctortoadmitapatienttoahospitaloramedicalcentre
+tocarryoutadiagnosisoraprocedure,basedonhisstatusasahealthcareworkeratahospital.
+Reference Leprivile`ged’admissionestledroitd’unme´decin,envertudesonstatutdemembresoignant
+d’unhoˆpital, d’admettreunpatientdansunhoˆpitalouuncentreme´dicalafind’yde´livrerun
+diagnosticouuntraitement.
+RNNenc-50 Unprivile`ged’admissionestledroitd’unme´decindereconnaˆıtreunpatienta` l’hoˆpitalouun
+centreme´dicald’undiagnosticoudeprendreundiagnosticenfonctiondesone´tatdesante´.
+RNNsearch-50 Un privile`ge d’admission est le droit d’un me´decin d’admettre un patient a` un hoˆpital ou un
+centreme´dicalpoureffectuerundiagnosticouuneproce´dure,selonsonstatutdetravailleurdes
+soinsdesante´a`l’hoˆpital.
+Google Un privile`ge admettre est le droit d’un me´decin d’admettre un patient dans un hoˆpital ou un
+Translate centreme´dicalpoureffectuerundiagnosticouuneproce´dure, fonde´esursasituationentant
+quetravailleurdesoinsdesante´dansunhoˆpital.
+Source ThiskindofexperienceispartofDisney’seffortsto”extendthelifetimeofitsseriesandbuild
+newrelationshipswithaudiencesviadigitalplatformsthatarebecomingevermoreimportant,”
+headded.
+Reference Ce type d’expe´rience entre dans le cadre des efforts de Disney pour ”e´tendre la dure´e de
+viedesesse´riesetconstruiredenouvellesrelationsavecsonpublicgraˆcea` desplateformes
+nume´riquesquisontdeplusenplusimportantes”,a-t-ilajoute´.
+RNNenc-50 Ce type d’expe´rience fait partie des initiatives du Disney pour ”prolonger la dure´e de vie de
+sesnouvellesetdede´velopperdesliensavecleslecteursnume´riquesquideviennentpluscom-
+plexes.
+RNNsearch-50 Cegenred’expe´riencefaitpartiedeseffortsdeDisneypour”prolongerladure´edeviedeses
+se´riesetcre´erdenouvellesrelationsavecdespublicsviadesplateformesnume´riquesdeplus
+enplusimportantes”,a-t-ilajoute´.
+Google Cegenred’expe´riencefaitpartiedeseffortsdeDisneya`“e´tendreladure´edeviedesase´rieet
+Translate construiredenouvellesrelationsaveclepublicparlebiaisdesplates-formesnume´riquesqui
+deviennentdeplusenplusimportant”,at-ilajoute´.
+Source InapressconferenceonThursday,MrBlairstatedthattherewasnothinginthisvideothatmight
+constitutea”reasonablemotive”thatcouldleadtocriminalchargesbeingbroughtagainstthe
+mayor.
+Reference Enconfe´rencedepresse,jeudi,M.Blairaaffirme´qu’iln’yavaitriendanscettevide´oquipuisse
+constituerdes”motifsraisonnables”pouvantmeneraude´poˆtd’uneaccusationcriminellecontre
+lemaire.
+RNNenc-50 Lorsdelaconfe´rencedepressedejeudi,M.Blairaditqu’iln’yavaitriendanscettevide´oqui
+pourraitconstituerune”motivationraisonnable”pouvantentraˆınerdesaccusationscriminelles
+porte´escontrelemaire.
+RNNsearch-50 Lorsd’uneconfe´rencedepressejeudi,M.Blairade´clare´qu’iln’yavaitriendanscettevide´oqui
+pourraitconstituerun”motifraisonnable”quipourraitconduirea` desaccusationscriminelles
+contrelemaire.
+Google Lorsd’uneconfe´rencedepressejeudi,M.Blairade´clare´ qu’iln’yavaitriendanscettevido
+Translate quipourraitconstituerun”motifraisonnable”quipourraitmenera`desaccusationscriminelles
+portescontrelemaire.
+Table3: ThetranslationsgeneratedbyRNNenc-50andRNNsearch-50fromlongsourcesentences
+(30 words or more) selected from the test set. For each source sentence, we also show the gold-
+standardtranslation. ThetranslationsbyGoogleTranslateweremadeon27August2014.
+15

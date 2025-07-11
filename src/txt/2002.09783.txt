@@ -1,0 +1,1056 @@
+c 2020IEEE.Personaluseofthismaterialispermitted. PermissionfromIEEEmustbeobtainedforallotheruses,in
+(cid:13)
+anycurrentorfuturemedia,includingreprinting/republishingthismaterialforadvertisingorpromotionalpurposes,
+creatingnewcollectiveworks,forresaleorredistributiontoserversorlists,orreuseofanycopyrightedcomponentof
+thisworkinotherworks.
+OPTIMALITY STUDY OF EXISTING QUANTUM COMPUTING
+LAYOUT SYNTHESIS TOOLS
+BochenTan JasonCong
+CS,UCLA CS,UCLA
+bctan@cs.ucla.edu
+July14,2020
+ABSTRACT
+Layoutsynthesis,animportantstepinquantumcomputing,processesquantumcircuitstosatisfydevice
+layoutconstraints. Inthispaper,weconstructQUEKObenchmarksforthisproblem,whichhaveknown
+optimaldepthsandgatecounts. WeuseQUEKOtoevaluatetheoptimalityofcurrentlayoutsynthesis
+tools,includingCirqfromGoogle,QiskitfromIBM,tket fromCambridgeQuantumComputing,and
+| (cid:105)
+recentacademicwork. Tooursurprise,despiteoveradecadeofresearchanddevelopmentbyacademiaand
+industryoncompilationandsynthesisforquantumcircuits,wearestillabletodemonstratelargeoptimality
+gaps: 1.5-12x on average on a smaller device and 5-45x on average on a larger device. This suggests
+substantialroomforimprovementoftheefficiencyofquantumcomputerbybetterlayoutsynthesistools.
+Finally,wealsoprovetheNP-completenessofthelayoutsynthesisproblemforquantumcomputing. We
+havemadetheQUEKObenchmarksopen-source.
+1 Introduction
+Recently,aquantumprocessor“Sycamore”fromGooglewasshowntohaveaclearadvantageoverclassicalsuper-
+computersonaproblemnamedsamplingrandomquantumcircuit[1]. Itiswidelyexpectedthatinthenearfuture,
+quantumcomputing(QC)willoutperformitsclassicalcounterpartsolvingmoreandmoreproblems. Achievingthis
+computationaladvantage,however,requiresexecutinglargerandlargerquantumcircuits.
+Aquantumcircuitconsistsofquantumgatesactingonqubits. Itwasshownthatonlygatesactingononeortwoqubits
+arerequiredforuniversalquantumcomputing[2]. Afteraquantumcircuitisdesigned,itneedstobemappedtoaQC
+device. However,qubitconnectionsrequiredbytwo-qubitgatesareoftengreatlyconstrainedbyQCdevicelayouts.
+QClayoutsynthesisresolvesthisissuebyproducinganinitialmappingfromthequbitsinthecircuittothephysical
+qubitsontheQCdevice,adjustingthemappingtolegalizetwo-qubitgatesbyinsertingsomenewgates,andscheduling
+allthegates. TheresultingcircuitpreservestheoriginalfunctionalityandisexecutableontheQCdevice.
+Quantumcircuitsinearlierexperimentsusedtobeonlydozensofgatesonsmalldevices,e.g.,thosewith5orfewer
+qubits.Inthosecases,layoutsynthesiswasusuallyrealizedbyexhaustiveenumeration.However,thetaskisincreasingly
+intractableasthecircuitsgetdeeperandwider. Nowadays,acutting-edgeQCexperimentrequirestheexecutionofa
+circuitof53qubits,1113single-qubitgates,and430two-qubitgates[1]. Forageneralcircuitofthissize,thenumber
+ofpossibleinitialmappingsis53!,andthesubsequentschedulingandlegalizationstepshavelargesolutionspaceas
+well. Clearly,designautomationisnecessary. Inaddition,thesizeofthecircuitsthatQChardwareisabletoexecute
+0202
+luJ
+31
+]hp-tnauq[
+4v38790.2002:viXrahasbeenscalingexponentiallyinthepastfewyears[3]. Thefastincreaseofhardwarecapacitypresentsanevenbigger
+challengetolayoutsynthesis.
+Severallayoutsynthesistoolsareavailableandtherearealsobenchmarksthathelpustocomparethem. However,
+itiscurrentlyunknownhowfarthesetoolsareawayfromtheoptimalsolutions. Inthispaper,wepresentQUEKO
+benchmarks(quantummappingexampleswithknownoptimal)whicharequantumcircuitswithknownoptimaldepth
+forthegivenQCdevice. Then,weevaluatefourexistingQClayoutsynthesistoolswithQUEKO,namelytket 1,
+greedyrouterincludedinCirq2,DenseLayoutplusStochasticSwapincludedinQiskit3,andtherecentacad | em (cid:105) ic
+workbyZulehneretal.[4]. Tooursurprise,ratherlargeoptimalitygapsarediscoveredevenforfeasible-depthcircuits:
+1.5-12xonaverageonasmallerdeviceand5-45xonaverageonalargerdevice.
+Thisresultissomewhatsurprisingas,incomparison,theresultoftheVLSIcircuitplacementoptimalitystudyconducted
+morethan15yearsagousingthePEKObenchmarks[5]revealedthattheoptimalitygapsoftheleadingacademicand
+industrialplacerswere1.43-2.12Xonaverageforcircuitswithovertwomillionplacableobjects,whilethequantum
+circuitsusedinthisstudyhaveonlyupto54qubitsandabout35thousandquantumgates,yetshownamuchlarge
+optimalitygap.
+Theoptimalitygapsrevealedinthisstudyhaveastrongimplication. Ifwecanconsistentlyhalvethecircuitdepth
+bybetterlayoutsynthesis,weeffectivelydoublethedecoherencetimeofaQCdevice,whichisequivalenttoalarge
+advancementinexperimentalphysicsandelectricalengineering. Therefore,thegapscallformoreresearchinvestments
+intoQClayoutsynthesis. Todrawaparallel,theVLSIplacementoptimalitystudyusingthePEKObenchmarks[5]
+spurredfurtherresearchinvestmentincircuitplacement,resultinginwirelengthreductionequivalenttotwoormore
+generationsofMoore’sLawscaling,butinamorecost-efficientway[6].
+Therestofthispaperisorganizedasfollows: Sec.2reviewsrelevantbackgroundofQC,Sec.3formulatestheQC
+layoutsynthesisproblem;Sec.4reviewsrelatedwork;Sec.5providestheconstructionofQUEKObenchmarks;Sec.6
+evaluatesaforementionedtoolswithQUEKO;Sec.7provestheNP-completenessofQClayoutsynthesis;Sec.8gives
+conclusion.
+2 Background
+2.1 Qubits
+Aqubitisinaquantumstate ψ representedbyavectorintwo-dimensionalHilbertspacewithL2-normequals1
+| (cid:105) (cid:18) (cid:19) (cid:18) (cid:19) (cid:18) (cid:19)
+α 1 0
+ψ = =α +β =α0 +β 1 , (1)
+| (cid:105) β 0 1 | (cid:105) | (cid:105)
+wherethetwobasisvectorsare 0 and 1 . Aquantumstateofmultiplequbitsliesinthetensorproductofindividual
+| (cid:105) | (cid:105)
+Hilbertspaces. Forinstance,ageneraltwo-qubitstate φ is
+| (cid:105)
+φ =α0 0 +β 0 1 +γ 1 0 +λ1 1 =(αβ γ λ)T, (2)
+| (cid:105) | (cid:105)| (cid:105) | (cid:105)| (cid:105) | (cid:105)| (cid:105) | (cid:105)| (cid:105)
+where we omit the tensor product notation between s for convenience. A joint state of two individual qubits
+⊗ |·(cid:105)
+ψ ψ is
+1 0
+| (cid:105)⊗| (cid:105) (cid:18) (cid:19) (cid:18) (cid:19)
+α α
+ψ ψ = (cid:48) =(αα αβ βα ββ )T. (3)
+| 1 (cid:105)| 0 (cid:105) β ⊗ β (cid:48) (cid:48) (cid:48) (cid:48) (cid:48)
+2.2 QuantumGates
+Aquantumgatetransformsaninputstatetoanoutputstate. Forexample,somecommonsingle-qubitgatesareX,H,
+andT. meanstransposecomplexconjugate.
+†
+(cid:18) 0 1 (cid:19)(cid:18) α (cid:19) (cid:18) β (cid:19) √2 (cid:18) 1 1 (cid:19) (cid:18) 1 0 (cid:19) (cid:18) 1 0 (cid:19)
+X ψ = = , H = ,T = , T = . (4)
+| (cid:105) 1 0 β α 2 1 − 1 0 eiπ/4 † 0 e − iπ/4
+Twocommontwo-qubitgatesareCZ andCX (alsonamedCNOT).
+1 0 0 0  1 0 0 0
+0 1 0 0 0 1 0 0
+CZ = , CX = . (5)
+0 0 1 0  0 0 0 1
+0 0 0 1 0 0 1 0
+−
+1https://github.com/CQCL/pytket
+2https://github.com/quantumlib/Cirq
+3https://Qiskit.org/
+2NANDgatesaresufficientforuniversalclassicalcomputing. Foruniversalquantumcomputing,therearemultiple
+completegatesets. Table1liststhreesuchsetschosenbyQCframeworksCirq2,Qiskit3,andpyQuil4. Othergates
+maybeinputtotheseframeworks,butwouldbetranslatedintoacombinationofthesenativegates. Theexactmatrix
+representationsofthesegatesarenotspecifiedherebecausetheyareirrelevanttothepurposeofthispaper.
+Table1: Completequantumgatesetexamples
+Framework Single-qubitgate Two-qubitgate
+Cirq(Google) Z(λ),phasedX power CZ
+Qiskit(IBM) U (λ),U (φ,λ),U (θ,φ,λ) CX
+1 2 3
+pyQuil(Rigetti) RZ(λ),RX(kπ/2) CZ
+AnotherimportantgateisCCX,orToffoli,gatewhichisuniversalforreversiblelogicandthusessentialforQClogic
+synthesis[7]. Itisaquantumgateonthreequbitsandcanbedecomposedintoasetofsingle-qubitandtwo-qubitgates
+asshowninthefollowingsubsection.
+1 0 0 0 0 0 0 0
+0 1 0 0 0 0 0 0
+ 
+0 0 1 0 0 0 0 0
+ 
+0 0 0 1 0 0 0 0
+CCX =  (6)
+0 0 0 0 1 0 0 0
+ 
+0 0 0 0 0 1 0 0
+0 0 0 0 0 0 0 1
+0 0 0 0 0 0 1 0
+Animportantpropertybetweentwogatesiswhethertheycommute. Iftheresultoffirstapplyinggate0followedby
+gate1isthesamewiththeresultoftheotherwayaround,wesaythesetwogatescommute. Iftwogatesactontotally
+differentqubits,theyalwayscommute. Forgatesactingonasamequbit,itisnontrivialtojudgeingeneral. T andCZ
+commutebecausetheyarebothdiagonalmatrices;butX andH donotcommute,sinceXH =HX.
+(cid:54)
+Formorebackgroundknowledge,thereadercanrefertoacomprehensivetextbookonquantumcomputingandquantum
+information[2],oraconcisetextbookonquantumcomputing[8]withmorecomputerscienceflavor.
+2.3 QuantumCircuit
+InQC,acircuitorprogramisusuallyinputasapieceofQASMcode[9],e.g.,Fig.1a. Thecodeisrathersimpleto
+read,merelyspecifyingeachgatesequentiallylikeinstructionsintraditionalassemblylanguage. Wethusdefinea
+quantumcircuittobealistofquantumgatesg g ...g .
+1 2 M
+Itisimportanttonotethatthequbitsinaquantumcircuitarelogicalqubitsdenotedasq ,...,q .Wedonotuse“logical”
+1 N
+toindicateerrorcorrectioninthispaper. Additionally,wedenotequbitcountbyN,gatecountbyM,single-qubitgate
+countbyM ,andtwo-qubitgatecountbyM . Forinstance,inFig.1,N =3,M =15,M =9,M =6.
+1 2 1 2
+Weusethenotationofgatelikeasetofqubits. Wesaythecardinality g =1ifgisasingle-qubitgateand g =2
+| | | |
+ifgisatwo-qubitgate. g g denotesthesetofqubitsinvolvedingorg . g g denotesthesetofqubitsinvolved
+(cid:48) (cid:48) (cid:48)
+∪ ∩
+in g and g . For instance, in Fig. 1, q ,q g , q g , g = g = 2, g = g = 1, g g = q , and
+(cid:48) 1 2 2 0 13 4 6 7 9 1 2 2
+∈ ∈ | | | | | | | | ∩ { }
+g g = q ,q ,q .
+8 9 0 1 2
+∪ { }
+A1Dcircuitdiagramcanalsorepresentthecircuit,e.g.,Fig.1b. Insuchadiagram,eachwirestandsforalogicalqubit.
+WedrawthecontrolqubitofCX gateas andthetargetqubitas . The1Ddiagramprovidessomeimplicittiming
+• ⊕
+information,i.e.,thegatesonthesamehorizontalwireareexecutedfromlefttoright. However,verticalalignment
+hasnoindicationontiming,e.g.,g andg canbeexecutedsimultaneously,butweseparatethembysomehorizontal
+8 9
+distancepurelytoavoidoverlappinginthediagram.
+2.4 QuantumComputingDeviceRepresentation
+WerepresentthelayoutofaQCdevicewithadevicegraphG=(P,E)whereeachnodepstandsforaphysicalqubit
+andeachedgeestandsforaconnectionthatenablestwo-qubitentanglinggates,i.e.,wecanonlyperformsuchgates
+4https://github.com/rigetti/pyquil
+3OPENQASM 2.0;
+include "qelib1.inc";
+qreg q[3]; // Initiate 3 logical qubits
+h q[2]; //g
+1
+cx q[1], q[2]; //g
+2
+tdg q[2]; //g
+3
+cx q[0], q[2]; //g
+4
+t q[2]; //g
+5
+cx q[1], q[2]; //g
+6
+tdg q[2]; //g
+7
+cx q[0], q[2]; //g
+8
+t q[1]; //g
+9
+t q[2]; //g
+10
+cx q[0], q[1]; //g
+11
+h q[2]; //g
+12
+t q[0]; //g
+13
+tdg q[1]; //g
+14
+cx q[0], q[1]; //g
+15
+(a)QASMcodeofToffolicircuit
+g g g g g
+4 8 11 13 15
+q 0 T
+• • • •
+g g g g
+2 6 9 14
+q 1 T T
+• • †
+g g g g g g
+1 3 5 7 10 12
+q 2 H T T T T H
+† †
+(b)1DdiagramofToffolicircuit
+q g ,g
+1 2 6
+g ,g
+11 15
+q q g ,g
+0 2 4 7
+(c)Two-qubitgatesetofToffolicircuit
+Figure1: Toffolicircuit(Single-qubitgatesarecoloredgray. Identicaltwo-qubitgatesappliedatdifferenttimeshave
+thesamecolor,e.g.,g andg areorangebecausetheyarebothCX(q ,q )butatdifferenttimes.)
+2 6 1 2
+ontwophysicalqubitsthatareconnected. Thisgraphisalsonamedascouplinggraphorqubitconnectivity. Device
+graphsusedinthispaperareshowninFig.2.
+Inthecouplinggraphs,weassumetheedgesarebi-directional. Wemadethisdecisionbasedonthefollowingreasons.
+First,ifthetwo-qubitgateinthegatelibraryissymmetric,likeCZgateusedbyGoogleandRigettiasshowninTable1,
+thenitdoesnotmakesensetohavedirectedconnections. Second,evenforasymmetricgateslikeCX,mostoftheIBM
+quantumcomputers5nowsupportbothdirectionsforeveryedge. Third,asweshallseeinSec.5,ourconstructionof
+QUEKObenchmarksworksfordirectedgraphsaswell. So,theassumptionofbi-directionalitydoesnotchangethe
+conclusionofthisstudy.
+3 ProblemFormulation
+Layoutsynthesisisdividedintotwosub-tasks: initialplacementthatproducesaninitialmappingfromlogicalqubitsto
+physicalqubits,andgateschedulingthatdecideswhenandwheretoexecuteeachinputgateandinsertSWAPgatesto
+maketwo-qubitgateslegalonthedevicegraph. However,aSWAPgatemayincreasethedepth,anddefinitelyincrease
+thegatecountandtheerrorrate. InthewholeQCcompilation/mappingworkflow,thereareusuallycircuitoptimization
+5https://quantum-computing.ibm.com/
+4p p
+4 2
+p p p
+3 1 0
+(a)IBM’sOurensedevicegraph
+(b)Rigetti’sAspen-4devicegraph
+(c)IBM’sTokyodevicegraph
+(d)IBM’sRochesterdevicegraph (e)Google’sSycamoredevicegraph
+Figure2: QCdeviceexamples
+stagesbeforeorafterlayoutsynthesis. Duringtheoptimizationstages,gatereductionandcommutationareperformed,
+e.g.,[10]. Weassumethattheseoptimizationsarealreadyappliedpriortolayoutsynthesis,sothateveryinputgate
+shouldbeexecutedandtherelativeorderofinputgatesshouldnotchangeinthelayoutsynthesisprocess.
+physical qubits logical qubits
+p p q
+4 2 1
+p p p q q
+3 1 0 0 2
+(a)InitialplacementforToffolicircuit
+g˜ g˜ g˜ g˜ g˜
+4 8 14 16 18
+q 0 p 0 p 0 T
+• • • •
+g˜ g˜ g˜ g˜ g˜ g˜ g˜
+2 6 9 11 12 13 17
+q 1 p 3 T p 1 T
+• • • • †
+g˜ g˜ g˜ g˜ g˜ g˜
+1 3 5 7 10 15
+q 2 p 1 H T T T T p 3 H
+† † •
+t 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15
+(b)ScheduledToffolicircuit
+Figure3: QuantumcomputinglayoutsynthesisforToffolicircuitonIBM’sOurensedevice
+53.1 InitialPlacement
+Duringinitialplacement,weneedtofindamappingfromlogicalqubitsinthequantumcircuittophysicalqubitsonthe
+deviceµ :Q P thatbenefitssubsequentgatescheduling. Ifthetwo-qubitgateset,consistingofallthetwo-qubit
+0
+→
+gates,canbeembeddedinthedevicegraphduringinitialplacement(e.g.,Fig.1ccanbeembeddedinFig.2c),gate
+schedulingdoesnotnecessarilyneedtoinsertanygates. However,thecaseisnotsoidealingeneral. Forexample,if
+wewanttomaptheToffolicircuitasshowninFig.1bontodeviceOurenseasshowninFig.2a,theremustbesome
+additionalgates,sincethedevicegraphdoesnotcontainanytriangles,butthetwo-qubitgatesinFig.1cformsatriangle.
+AvalidinitialplacementinthiscaseisgiveninFig.3awhereµ (q )=p ,µ (q )=p ,andµ (q )=p .
+0 0 0 0 1 3 0 2 1
+3.2 GateScheduling
+Givenaquantumcircuitg ...g ,e.g.,Fig.1b,gateschedulingproducesthespacetimecoordinates(t ,x )foreach
+1 M j j
+gate. Thecoordinatesspecifywhenandwherethegatesareapplied. Wesaythatagateisscheduledtocycletifitstime
+coordinateist. Forasingle-qubitgate,thespacecoordinateisaphysicalqubit,i.e.,x P;foratwo-qubitgate,it
+j
+∈
+isanedgeinthedevicegraph,i.e.,x E. SWAPgatesmayneedtobeinsertedduringgateschedulingtoensure
+j
+∈
+thatalltwo-qubitgatesareexecutable. TheinputgateplustheinsertedSWAPgatesconstitutethescheduledgatelist
+g˜ ,...,g˜ . SinceonlySWAPgatesareinsertedandalltheinputgatesarecontainedinthescheduledgatelist,the
+1 M˜
+functionalityofinputcircuitremainsunchangedafterthelayoutsynthesisprocess. Additionally,gateschedulingmust
+respectdependenciesinthequantumcircuit. Ifgategactsonqubitq,thengcanonlybeexecutedafterallpriorgates,
+whichactonqubitq,areexecuted.
+AvalidbutnotnecessarilyoptimalgateschedulingexampleisgiveninFig.3b. Thetimecoordinatesforallthegates
+are displayed at the bottom, e.g., t = 1 and t = 13. The space coordinates can be inferred from the mapping,
+1 15
+e.g. x = p ,x = (p ,p ),x = (p ,p ),andx = p . Thereisaninjectivemapfromtheoriginalgatestothe
+1 1 2 3 1 14 0 1 15 3
+scheduledgates: f(i)=ifori=1to10andf(i)=i+3fori=11to15suchthatg =g˜ fori=1to15. The
+i f(i)
+threeCX gatesinthedashedboxg˜ ,g˜ ,andg˜ constituteaSWAPgate. Theadjustedmappingisshownafterthe
+11 12 13
+them. TheSWAPgateisinsertedsothatg˜ andg˜ areonconnectedqubitsp andp ,thusexecutable.
+14 18 0 1
+3.3 FormalDefinitionof(Depth-Optimal)LayoutSynthesisProbleminQuantumComputing
+InputAdevicegraphG=(P,E)andalistofquantumgatesg ...g actingonlogicalqubitsetQ. Alltheinputgates
+1 M
+areinthegatesetofthedevice,e.g.,asetfromTable1. Logicalqubitsarelessorequalthanphysicalqubits,i.e.,
+Q P .
+| |≤| |
+Output An initial mapping µ : Q P, and a scheduled quantum circuit consists of a new list of gates g˜ ...g˜ ,
+0
+→
+1 M˜
+including SWAP gates, where each gate has a spacetime coordinate (t ,x ). We use tilde to denote that a gate is
+j j
+scheduledfromhereon.
+Constraints
+Feasibletwo-qubitgates: allthetwo-qubitgatesinthescheduledcircuitmustbeontwoqubitsconnectedin
+• thedevicegraph. Formally,forj =1toM˜,if g˜ =2,thenx E.
+j j
+| | ∈
+Executingallgates: allinputgatesshouldbeexecuted. Formally,thereisaninjectivemapf : 1,...,M
+• { }→
+1,...,M˜ suchthatg =g˜ fori=1toM.
+i f(i)
+{ }
+Respectingdependencies: fori,i (cid:48) =1toM,ifi<i (cid:48) andg i g i(cid:48) = thent f(i) <t f(i(cid:48)) .
+• ∩ (cid:54) ∅
+Objective Minimizing circuit depth T, which is the maximal time coordinate of all the scheduled gates, i.e., T
+≡
+max t .
+j=1,...,M˜ j
+Inthispaper,weusedepthasthedefaultobjectivebutotherobjectivescanbeusedaswell,e.g.,thenumberofadditional
+gatesM˜ M,orthefidelityofthescheduledcircuit. Theoutputandtheconstraintsoftheproblemareindependentof
+−
+theobjective. However,withotherobjectiveslikefidelity,moreinputinformationmayberequired.
+4 RelatedWork
+Inthemostgeneralsense, thetaskofQClayoutsynthesisisgeneratingaquantumcircuitthatsatisfiesQCdevice
+constraints and fulfills the functionality of the input circuit. Related works on this problem include [4,11–36].
+6Theseworksmayhavesomevariationsontheprobleminmind.[11,13–17,26,34]focusonmultidimensionalarray
+devicegraphs(lineararrayfor1D,gridfor2D,andsoon).[30]focusesspecificallyonSU(4)circuitsandincludes
+post-synthesisoptimization.[36]focusesonadjustingthemappingaftersynthesistoimprovefidelity.
+AspointedoutinSec.2.2,itisnontrivialtojudgeiftwoquantumgatescommute.Iftwogatesdonotcommute,changing
+theirrelativeorderwouldresultinafunctionallydifferentcircuit. Therefore,ingeneral,performingcommutationsare
+seentobepartoflogicsynthesisforquantumcomputing,whichhappensbeforelayoutsynthesis,themaintopicof
+thispaper. Thus,tobetterisolatelayoutsynthesis,westatedinSec.3that,asanassumption,allcommutation-based
+optimizationhavebeenperformedbeforehand. Thisassumptionisalsorespectedinalloftheevaluationsafterwards
+andalltheotherrelatedworkslistedaboveexcept[21,27–29].[21]considersafewbasiccommutationrules,butthe
+solutionsitcomparestodonotusedependenciestoencodetherelativeordersbetweenthegates. Thus,itisunclear
+whetherthegainof[21]isbecauseofcommutations, orencodingwithdependencies.[27–29]considerthelayout
+synthesisofQAOAcircuits. Allthetwo-qubitgatesusedinQAOAcircuits[37]areZZ-phasegatesthatcommutewith
+eachother,whichmeanstherelativeorderoftwoZZ-phasegatescanbechangedeveniftheyactonasamequbit.
+However,thesegatesrarelyappearinotherexistingquantumcircuits,sowedecidetotreatQAOAcircuitsasaspecial
+caseinsteadofjeopardizingoureffortsinisolatinglayoutsynthesis.
+Existingworksonquantumlayoutsynthesiscanbecharacterizedbybasedonoptimizationmetricsused. Themetric
+canbetheadditional“cost”,whichisusuallyproportionaltothenumberofadditionalgates[4,12–24,26,30];orcircuit
+depthlikethispaper,sincethequbitscanonlyfunctionwellwithinthedecoherencetime[11,25,27–29];orcircuit
+fidelity, sincenowadaysacommonpracticeisexecutingacircuitmultipletimesandanalysingthestatisticsofthe
+results[32,34–36];oramixoftheabove[31,33].
+DetaileddiscussionsofthecomplexityofQClayoutsynthesiscanbefoundinSec.7. Thesediscussionsindicatethat
+largescaleinstancescannotbesolvedbothexactlyandefficiently. Fromtheperspectiveofsolutiontechniques,the
+currentworkscanbedividedintotwocategories. Thefirstgroupfocusesonderivingtheexactsolutionformoderate-
+sizedinstanceswiththehelpofsolvers[15,18,22,25–29,34,35].[18,26]useaPBO(pseudoBooleanoptimizer)to
+decideasetofSWAPgatesthatlegalizesallthetwo-qubitgates,buttheydonotexplicitlyschedulethegates. Thesame
+goesfor[15,22],whichuseaMIP(mixedintegerprogramming)solverandaSMT(satisfiabilitymodulotheories)
+solvercorrespondingly.[27–29]useatemporalplannertoschedulespecificallyQAOAcircuits. Theclosestprevious
+works concerning this paper are [25,34,35]. However, [34,35] use a SMT solver to maximize fidelity. [25] splits
+circuitsinto“levels”andinsertsgatestotransformthemappingbetweenthelevels. Thismodelofquantumcircuitmay
+notyieldanoptimalsolution. Underthisimperfect“levels”model,[25]aimstoderiveadepth-optimalsolutionwith
+integerlinearprogramming.
+Thesecondgroupofrelatedworksuseheuristicsearchtechniques[4,11–14,16,17,19–21,23,24,30–33]. Weonly
+discusstheworkstargetinggeneraldevicelayoutsbelow[4,12,19–21,23,24,30–33]. Thegeneralapproachissplitting
+thecircuitintosmallsub-circuitsforwhichthelayoutsynthesiscanbedoneefficiently,andthensearchingforthe
+mappingtransformationbetweenthesesub-circuits. Asub-circuitcanbea“level”or“layer”mentionedinthelast
+paragraph[4,20,23,24,31–33],asetofseverallevels[12],severallevelsbutforafewspecificqubits[30],orindividual
+gates [19,21]. In order to find the mapping transformation, [19] inserts SWAP gates to move the two qubits that
+requiredbythenexttwo-qubitgateintheshortestpath;[21,24,31]alsoconsiderdistancesbetweenqubitsoffurther
+two-qubitgates;[32]additionallyconsidersfidelityinthequbitmovements;[4,30]usethesum-of-distancesplusthe
+numberofSWAPgatesasthecostfunctioninA*search;[33]usesbidirectionalsearch;[20]usesa4-approximation
+algorithm;[23]exploitssomeexistingapproximatesolutionoftokenswapping;[12]recursivelyconsidersSWAPgates
+ascutsinthedevicegraph.
+Thecomplexityalsobringsdifficultytotheevaluationofthesesolutions.Currently,thebenchmarksusuallyarequantum
+circuitlibrariesofsomerealisticfunctions,e.g.,[10]andRevLib[38],orcertainrandomcircuits,whicharethoughtto
+betheworst-casescenario,e.g.,SU(4)circuits[30]. Sofar,researcherscanonlycompareagainsteachother,butdonot
+knowhowfartheyarefromtheoptimum. Thispaperaimstofillinthisgap.
+TheQClayoutsynthesisproblemisstillquitenewtocompileranddesignautomationcommunities,sothenameofthe
+problemvaries.Itcanbeplacement[12,15],routing[24],compilingquantumcircuits[21,27–30,34,35],quantumcircuit
+transformation[20],mappingcircuitstoQCarchitectures[4,18,22,25,26,31,33],conversion[13]oroptimization[14]
+ofcircuitsinQCarchitecture,realizationofquantumcircuits[16,17],orqubitallocation[19,23,32,36].
+75 QUEKOBenchmarks
+ThisworkisinspiredbyPEKO[5],placementexampleswithknownoptimal. Placementisacrucialstepinclassical
+integratedcircuitdesign,wheremodulesareplacedonachipwithobjectiveofminimizingtotalwirelength. Although
+thisproblemisNP-hard,thePEKOalgorithmisabletogeneratebenchmarkswithknowoptimalsolutions.
+Similarly,foragenericinputquantumcircuitandagenericdevicegraph,findingthescheduledcircuitwithoptimal
+depthisNP-complete,whichwillbeprovedinSec.7. However,itisfeasibletoconstructsomebenchmarkswithknown
+optimalsolution. GivenatargetdevicegraphGandatargetdepthT,wecanconstructandepth-optimalcircuit. Then,
+byre-labellingthequbits,wederiveaQUEKObenchmark.
+Additionally, QUEKO can be customized for a given feature: gate density vector (d ,d ). The two components
+1 2
+intuitivelystandforthedensitiesofsingle-qubitgatesandtwo-qubitgatesinthewholecircuit. Supposeacircuithasn
+logicalqubits,M single-qubitgates,M two-qubitgates,andalongestdependencychainofl,thend =M /(n l)
+1 2 1 1
+·
+and d = 2M /(n l). For example, in Fig. 1b, n = 3, l = 11, M = 9, and M = 6, so d 0.27 and
+2 2 1 2 1
+· ≈
+d 0.36. Likewise, we can extract (d ,d ) from other existing circuits with known functionalities, so that the
+2 1 2
+≈
+QUEKObenchmarksimitatesomereal-worldcircuitsand,atthesametime,haveknownoptimaldepths.
+TheconstructionofQUEKO,asshowninAlgorithm1,startswithcheckingthevalidityofinputdatabycalculating
+thenumberofsingle-qubitandtwo-qubitgatesM andM . IfM +M <T,thentherewouldbetoofewgatesto
+1 2 1 2
+generateacircuitwithdepthT;ifM +2M >N T,thentherewouldbetoomanygatesforthegivendepthand
+1 2
+·
+devicegraph. WedefinethematchingbounduofagraphGtobetheminimalsizeofmaximalmatchingsofG. This
+meanswecanfindatleastuedgesinGthatpair-wiselysharenovertices. IfM >u T,thentherecouldbetoomany
+2
+·
+two-qubitgatesforthegivendepthanddevicegraph. Inshort,ifM +M <T,M +2M >N T,orM >u T,
+1 2 1 2 2
+· ·
+wereturnanerrortorejecttheinputdata. Otherwise,weproceedtothreephases: backboneconstruction,sprinkling,
+andscrambling.
+5.1 BackboneConstructionPhase
+This phase “grows” a sequence of T gates, each depending on the previous one, constituting a dependency chain
+of length T. This chain serves as the “backbone” of the circuit. For example, we start from the device graph as
+Fig.4a(whichisjustFig.2arotated),andpickthreeexecutablegatesg˜ ,g˜ ,andg˜ whosespacetimecoordinatesare
+1 2 3
+(1,(p ,p )),(2,p ),(3,(p ,p )). TheyconstituteadependencychainoflengthT = 3,sinceallofthemactonp .
+0 1 1 1 2 1
+ThisisshowninFig.4b,wheregatesatdifferentcyclesareputondifferent“slices”fromlefttoright. The“backbone”
+iscoloredgreen. Notethatifthegivengraphisdirected,thenwemakesurethatthedirectionofthetwo-qubitgatewe
+chooseisconsistentwiththedirectionofthecorrespondingedge. Thus,ourconstructionalsoworksfordirecteddevice
+graphs.
+Tobemorerigorous,wefirstchoosearandomnodeoredgeofGasx . Ineveryiterationafterwards,werandomly
+1
+choosex thatoverlapswithx . Thus,x x = ,whichenforcest >t =k 1bydependencyconstraint.
+k k 1 k k 1 k k 1
+Ontheotherhand,sinceg˜ ise−xecutable,itc ∩ ana−tm (cid:54) ost ∅ takeasinglecycle,i.e.,t−heoptim − alt =t +1=k. Gate
+k k k 1
+sequenceg˜ ,g˜ ,...,g˜ constitutesadependencychainoflengthT. Becauseofthis“backbone”,the−finaldepthofthe
+1 2 T
+scheduledcircuitcannotbelowerthanT. NotethatwedonotneedtouseanySWAPgatesforbackboneconstruction.
+5.2 SprinklingPhase
+ThebackboneconstructionphaseusesT gatesintotal,wethenrandomly“sprinkle”therestM +M T gates,e.g.,
+1 2
+−
+g˜ ,g˜ ,g˜ ,g˜ showninFig.4c. Werandomlyselectspacetimecoordinates(t ,x ),(1 t T)thatdoesnotoverlap
+4 5 6 7 i i i
+≤ ≤
+withanyexistinggateswithtimecoordinatet . SinceallthetimecoordinatesofgatessprinkledarelessorequaltoT,
+i
+thebackboneisnotlengthenedinthisphase. Aftersprinkling,acircuitwithgatesg˜ ...g˜ iscreated. Itsgatesare
+1 M1+M2
+allexecutable;itsdepthisT;itsgatedensityvectorapproximates(d ,d ). (Therecouldbeminorroundingerrorsin
+1 2
+theceilingfunction.)
+Itisworthyofnotingthatthoughonlyonelongestdependencychainisexplicitlygeneratedinthebackboneconstruction
+phase,thesprinklingphasemayimplicitlygeneratemore. Forexample,g˜ dependsong˜ ;ifwe“sprinkles”agateon
+4 7
+p atcycle3,thenanotherdependencychainoflength3wouldexistintheoutputcircuit. Thehigherthegatedensities,
+4
+themorelikelythattheseimplicitlongestdependencychainsaregenerated.
+8Algorithm1QUEKOconstruction
+Input: adevicegraphG=(P,E)with P =N anditsmatchingboundu,adepthtargetT,andagatedensityvector
+| |
+(d ,d )
+1 2
+Output: QUEKObenchmarkg g ...g ,whereM andM arethenumbersofsingle-/two-qubitgates
+1 2 M1+M2 1 2
+1: M d N T ,M d N T/2
+1 1 2 2
+←(cid:100) · · (cid:101) ←(cid:100) · · (cid:101)
+2: ifM +M <T orM +2M >N T orM >u T then
+1 2 1 2 2
+· ·
+3: return error: inputdatanotadmissible
+4: endif
+5: m 0,m 0 //howmanysingle-qubitgatesandtwo-qubitgateswehaveused
+1 2
+← ←
+//Backboneconstructionphase
+6: fori=1toT do
+7: j rand( 1,2 ) //randomlydecidesingle-qubitortwo-qubitgate
+← { }
+8: ifj =2andm <M then
+2 2
+9: x i rand(E)
+←
+10: whilei>1andx i x i 1 = do
+11: x i rand(E) ∩ − ∅
+←
+12: endwhile
+13: t i i,m 2 m 2 +1
+← ←
+14: else
+15: x i rand(P)
+←
+16: whilei>1andx i x i 1 = do
+17: x i rand(P) ∩ − ∅
+←
+18: endwhile
+19: t i i,m 1 m 1 +1
+← ←
+20: endif
+21: endfor
+//Sprinklingphase
+22: fori=T +1toM +M do
+1 2
+23: j rand( 1,2 )
+← { }
+24: ifj =2andm <M then
+2 2
+25: (t i ,x i ) rand( 1,2,...,T E)
+← { }×
+26: while l 1,...,i suchthatt i =t l andx i x l = do
+∃ ∈{ } ∩ (cid:54) ∅
+27: (t i ,x i ) rand( 1,2,...,T E)
+← { }×
+28: endwhile
+29: m m +1
+2 2
+←
+30: else
+31: (t i ,x i ) rand( 1,2,...,T P)
+← { }×
+32: while l 1,...,i suchthatt i =t l andx i x l = do
+∃ ∈{ } ∩ (cid:54) ∅
+33: (t i ,x i ) rand( 1,2,...,T P)
+← { }×
+34: endwhile
+35: m m +1
+1 1
+←
+36: endif
+37: endfor
+//Scramblingphase
+38: τ arandommappingfromP toQ
+←
+39: fori=1toM +M do
+1 2
+40: ifx i =(p,p (cid:48) ) E then
+∈
+41: g i two-qubitgate(τ(x i .p),τ(x i .p (cid:48) ))
+←
+42: else
+43: g i single-qubitgate(τ(x i ))
+←
+44: endif
+45: endfor
+//Output
+46: sortg i accordingtot i ,i=1toM 1 +M 2
+47: return g 1 g 2 ...g M1+M2
+91
+p 0
+p 2
+p
+1
+p 4
+p 3
+(a)Devicegraph
+p
+p
+2
+4
+p 3
+2
+p 0
+g˜ 1
+p
+1
+p
+p
+2
+4
+p 3
+p
+1
+g˜ 2
+p 0
+3
+p 4
+p 2
+p 3
+p
+1
+p 0
+t
+g˜
+3
+(b)Backboneconstructionphase
+1
+p 4
+p 2
+2
+p 0 g˜ 6
+p g˜ 2 1
+p
+1
+p 4 g˜
+7 p g˜ 3 4 p 3
+p
+1
+g˜ 2
+p 0
+3
+p 4
+p 2
+p 3
+t
+τ
+q
+0
+g˜
+5
+p 0 p 0 q 1
+p 2 g˜ q
+3 p p 2
+1 1
+p 4 q 3
+p 3
+q
+4
+(c)Sprinklingphase (d)Scramblingphase
+q 0 X
+•
+OPENQASM 2.0;
+q include "qelib1.inc";
+1
+qreg q[5];
+q 2 X cx q[0], q[2]; //g 1 (g˜ 1 )
+• cx q[3], q[1]; //g 2 (g˜ 7 )
+x q[2]; //g (g˜ )
+3 2
+q 3 X x q[3]; //g 4 (g˜ 4 )
+• x q[4]; //g (g˜ )
+5 6
+cx q[2], q[4]; //g (g˜ )
+q 4 X x q[0]; //g (g˜ ) 6 3
+7 5
+(f)OutputQASMcode(Insidethe
+(e)Outputcircuit1Ddiagram
+parenthesesarethecorresponding
+gatesbeforethescramblingphase.)
+Figure4: QUEKOconstructionvisualization
+5.3 ScramblingPhase
+AsshowninFig.4d,wegeneratearandommappingτ fromphysicalqubitstologicalqubitsandapplyτ tothespace
+coordinatesofg˜ g˜ ...g˜ . Forinstance,x =(p ,p ),sotheresultinggateg isatwo-qubitgateonlogicalqubits
+1 2 M1+M2 1 0 1 1
+τ(p )=q andτ(p )=q ;x =(p ,p ),sog isatwo-qubitgateonτ(p )=q andτ(p )=q ;g isasingle-qubit
+0 0 1 2 7 3 4 7 3 1 4 3 6
+gateonτ(p )=q ... Thespecifictypesofsingle-qubitgatesandtwo-qubitgatesarenotimportant,sinceQUEKOis
+2 4
+onlyforlayoutsynthesis,notforcircuitoptimization. WeuseX asthesingle-qubitgateandCX asthetwo-qubitgate.
+105.4 Output
+Sortthegatesg g ...g accordingtothetimecoordinatestotransferthetiminginformationoriginallyinthese
+1 2 M1+M2
+timecoordinatestotherelativeorderinsidetheoutputgatelist. TheresultisaQUEKObenchmark,asshowninFig.4e
+andFig.4f.
+Aswehaveproven,thedepthoftheoutputcircuitisatleastT becauseofthebackbone. AQClayoutsynthesistoolcan
+meettheoptimumbyfindingtheinitialmappingthatistheinverseofthescramblingmappingτ. Therefore,QUEKO
+circuitshaveknownoptimaldepthT.
+NotethatQUEKOcircuitsalsohaveknownoptimalgatecountM +M . Sinceweassumethat,inlayoutsynthesis,
+1 2
+alltheinputgatesneedtobeexecuted,theresultproducedbythetoolshasatleastasmanygatesastheQUEKOcircuit.
+Theoptimalgatecountisalsometwiththeoptimalinitialmappingτ 1,sincenoSWAPgatesareneededinthiscase.
+−
+6 Experiment
+6.1 ExperimentalSetup
+ToevaluateQClayoutsynthesistoolswithQUEKO,devicegraphs, depthsandsizes, andgatedensityvectorsare
+required. Wespecifythechoiceoftheseparametersandthechoiceoftoolstoevaluateinthissubsection. Becauseof
+therandomnessinourconstruction,wegeneratetenQUEKObenchmarksforeachtripletoftheparameters. These
+benchmarksaremadeopen-source6undertheBSDlicense. Forevaluation,wefedeachoneofthesebenchmarksto
+fourlayoutsynthesistools,asshowninFig.5. AlltheexperimentswererunonaUbuntu16.04server,whichhastwo
+IntelXeonE5-2699v3asCPUsand128GBmainmemory.7
+6.1.1 DeviceGraph
+WeusedrepresentativedevicesfromthreedifferentQChardwareproviders. SycamorefromGoogle[1],Tokyoand
+RochesterfromIBM8,andAspen-4fromRigetti9. ThegraphsofthesedevicesareshowninFig.2. Sycamorehas54
+qubits,ofwhich53areactive;Rochesteralsohas53qubits. Bothofthemarestate-of-the-artdevices,butSycamore
+hasricherconnectivity. Aspen-4has16qubits,andTokyohas20qubits. Theyarebothhighlycompetitivedevices,but
+Tokyohasgreaterconnectivity.
+Also,wehaveonlylistedsuperconductingdevicesbecausetheyarebyfarthemostadvancedQCdevices. Thisdoes
+notmeanthatQUEKOcannotgeneralizetoothertechnologiessuchasquantumdot10becauseourapproachisvalidas
+longasthebasicquantumgatesofthistechnologyaresingle-qubitandtwo-qubitgates.
+6.1.2 DepthandSize
+Weconstructedtwosetsofbenchmarkswithdifferentdepthranges. Thecorrespondingsizeofthesebenchmarkscanbe
+deducedfromthedepthandthegatedensityvector,asshowninAlgorithm1. Thefirstsethasdepthsfrom5to45,
+whichisthenear-termfeasiblebenchmarks(B ). Infact,oneofthelargestquantumcircuitsexecutednowadayshas
+NTF
+depths41[1],whichisaboutthesamewiththeupperboundofB . Weintendedtofindoutthelayoutsynthesis
+NTF
+performancewithinthecurrentexecutioncapacity. ThesizesofB benchmarksrangefrom1136to34506quantum
+NTF
+gates. Thesecondsetofbenchmarks,denotedasB hasdepthfrom100to900whicharebenchmarksforscaling
+SS
+study. B representstheperformanceofthesetoolswhenthedecoherencetimeofQCdeviceimprovesinthefuture.
+SS
+ThesizesofB benchmarksrangefrom37to1727quantumgates.
+SS
+6.1.3 GateDensityVector
+Wepickedtwospecialgatedensityvectorsintheexperiment:(0.51,0.4)basedonthequantumcircuitsusedinGoogle’s
+quantumsupremacyexperiment[1],denoted“QSE”below,and(0.27,0.36)basedontheToffolicircuit,denoted“TFL”
+6https://github.com/UCLA-VAST/QUEKO-benchmark
+7Wedidnotcomparetheruntimeofthesefourtools,assomeofthemareimplementedinPythonandothersinC.Theinherent
+efficiencydifferenceofprogramminglanguagesrendersadirectruntimecomparisonunfair.Morefundamentally,sinceweusea
+noiselessmodelofquantumcomputersinthispaper,layoutsynthesiswouldberequiredonlyonce,soperformanceratherthan
+runtimeisthemajorconcern.Forotherstudiesonmitigatingchangingnoisepropertiesofquantumdevices,theruntimewouldbe
+moreimportant.
+8https://quantum-computing.ibm.com/
+9https://www.rigetti.com/qpu
+10https://sqc.com.au
+11below. ItisbeneficialtostudyQSE,sinceitistheonlycircuitsofarwithwhichexperimentalQChasshownaclear
+advantage. WechosetheTFLbecauseexistingQClogicsynthesisalgorithmsarebasedlargelyonreversiblelogic
+synthesis,whichusesTFLasafundamentalelement[7]. SomeB haveTFLdensityandothershaveQSEdensity.
+NTF
+AllB haveQSEdensity. Wealsosweptthroughpossiblegatedensityvectorsandgeneratedbenchmarksforimpactof
+SS
+gatedensity(B ).
+IGD
+6.1.4 LayoutSynthesisTools
+Input Circuits in qasm files and device graphs
+Zulehner
+Cirq Qiskit tket et al.
+Initial
+Dense Graph
+Placement
+Layout Placement
+Greedy
+Router
+ibm_qx_
+Stochastic mapping
+Route
+Swap
+Gate
+Scheduling
+Decompose to CX gates
+Output
+Count Depth
+Figure5: Workflowoftheexperiments
+Currently,Google,IBM,andRigettiareconsideredfront-runnersofsuperconductingQC.InsidetheirQCframeworks
+(Cirq, Qiskit, and pyQuil), there are tools for layout synthesis. Unfortunately, pyQuil does not provide options to
+breakdownthewholecompilationintooptimizationandlayoutsynthesis,sopyQuilwasexcludedfromtheexperiments.
+WealsoincludedarecentacademicworkfromZulehneretal.[4],whichisopen-source.11
+WeusedgreedyrouterinCirqversion0.6.0asoneofthelayoutsynthesistools, asshowninFig.5. Sofar, only
+onerouternamedgreedyhasbeenreleased,whichcontainsaninitialplacementpolicyandaSWAPinsertionpolicy
+basedonheuristicsearch. Notethatgreedy routerdoesnottransformthegatesintogatesthatareimplementable
+onGoogledevicesinTable1,sotheresultingcircuititproducescontainstheoriginalinputgatesandSWAPgatesit
+inserts. Forafaircomparisonofdepth,inalltheexperiments,wedecomposeSWAPgatesinsertedbythetoolstothree
+CX gates,likeinFig.3b.
+Qiskit offers the most precise control over the so-called “transpiler”. The transpilation is divided into individual
+passes,anduserscandefinetheirown“passmanager”tomakeuseofvarioustranspilingmodulesthatareoffered.
+Forthelayoutsynthesisproblem,thereareLayoutmodulesgeneratinginitialmappingandSwapmodulesinserting
+SWAPgatestothecircuittoenabletwo-qubitgates. Amongthevariouscombinations,wechoseDenseLayoutand
+StochasticSwapasshowninFig.5,whichseemedtohavethebestoverallperformance. DenseLayoutmapsthe
+logicalqubitstoanareaonthedevicegraphwithdenseconnections. StochasticSwapperturbsthedistancematrixof
+physicalqubitsandperformsheuristicsearchforSWAPgates. TheversionofQiskitintheexperimentsis0.14.1.
+Another highly competitive router, tket , comes from Cambridge Quantum Computing. Graph Placement uses
+| (cid:105)
+graphmonomorphismtoderiveinitialmapping. RouteperformsheuristicsearchforSWAPgates. Weusedtket
+| (cid:105)
+version0.4.1intheexperiments.
+Sinceallthetoolsevaluateduseheuristicsatsomestages,sub-optimalityisexpected. Notethatweonlyusedefault
+setuponallthemodulesinallthetools. ChangingsetupparametersinsomeofthesemodulesspecificallyforQUEKO
+benchmarksmayleadtobetterperformanceinthefollowingexperiments,butmayleadtoworseperformanceonother
+circuits.
+11https://github.com/iic-jku/ibm_qx_mapping
+126.2 ExperimentalResults
+6.2.1 PerformanceonB
+NTF
+25
+20
+15
+10
+5
+0 10 20 30 40 50
+Optimaldepth
+oitarhtpeD
+50
+Zulehneretal.
+Cirq
+40
+Qiskit
+tket
+| i
+30
+20
+10
+0 10 20 30 40 50
+Optimaldepth
+(a)Smallerdevice(Aspen-4),sparsercircuits(TFL)
+oitarhtpeD
+Cirq
+tket
+| i
+Qiskit
+(b)Largerdevice(Sycamore),densercircuits(QSE)
+Figure6: PerformanceofQClayoutsynthesistoolsonB (Linesareaverage.)
+NTF
+InFig.6,thehorizontalaxisistheoptimaldepthandtheverticalaxisisthedepthratio,whichisthedepthoflayout
+synthesisresultdividedbytheoptimaldepthT. Inthecaseofasmallerdevice(Aspen-4)andsparsercircuits(TFL),
+theoptimalitygaponaverageisabout12xfor[4], 10xforCirq, 5xforQiskitand1.5xfortket . Inthecaseofa
+| (cid:105)
+largerdevice(Sycamore)anddensercircuits(QSE),theoptimalitygaponaverageisabout11xto14xforQiskit. The
+optimalitygapsofCirqandtket growwithdepthcorrespondinglyfrom35xto50xandfrom1xto5x. Zulehneretal.
+| (cid:105)
+isnotintheFig.6b,becauseforthelargerdevice,ittooksomuchmemorythattheoperatingsystemconstantlykilledit
+beforefinishing. Thisalsohappenssometimesforthesmallerdeviceexperiments,sotherearelessbluedatapointsthan
+theothertypesofpointsinFig.6a.
+6.2.2 PerformanceonB
+SS
+10
+8
+6
+4
+2
+0 200 400 600 800 1,000
+Optimaldepth
+oitarhtpeD
+Rochester 15
+Sycamore
+Tokyo
+Aspen-4
+10
+5
+0 200 400 600 800 1,000
+Optimaldepth
+(a)t|ket(cid:105)scalingbehavior
+oitarhtpeD
+Rochester
+Sycamore
+Tokyo
+Aspen-4
+(b)Qiskitscalingbehavior
+Figure7: tket andQiskitperformanceonB (Linesareaverage.)
+SS
+| (cid:105)
+Westudiedfurtherscalingoftket andQiskitondifferentdevicesasshowninFig.7. Theoptimalitygapsonaverage
+| (cid:105)
+bytket areabout5xto7xforRochester,3xto4xforSycamore,3xforTokyo,and2xforAspen-4. Notethatfora
+| (cid:105)
+13fixeddepthandafixeddevice,theoptimalitygapsbytket variesratherwidely. tket managedtofindtheoptimal
+| (cid:105) | (cid:105)
+mappingsforsomeQUEKObenchmarks. Ingeneral,asthedepthincreases,thedepthratiobyQiskitdecreasesat
+firstandthenconvergestoavalue. Thereasonforthisphenomenonmaybethatasthecircuitdeepens,theinfluence
+ofinitialplacementgetssmallerthantheinfluenceofSWAPinsertion. ForQiskit,theoptimalitygapsonRochester
+decreasedfrom13xto10xonaverage;onSycamore,TokyoandAspen-4areabout8x,5x,and4xonaverage. Itcanbe
+seenthatlargerdevices(RochesterandSycamore)bringaboutlargeroptimalitygaps. Ifthenumberofphysicalqubits
+areclose,thenricherconnectivity(SycamoreversusRochester)bringsaboutsmalleroptimalitygaps.
+6.2.3 PerformanceonB
+IGD
+d2 d2
+0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8
+0.0 1.23 1.59 1.99 2.16 2.8 2.61 2.09 1.91 0.0 2.49 3.16 3.96 4.49 5.1 5.55 5.95 6.1
+0.1 1.18 1.55 1.85 1.78 2.73 1.92 2.08 0.1 2.12 3.09 3.87 4.53 5.05 5.58 5.92
+0.2 1.24 1.67 1.68 2.27 2.25 2.42 0.2 2.25 3.27 3.97 4.53 5.29 5.56
+0.3 1.53 1.85 2.43 2.66 2.34 0.3 2.26 3.26 3.87 4.73 5.09
+0.4 1.61 2.0 2.4 2.73 d1 0.4 2.23 3.25 3.98 4.72
+d1 0.5 1.86 1.85 2.82 0.5 2.18 3.37 4.05
+0.6 1.96 2.38 0.6 2.14 3.13
+0.7 1.97 0.7 2.18
+(a)t|ket(cid:105)performanceindepthratio (b)Qiskitperformanceindepthratio
+Figure8: tket andQiskitperformanceonB (Dataare10-timeaverage.)
+IGD
+| (cid:105)
+Tobetterunderstandtheimpactofgatedensityonlayoutsynthesisperformance,wefixedthedevicetoTokyoand
+the depth to 45, and swept through possible gate densities. The results are shown in Fig. 8. Fixing a column, the
+single-qubitgatedensityincreasesaswegodown,Qiskitseemstoberatherinsensitivetothischange,whichissensible
+sincethesingle-qubitgatesdonotinducedifficultyinlayoutsynthesis. However,tket isstillsensitivetothischange.
+| (cid:105)
+Bothtoolsaremoresensitivetothechangeinthehorizontaldirectionthanintheverticaldirection. Sincethechallenge
+tolayoutsynthesiscomesmainly,ifnotsolely,fromthetwo-qubitgates,thisresultisexpected. Thedepthratioof
+tket decreaseswhenthetwo-qubitgatedensityisveryhigh. Thisisbecausewhenthecircuitisdensewithtwo-qubit
+| (cid:105)
+gates,graphmonomorphismalgorithmscanextractmoreinformationfromthefirstfewlayerstonarrowdownbetter
+initialmappings.
+7 Complexity
+Seeingthelargeoptimalitygap,itisnaturalforustoinvestigatethecomputationalcomplexityofthedepth-optimal
+QClayoutsynthesisproblem,whichwasunknowntillthispoint. Severalrelatedresultsareshown,e.g.,determining
+theminimalnumberofSWAPgatestoinsertisNP-complete.[19]provesthistheorembyreductionfromsubgraph
+isomorphismproblem.[12]provestheNP-completenessofdepth-optimalinitialplacementwhereSWAPgatesarenot
+allowed. TheNP-completenessofdepth-optimalQClayoutsynthesisforQAOAcircuitsisprovenin[39]byreduction
+from3-SAT.Inthissection,weprovethisforgeneralquantumcircuitsbyreductionfromHamiltoniancycleproblem,
+asTheorem1states.
+Theorem1. Depth-optimalQClayoutsynthesisisNP-complete.
+Proof. The original QC depth-optimal layout synthesis problem is not easier than its decision version: input and
+constraintsremainthesame;butoutputwhetherthedepthofthescheduledcircuitcanbelowerorequaltoT. Inspired
+by[12],weshowthattheproblemofdeterminingwhetheraHamiltoniancycleexistsinagraphisreducibletotheQC
+depth-decisionlayoutsynthesisproblem. TheformerisNP-complete,sothelatterisalsoNP-complete.
+SupposethegraphfortheHamiltoniancycleproblemisG = (V ,E ),where V = N. Weconstructadepth-
+H H H H
+| |
+decisionQClayoutsynthesisproblemusingG asthedevicegraphandN asthetargetdepth. TheinputcircuitisN
+H
+“levels”ofgates. Levellcontainsatwo-qubitgateg =CX(q ,q ). Alltheotherlogicalqubitsatlevellare
+l l (l+1)modN
+fullyoccupiedbysingle-qubitgates.
+IfthereexistsaHamiltoniancycleinG ,(p ,p ,...,p ,p ),thenlettheinitialmappingbeµ :q p fori=1to
+H 1 2 N 1 0 i i
+(cid:55)→
+N. Itiseasytoseethat,withthismapping,allthegatesintheconstructedcircuitcanbeexecuted.
+Ontheotherhand,ifthereexistsascheduledcircuitwithdepthwithinN,wefirstclaimthatthemappingcannotchange
+duringtheexecutionofthecircuit. Everygateinaleveldependsonsomegateinthelastlevel. Soeverygateinlevell
+14hasadependencychainoflengthl,whichistheearliestcycleitcanbescheduledto. Thismeans,ifanySWAPgates
+areinsertedingatescheduling,certaindependencychainmustlengthenandthedepthofthescheduledcircuitislarger
+thanN. Therefore,ifasolutionwithinN cyclesexists,eachgateinlevellmustbescheduledatexactlycycleland
+therecanbenoSWAPgatesinserted. ItisalsoeasytoseethattheinputCX gatescannotconstituteanySWAPgates.
+Therefore,themappingfromlogicaltophysicalqubitsremainsµ throughoutallthecyclesinthescheduledcircuit.
+0
+ThegatesCX(q ,q )beingallexecutablemeansthattheyaremappedtoedgesofG . Thismeansµ (q ),
+l (l+1)modN H 0 1
+µ (q ),...,µ (q ),µ (q )isaHamiltoniancycleinG .
+0 2 0 N 0 1 H
+Inconclusion,weestablishedtheequivalencebetweenaHamiltoniancycleinG andtheexistenceofQClayout
+H
+synthesis solution within depth N. Thus, the Hamiltonian cycle problem is reducible to the QC layout synthesis
+problem. ThelatterisNP-complete,sincetheformerisknowntobeNP-complete.
+8 ConclusionandFutureWork
+Inthispaper,weformulatedtheproblemofquantumcomputinglayoutsynthesisandproveditsNP-completeness.
+We constructed QUEKO benchmarks, each has a known optimal depth for the given device. With QUEKO, we
+examinedfourexistingquantumcomputinglayoutsynthesistools,greedyrouterinCirq,tket ,DenseLayoutplus
+| (cid:105)
+StochasticSwapinQiskit,andZulehneretal.[4]andshowedrathersurprisingresults. Despiteovertenyearsof
+researchanddevelopmenteffortsbybothacademiaandindustry,thecurrentQCcompilationflowisfarfromoptimal.
+Infact,evencombiningthebestperformancesofalltoolsevaluated,theoptimalitygapsrangefrom1.5xto45xon
+averageforcircuitsoffeasibledepthonexistingdevices. Thesegapsrevealthatthereissubstantialroomforresearch
+intoQClayoutsynthesis,potentiallyequivalenttoanorderofimprovementofthedecoherencetime,whichwould
+requiremuchhigherinvestmentinquantumdevicetechnologiestoachieve. WeplantouseQUEKObenchmarksasa
+guidetobetterlayoutsynthesistools. Ontheotherhand,ourconstructionmethodopensuproomforfutureextension.
+Withmorespecificcontrolovertheamountandstructuresofdependencychains,webelieveitispossibletogenerate
+benchmarkswithknownoptimalthatareevenmorerepresentativeofrealapplications, whichsometimesrequires
+SWAPgatesinoptimalsolutions. Inaddition,weplantoextendourresearchtoconstructexampleswithknownoptimal
+solutionsforfidelityoptimization,asmultiplestudieshaveshownthatfidelityisaveryimportantmetricforquantum
+circuitsintheNISQera.
+Acknowledgment
+TheauthorswouldliketothankIrisCong,SilasDilkes,DmitriMaslov,andNengkunYuforvaluablecommentson
+themanuscript. ThisworkispartiallysupportedbyNECundertheCenterforDomain-SpecificComputingIndustrial
+PartnershipProgram.
+References
+[1] FrankArute,KunalArya,RyanBabbush,DaveBacon,JosephCBardin,RamiBarends,RupakBiswas,Sergio
+Boixo,FernandoGSLBrandao,DavidABuell,etal. Quantumsupremacyusingaprogrammablesuperconducting
+processor. Nature,574(7779):505–510,2019.
+[2] MichaelANielsenandIsaacLChuang. QuantumComputationandQuantumInformation. CambridgeUniversity
+Press,Cambridge,UK,2010.
+[3] Jay Gambetta and Sarah Sheldon. Cramming more power into a quantum device. https://www.ibm.com/
+blogs/research/2019/03/power-quantum-device/,March2019.
+[4] A.Zulehner,A.Paler,andR.Wille. EfficientmappingofquantumcircuitstotheIBMQXarchitectures. In2018
+Design,AutomationTestinEuropeConferenceExhibition(DATE),pages1135–1138,March2018.
+[5] Chin-ChihChang,J.Cong,M.Romesis,andMinXie. Optimalityandscalabilitystudyofexistingplacement
+algorithms. IEEETransactionsonComputer-AidedDesignofIntegratedCircuitsandSystems,23(4):537–549,
+April2004.
+[6] ‘Huge opportunity’ in IC design optimization gained by Semiconductor Research Corporation, National
+Science Foundation: CAD innovation could save industry billions. https://www.src.org/newsroom/
+press-release/2007/41/,December2007.
+15[7] V.V.Shende,A.K.Prasad,I.L.Markov,andJ.P.Hayes. Synthesisofreversiblelogiccircuits. IEEETransactions
+onComputer-AidedDesignofIntegratedCircuitsandSystems,22(6):710–722,June2003.
+[8] NDavidMermin. Quantumcomputerscience: anintroduction. CambridgeUniversityPress,2007.
+[9] AndrewW.Cross,LevS.Bishop,JohnA.Smolin,andJayM.Gambetta. Openquantumassemblylanguage,
+2017.
+[10] YunseongNam,NeilJ.Ross,YuanSu,AndrewM.Childs,andDmitriMaslov. Automatedoptimizationoflarge
+quantumcircuitswithcontinuousparameters. npjQuantumInformation,4(1),May2018.
+[11] MarkWhitney, NemanjaIsailovic, YatishPatel, andJohnKubiatowicz. Automatedgenerationoflayoutand
+controlforquantumcircuits. InProceedingsofthe4thInternationalConferenceonComputingFrontiers,CF’07,
+pages83–94,NewYork,NY,USA,2007.AssociationforComputingMachinery.
+[12] D.Maslov,S.M.Falconer,andM.Mosca. Quantumcircuitplacement. IEEETransactionsonComputer-Aided
+DesignofIntegratedCircuitsandSystems,27(4):752–763,April2008.
+[13] Yuichi Hirata, Masaki Nakanishi, Shigeru Yamashita, and Yasuhiko Nakashima. An efficient conversion of
+quantumcircuitstoalinearnearestneighborarchitecture. QuantumInformation&Computation,11(1&2):142–
+166,2011.
+[14] AlirezaShafaei,MehdiSaeedi,andMassoudPedram. Optimizationofquantumcircuitsforinteractiondistancein
+linearnearestneighborarchitectures. InProceedingsofthe50thAnnualDesignAutomationConference,DAC
+’13,NewYork,NY,USA,2013.AssociationforComputingMachinery.
+[15] A.Shafaei,M.Saeedi,andM.Pedram. Qubitplacementtominimizecommunicationoverheadin2Dquantum
+architectures. In201419thAsiaandSouthPacificDesignAutomationConference(ASP-DAC),pages495–500,
+Jan2014.
+[16] A.Kole,K.Datta,andI.Sengupta. Aheuristicforlinearnearestneighborrealizationofquantumcircuitsby
+SWAPgateinsertionusingN-gatelookahead. IEEEJournalonEmergingandSelectedTopicsinCircuitsand
+Systems,6(1):62–72,March2016.
+[17] A.Kole,K.Datta,andI.Sengupta. AnewheuristicforN-dimensionalnearestneighborrealizationofaquantum
+circuit. IEEETransactionsonComputer-AidedDesignofIntegratedCircuitsandSystems,37(1):182–192,Jan
+2018.
+[18] R.Wille,A.Lye,andR.Drechsler. OptimalSWAPgateinsertionfornearestneighborquantumcircuits. In2014
+19thAsiaandSouthPacificDesignAutomationConference(ASP-DAC),pages489–494,Jan2014.
+[19] MarcosYukioSiraichi,ViníciusFernandesDosSantos,SylvainCollange,andFernandoMagnoQuintaoPereira.
+Qubitallocation. InProceedingsofthe2018InternationalSymposiumonCodeGenerationandOptimization,
+CGO2018,pages113–125,NewYork,NY,USA,2018.AssociationforComputingMachinery.
+[20] AndrewMChilds,EddieSchoute,andCemMUnsal. Circuittransformationsforquantumarchitectures. In14th
+ConferenceontheTheoryofQuantumComputation,CommunicationandCryptography(TQC2019).Schloss
+Dagstuhl-Leibniz-ZentrumfuerInformatik,2019.
+[21] ToshinariItoko,RudyRaymond,TakashiImamichi,AtsushiMatsuo,andAndrewW.Cross. Quantumcircuit
+compilersusinggatecommutationrules. InProceedingsofthe24thAsiaandSouthPacificDesignAutomation
+Conference,ASPDAC’19,pages191–196,NewYork,NY,USA,2019.AssociationforComputingMachinery.
+[22] Robert Wille, Lukas Burgholzer, and Alwin Zulehner. Mapping quantum circuits to IBM QX architectures
+usingtheminimalnumberofSWAPandHoperations. InProceedingsofthe56thAnnualDesignAutomation
+Conference2019,DAC’19,NewYork,NY,USA,2019.AssociationforComputingMachinery.
+[23] MarcosYukioSiraichi,ViníciusFernandesdosSantos,CarolineCollange,andFernandoMagnoQuintãoPereira.
+Qubitallocationasacombinationofsubgraphisomorphismandtokenswapping. Proc.ACMProgram.Lang.,
+3(OOPSLA),October2019.
+[24] AlexanderCowtan,SilasDilkes,RossDuncan,AlexandreKrajenbrink,WillSimmons,andSeyonSivarajah. On
+thequbitroutingproblem. In14thConferenceontheTheoryofQuantumComputation,Communicationand
+Cryptography,2019.
+16[25] D.Bhattacharjee,A.A.Saki,M.Alam,A.Chattopadhyay,andS.Ghosh. MUQUT:Multi-constraintquantum
+circuitmappingonNISQcomputers: Invitedpaper. In2019IEEE/ACMInternationalConferenceonComputer-
+AidedDesign(ICCAD),pages1–7,Nov2019.
+[26] A.Lye, R.Wille, andR.Drechsler. DeterminingtheminimalnumberofSWAPgatesformulti-dimensional
+nearestneighborquantumcircuits. InThe20thAsiaandSouthPacificDesignAutomationConference,pages
+178–183,Jan2015.
+[27] DavideVenturelli,MinhDo,EleanorRieffel,andJeremyFrank. Temporalplanningforcompilationofquantum
+approximateoptimizationcircuits. InProceedingsoftheTwenty-SixthInternationalJointConferenceonArtificial
+Intelligence,IJCAI-17,pages4440–4446,2017.
+[28] DavideVenturelli,MinhDo,EleanorRieffel,andJeremyFrank. Compilingquantumcircuitstorealistichardware
+architecturesusingtemporalplanners. QuantumScienceandTechnology,3(2):025004,February2018.
+[29] KyleECBooth,MinhDo,JChristopherBeck,EleanorRieffel,DavideVenturelli,andJeremyFrank. Comparing
+andintegratingconstraintprogrammingandtemporalplanningforquantumcircuitcompilation. InTwenty-Eighth
+InternationalConferenceonAutomatedPlanningandScheduling,2018.
+[30] AlwinZulehnerandRobertWille. CompilingSU(4)quantumcircuitstoIBMQXarchitectures. InProceedings
+ofthe24thAsiaandSouthPacificDesignAutomationConference,ASPDAC’19,pages185–190,NewYork,NY,
+USA,2019.AssociationforComputingMachinery.
+[31] A.Kole,S.Hillmich,K.Datta,R.Wille,andI.Sengupta. ImprovedmappingofquantumcircuitstoIBMQX
+architectures. IEEETransactionsonComputer-AidedDesignofIntegratedCircuitsandSystems,pages1–1,2019.
+[32] SwamitS.TannuandMoinuddinK.Qureshi. Notallqubitsarecreatedequal:Acaseforvariability-awarepolicies
+forNISQ-eraquantumcomputers. InProceedingsoftheTwenty-FourthInternationalConferenceonArchitectural
+SupportforProgrammingLanguagesandOperatingSystems,ASPLOS’19,pages987–999,NewYork,NY,USA,
+2019.AssociationforComputingMachinery.
+[33] GushuLi,YufeiDing,andYuanXie. TacklingthequbitmappingproblemforNISQ-eraquantumdevices. In
+ProceedingsoftheTwenty-FourthInternationalConferenceonArchitecturalSupportforProgrammingLanguages
+andOperatingSystems,ASPLOS’19,pages1001–1014,NewYork,NY,USA,2019.AssociationforComputing
+Machinery.
+[34] Prakash Murali, Jonathan M. Baker, Ali Javadi-Abhari, Frederic T. Chong, and Margaret Martonosi. Noise-
+adaptivecompilermappingsfornoisyintermediate-scalequantumcomputers.InProceedingsoftheTwenty-Fourth
+InternationalConferenceonArchitecturalSupportforProgrammingLanguagesandOperatingSystems,ASPLOS
+’19,pages1015–1029,NewYork,NY,USA,2019.AssociationforComputingMachinery.
+[35] Prakash Murali, Norbert Matthias Linke, Margaret Martonosi, Ali Javadi Abhari, Nhung Hong Nguyen, and
+Cinthia Huerta Alderete. Full-stack, real-system quantum computer studies: Architectural comparisons and
+designinsights. InProceedingsofthe46thInternationalSymposiumonComputerArchitecture,ISCA’19,pages
+527–540,NewYork,NY,USA,2019.AssociationforComputingMachinery.
+[36] AbdullahAsh-Saki,MahabubulAlam,andSwaroopGhosh.QURE:Qubitre-allocationinnoisyintermediate-scale
+quantumcomputers. InProceedingsofthe56thAnnualDesignAutomationConference2019,DAC’19,New
+York,NY,USA,2019.AssociationforComputingMachinery.
+[37] EdwardFarhi,JeffreyGoldstone,andSamGutmann. Aquantumapproximateoptimizationalgorithm,2014.
+[38] R.Wille,D.Große,L.Teuber,G.W.Dueck,andR.Drechsler.RevLib:Anonlineresourceforreversiblefunctions
+andreversiblecircuits. In38thInternationalSymposiumonMultipleValuedLogic(ismvl2008),pages220–225,
+May2008.
+[39] AdiBotea, AkihiroKishimoto, andRaduMarinescu. Onthecomplexityofquantumcircuitcompilation. In
+EleventhAnnualSymposiumonCombinatorialSearch,2018.
+17

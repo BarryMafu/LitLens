@@ -11,10 +11,10 @@ def keyword_extraction(paper_content):
             "content": """
 You are a helpful assistant that extracts keywords from academic papers. You will be required to extract a few keywords from the provided paper content. The keywords should be relevant and concise, capturing the main themes or topics of the paper, since we are using the keywords to search for related papers.
 
-Your answer should be a list of 3~5 keywords, each keyword should be a single word or a short phrase, and they should be separated by commas. Do not include any additional text or explanations in your response. 
+Your answer should be a list of 1~2 keywords, each keyword should be a single word or a short phrase, and they should be separated by commas. Do not include any additional text or explanations in your response. Please do not include any special characters or punctuation in the keywords and ignore keywords with low relevance.
 
 Example:
-machine learning, natural language processing, deep learning
+machine learning, natural language processing
 """
         },
         {
@@ -63,7 +63,7 @@ Here is the list of paper titles, which consist of 3 parts:
     ]
 
 def second_round(titles, abstracts, limit, paper_content):
-    prompt_input = "\n".join([f"Title: {title}\nAbstract: {abstract}" for title, abstract in zip(titles, abstracts)])
+    prompt_input = "\n".join([f"Title: {title}\nAbstract: {abstract}" for title, abstract in zip(titles, abstracts) if abstract])
     return [
         {
             "role": "system",
@@ -93,3 +93,35 @@ Here is the list of papers with both title and abstract:
 """
         }
     ]
+
+# def third_round(titles, contents, limit, paper_content):
+#     prompt_input = "\n".join([f"Title: {title}\nContent: {content}" for title, content in zip(titles, contents) if content])
+#     return [
+#         {
+#             "role": "system",
+#             "content": f"""
+# You are a helpful assistant that select relevant papers from a list of academic papers. You will be provided with a list of paper titles only. Your task is to select the most relevant papers based on the given content.
+
+# You will be provided with (1) first, the content of the original paper, and (2) a list of papers with both title and content. You should select the most relevant papers from the list based on the content provided.
+
+# You are required to select no more than (<=) {limit} papers from the provided list. (If the list contains fewer than {limit} papers, select all of them.) The selected papers should be the most relevant to the content provided and ranked from higher relationship to lower.
+
+# Your answer should be a list of paper titles, each title should be a single line, followed by your reason to choose the paper.
+
+# Example:
+# Attention is All You Need [Reason:] <your reason here>
+# Transformers for Natural Language Processing [Reason:] <your reason here>
+# """
+#         },
+#         {
+#             "role": "user",
+#             "content": f"This is the content of the original paper {paper_content}"
+#         },
+#         {
+#             "role": "user",
+#             "content": f"""
+# Here is the list of papers with both title and content:
+# {prompt_input}
+# """
+#         }
+#     ]

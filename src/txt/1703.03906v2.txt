@@ -1,0 +1,658 @@
+Massive Exploration of Neural Machine Translation
+Architectures
+DennyBritz∗,†AnnaGoldie∗,Minh-ThangLuong,QuocLe
+{dennybritz,agoldie,thangluong,qvl}@google.com
+GoogleBrain
+Abstract engineeredfeatures. Themostpopularapproaches
+toNMTarebasedonanencoder-decoderarchitec-
+Neural Machine Translation (NMT) has
+ture consisting of two recurrent neural networks
+shown remarkable progress over the past
+(RNNs) and an attention mechanism that aligns
+few years with production systems now
+target with source tokens (Bahdanau et al., 2015;
+being deployed to end-users. One major
+Luongetal.,2015a).
+drawback of current architectures is that
+OneshortcomingofcurrentNMTarchitectures
+they are expensive to train, typically re-
+is the amount of compute required to train them.
+quiring days to weeks of GPU time to
+Training on real-world datasets of several million
+converge. This makes exhaustive hyper-
+examples typically requires dozens of GPUs and
+parameter search, as is commonly done
+convergencetimeisontheorderofdaystoweeks
+with other neural network architectures,
+(Wuetal.,2016). Whilesweepingacrosslargehy-
+prohibitively expensive. In this work,
+perparameter spaces is common in Computer Vi-
+we present the first large-scale analy-
+sion(Huangetal.,2016b),suchexplorationwould
+sis of NMT architecture hyperparameters.
+be prohibitively expensive for NMT models, lim-
+We report empirical results and variance
+iting researchers to well-established architectures
+numbersforseveralhundredexperimental
+and hyperparameter choices. Furthermore, there
+runs, corresponding to over 250,000 GPU
+have been no large-scale studies of how architec-
+hours on the standard WMT English to
+tural hyperparameters affect the performance of
+Germantranslationtask. Ourexperiments
+NMTsystems. Asaresult,itremainsunclearwhy
+leadtonovelinsights andpracticaladvice
+these models perform as well as they do, as well
+forbuildingandextendingNMTarchitec-
+ashowwemightimprovethem.
+tures. As part of this contribution, we
+In this work, we present the first comprehen-
+release an open-source NMT framework1
+sive analysis of architectural hyperparameters for
+that enables researchers to easily experi-
+Neural Machine Translation systems. Using a to-
+mentwithnoveltechniquesandreproduce
+tal of more than 250,000 GPU hours, we explore
+stateoftheartresults.
+commonvariationsofNMTarchitecturesandpro-
+1 Introduction vide insight into which architectural choices mat-
+ter most. We report BLEU scores, perplexities,
+Neural Machine Translation (NMT) (Kalchbren- model sizes, and convergence time for all ex-
+ner and Blunsom, 2013; Sutskever et al., 2014; periments, including variance numbers calculated
+Cho et al., 2014) is an end-to-end approach to across several runs of each experiment. In ad-
+automated translation. NMT has shown impres- dition, we release to the public a new software
+siveresults(Jeanetal.,2015;Luongetal.,2015b; frameworkthatwasusedtoruntheexperiments.
+Sennrich et al., 2016a; Wu et al., 2016) sur- Insummary,themaincontributionsofthiswork
+passing those of phrase-based systems while ad- areasfollows:
+dressing shortcomings such as the need for hand-
+• We provide immediately applicable insights
+∗Bothauthorscontributedequallytothiswork.
+into the optimization of Neural Machine
+†WorkdoneasamemberoftheGoogleBrainResidency
+Translation models, as well as promising di-
+program(g.co/brainresidency).
+1https://github.com/google/seq2seq/ rectionsforfutureresearch. Forexample,we
+1
+7102
+raM
+12
+]LC.sc[
+2v60930.3071:viXrafound that deep encoders are more difficult
+to optimize than decoders, that dense resid- (cid:88)
+c = a h (1)
+ualconnectionsyieldbetterperformancethan i ij j
+j
+regular residual connections, that LSTMs
+aˆ
+outperform GRUs, and that a well-tuned a = ij (2)
+ij (cid:80)
+aˆ
+beam search is crucial to obtaining state of j ij
+theartresults. Bypresentingpracticaladvice aˆ = att(s ,h ) (3)
+ij i j
+for choosing baseline architectures, we help
+Here, att(s ,h ) is an attention function that
+researchersavoidwastingtimeonunpromis- i j
+calculates an unnormalized alignment score be-
+ingmodelvariations.
+tween the encoder state h and the decoder state
+j
+s . In our base model, we use a function of the
+i
+• Wealsoestablishtheextenttowhichmetrics form att(s i ,h j ) = (cid:104)W h h j ,W s s i (cid:105), where the ma-
+suchasBLEUareinfluencedbyrandomini- tricesW areusedtotransformthesourceandtar-
+tialization and slight hyperparameter varia- getstatesintoarepresentationofthesamesize.
+tion,helpingresearcherstodistinguishstatis- Thedecoderoutputsadistributionoveravocab-
+ticallysignificantresultsfromrandomnoise.
+ularyoffixed-sizeV:
+P(y |y ,...,y ,x)
+• Finally, we release an open source package i 1 i−1
+= softmax(W[s ;c ]+b)
+based on TensorFlow, specifically designed i i
+for implementing reproducible state of the
+Thewholemodelistrainedend-to-endbymin-
+artsequence-to-sequencemodels. Allexperi-
+imizing the negative log likelihood of the target
+mentswererunusingthisframeworkandwe
+wordsusingstochasticgradientdescent.
+hope to accelerate future research by releas-
+ing it to the public. We also release all con- 3 ExperimentalSetup
+figurationfilesandprocessingscriptsneeded
+3.1 DatasetsandPreprocessing
+toreproducetheexperimentsinthispaper.
+We run all experiments on the WMT’15
+English→German task consisting of 4.5M sen-
+2 BackgroundandPreliminaries tence pairs, obtained by combining the Europarl
+v7, News Commentary v10, and Common Crawl
+corpora. We use newstest2013 as our validation
+2.1 NeuralMachineTranslation
+setandnewstest2014andnewstest2015asourtest
+sets. To test for generality, we also ran a small
+Our models are based on an encoder-decoder ar-
+numberofexperimentsonEnglish→Frenchtrans-
+chitecture with attention mechanism (Bahdanau
+lation, and we found that the performance was
+etal.,2015;Luongetal.,2015a),asshowninfig-
+highly correlated with that of English→German
+ure 1. An encoder function f takes as input a
+enc
+butthatittookmuchlongertotrainmodelsonthe
+sequence of source tokens x = (x ,...,x ) and
+1 m
+larger English→French dataset. Given that trans-
+produces a sequence of states h = (h ,...,h ).
+1 m
+lation from the morphologically richer German is
+In our base model, f is a bi-directional RNN
+enc
+also considered a more challenging task, we felt
+and the state h corresponds to the concatenation
+i
+justifiedinusingtheEnglish→Germantranslation
+of the states produced by the backward and for-
+→− ←− taskforthishyperparametersweep.
+ward RNNs, h = [h ;h ] .The decoder f is
+i i i dec
+We tokenize and clean all datasets with the
+an RNN that predicts the probability of a target
+scripts in Moses2 and learn shared subword units
+sequencey = (y ,...,y )basedonh. Theproba-
+1 k
+using Byte Pair Encoding (BPE) (Sennrich et al.,
+bilityofeachtargettokeny ∈ 1,...V ispredicted
+i
+2016b) using 32,000 merge operations for a final
+based on the recurrent state in the decoder RNN
+vocabularysizeofapproximately37k. Wediscov-
+s , the previous words, y , and a context vector
+i <i
+ered that data preprocessing can have a large im-
+c . The context vector c is also called the atten-
+i i
+pactonfinalnumbers,andsincewewishtoenable
+tionvectorandiscalculatedasaweightedaverage
+ofthesourcestates. 2https://github.com/moses-smt/mosesdecoder/Figure1: Encoder-Decoderarchitecturewithattentionmodule. Sectionnumbersreferenceexperiments
+correspondingtothecomponents.
+reproducibility, we release our data preprocessing viationaswellashighestscores(aspercrossval-
+scripts together with the NMT framework to the idation)foreachexperiment.
+public. Formoredetailsondatapreprocessingpa-
+3.3 BaselineModel
+rameters,wereferthereadertothecoderelease.
+Basedonareviewofpreviousliterature,wechose
+3.2 TrainingSetupandSoftware
+abaselinemodelthatweknewwouldperformrea-
+All of the following experiments are run using sonably well. Our goal was to keep the baseline
+our own software framework based on Tensor- model simple and standard, not to advance the
+Flow (Abadi et al., 2016). We purposely built startoftheart. Themodel(describedin2.1)con-
+this framework to enable reproducible state-of- sists of a 2-layer bidirectional encoder (1 layer in
+the-artimplementationsofNeuralMachineTrans- eachdirection),anda2layerdecoderwithamul-
+lation architectures. As part of our contribution, tiplicative (Luong et al., 2015a) attention mecha-
+wearereleasingtheframeworkandallconfigura- nism. We use 512-unit GRU (Cho et al., 2014)
+tion files needed to reproduce our results. Train- cells for both the encoder and decoder and apply
+ingisperformedonNvidiaTeslaK40mandTesla Dropout of 0.2 at the input of each cell. We train
+K80GPUs,distributedover8parallelworkersand usingtheAdamoptimizerandafixedlearningrate
+6 parameter servers per experiment. We use a of 0.0001 without decay. The embedding dimen-
+batch size of 128 and decode using beam search sionalityissetto512. Amoredetaileddescription
+withabeamwidthof10andthelengthnormaliza- of all model hyperparameters can be found in the
+tion penalty of 0.6 described in (Wu et al., 2016). supplementarymaterial.
+BLEUscoresarecalculatedontokenizeddataus- In each of the following experiments, the hy-
+ingthemulti-bleu.perlscriptinMoses3. Eachex- perparametersofthebaselinemodelareheldcon-
+perimentisrunforamaximumof2.5Mstepsand stant, except for the one hyperparameter being
+replicated 4 times with different initializations. studied. We hope that this allows us to isolate the
+Wesavemodelcheckpointsevery30minutesand effectofvarioushyperparameterchanges. Werec-
+choosethebestcheckpointbasedonthevalidation ognizethatthisproceduredoesnotaccountforin-
+setBLEUscore. Wereportmeanandstandardde- teractions between hyperparameters, and we per-
+formadditionalexperimentswhenwebelievesuch
+3https://github.com/moses-
+interactions are likely to occur (e.g. skip connec-
+smt/mosesdecoder/blob/master/scripts/generic/multi-
+bleu.perl tionsandnumberoflayers).4 ExperimentsandDiscussion on small sequence tasks of a few thousand exam-
+ples, we are not aware of such studies in large-
+For the sake of brevity, we only report mean
+scaleNMTsettings.
+BLEU, standard deviation, highest BLEU in
+A motivation for gated cells such as the GRU
+parantheses, and model size in the following ta-
+and LSTM is the vanishing gradient problem.
+bles. Log perplexity, tokens/sec and convergence
+Using vanilla RNN cells, deep networks cannot
+times can be found in the supplementary material
+efficiently propagate information and gradients
+tables.
+through multiple layers and time steps. However,
+4.1 EmbeddingDimensionality withanattention-basedmodel,webelievethatthe
+decoder should be able to make decisions almost
+With a large vocabulary, the embedding layer can
+exclusively based on the current input and the at-
+account for a large fraction of the model param-
+tentioncontextandwehypothesizethatthegating
+eters. Historically, researchers have used 620-
+mechanisminthedecoderisnotstrictlynecessary.
+dimensional (Bahdanau et al., 2015) or 1024-
+This hypothesis is supported by the fact that we
+dimensional (Luong et al., 2015a) embeddings.
+always initialize the decoder state to zero instead
+We expected larger embeddings to result in bet-
+of passing the encoder state, meaning that the de-
+terBLEUscores,oratleastlowerperplexities,but
+coderstatedoesnotcontaininformationaboutthe
+we found that this wasn’t always the case. While
+encoded source. We test our hypothesis by using
+Table 1showsthat2048-dimensionalembeddings
+a vanilla RNN cell in the decoder only (Vanilla-
+yielded the overall best result, they only did so
+Dec below). For the LSTM and GRU variants we
+by a small margin. Even small 128-dimensional
+replacecellsinboththeencoderanddecoder. We
+embeddings performed surprisingly well, while
+useLSTMcellswithoutpeepholeconnectionsand
+converging almost twice as quickly. We found
+initialize the forget bias of both LSTM and GRU
+that gradient updates to both small and large em-
+cellsto1.
+beddings did not differ significantly and that the
+normofgradientupdatestotheembeddingmatrix
+Cell newstest2013 Params
+stayed approximately constant throughout train-
+LSTM 22.22±0.08(22.33) 68.95M
+ing regardless of size. We also did not observe
+GRU 21.78±0.05(21.83) 66.32M
+overfittingwithlargeembeddingsandtraininglog
+Vanilla-Dec 15.38±0.28(15.73) 63.18M
+perplexity was approximately equal across exper-
+iments, suggesting that the model does not make
+Table 2: BLEU scores on newstest2013, varying
+efficientuseoftheextraparametersandthatthere
+thetypeofencoderanddecodercell.
+may be a need for better optimization techniques.
+Alternatively,itcouldbethecasethatmodelswith
+In our experiments, LSTM cells consistently
+large embeddings simply need much more than
+outperformedGRUcells. Sincethecomputational
+2.5Mstepstoconvergetothebestsolution.
+bottleneckinourarchitectureisthesoftmaxopera-
+Dim newstest2013 Params tionwedidnotobservelargedifferenceintraining
+speed between LSTM and GRU cells. Somewhat
+128 21.50±0.16(21.66) 36.13M
+to our surprise, we found that the vanilla decoder
+256 21.73±0.09(21.85) 46.20M
+is unable to learn nearly as well as the gated vari-
+512 21.78±0.05(21.83) 66.32M
+ant. This suggests that the decoder indeed passes
+1024 21.36±0.27(21.67) 106.58M
+information in its own state throughout multiple
+2048 21.86±0.17(22.08) 187.09M
+time steps instead of relying solely on the atten-
+tionmechanismandcurrentinput(whichincludes
+Table 1: BLEU scores on newstest2013, varying
+the previous attention context). It could also be
+theembeddingdimensionality.
+thecasethatthegatingmechanismisnecessaryto
+maskoutirrelevantpartsoftheinputs.
+4.2 RNNCellVariant
+4.3 EncoderandDecoderDepth
+Both LSTM (Hochreiter and Schmidhuber, 1997)
+and GRU (Cho et al., 2014) cells are commonly We generally expect deeper networks to converge
+usedinNMTarchitectures. Whilethereexiststud- to better solutions than shallower ones (He et al.,
+ies (Greff et al., 2016) that explore cell variants 2016). While some work (Luong et al., 2015b;Zhouetal.,2016;LuongandManning,2016;Wu 16
+et al., 2016) has achieved state of the art results 14
+using deep networks, others (Jean et al., 2015;
+12
+Chung et al., 2016; Sennrich et al., 2016b) have
+10
+achieved similar results with far shallower ones.
+8
+Hence, it is unclear how important depth is, and
+6
+whether shallow networks are capable of produc-
+ing results competitive with those of deep net- 4
+works. Here,weexploretheeffectofbothencoder 2
+0 500000 1000000 1500000 2000000
+and decoder depth up to 8 layers. For the bidi- Step
+rectional encoder, we separately stack the RNNs
+in both directions. For example, the Enc-8 model
+corresponds to one forward and one backward 4-
+layer RNN. For deeper networks, we also exper-
+iment with two variants of residual connections
+(Heetal.,2016)toencouragegradientflow. Inthe
+standard variant, shown in equation (4), we insert
+residual connections between consecutive layers.
+(l) (l) (l) If h (x ,h ) is the RNN output of layer l at
+t t t−1
+timestept,then:
+(l+1) (l) (l) (l) (l)
+x = h (x ,h )+x (4)
+t t t t−1 t
+(0)
+where x are the embedded input tokens.
+t
+We also explore a dense (”ResD” below) variant
+of residual connections similar to those used by
+(Huang et al., 2016a) in Image Recognition. In
+this variant, we add skip connections from each
+layertoallotherlayers:
+l
+(l+1) (l) (l) (l) (cid:88) (j)
+x = h (x ,h )+ x (5)
+t t t t−1 t
+j=0
+Our implementation differs from (Huang et al.,
+2016a)inthatweuseanadditioninsteadofacon-
+catenationoperationinordertokeepthestatesize
+constant.
+Table 3 shows results of varying encoder and
+decoder depth with and without residual connec-
+tion. We found no clear evidence that encoder
+depth beyond two layers is necessary, but found
+deepermodelswithresidualconnectionstobesig-
+nificantly more likely to diverge during training.
+The best deep residual models achieved good re-
+sults,butonlyoneoffourrunsconverged,assug-
+gestedbythelargestandarddeviation.
+On the decoder side, deeper models outper-
+formed shallower ones by a small margin, and
+we found that without residual connections, it
+was impossible for us to train decoders with 8
+ytixelpreP
+goL
+depth_dec_8
+depth_dec_8_res
+depth_dec_8_res_dense
+Figure2: Trainingplotsfordeepdecoderwithand
+without residual connections, showing log per-
+plexityontheevalset.
+Depth newstest2013 Params
+Enc-2 21.78±0.05(21.83) 66.32M
+Enc-4 21.85±0.32(22.23) 69.47M
+Enc-8 21.32±0.14(21.51) 75.77M
+Enc-8-Res 19.23±1.96(21.97) 75.77M
+Enc-8-ResD 17.30±2.64(21.03) 75.77M
+Dec-1 21.76±0.12(21.93) 64.75M
+Dec-2 21.78±0.05(21.83) 66.32M
+Dec-4 22.37±0.10(22.51) 69.47M
+Dec-4-Res 17.48±0.25(17.82) 68.69M
+Dec-4-ResD 21.10±0.24(21.43) 68.69M
+Dec-8 01.42±0.23(1.66) 75.77M
+Dec-8-Res 16.99±0.42(17.47) 75.77M
+Dec-8-ResD 20.97±0.34(21.42) 75.77M
+Table 3: BLEU scores on newstest2013, varying
+theencoderanddecoderdepthandtypeofresidual
+connections.
+or more layers. Across the deep decoder exper-
+iments, dense residual connections consistently
+outperformed regular residual connections and
+converged much faster in terms of step count, as
+shown in figure 2. We expected deep models to
+perform better (Zhou et al., 2016; Szegedy et al.,
+2015) across the board, and we believe that our
+experimentsdemonstratetheneedformorerobust
+techniquesforoptimizingdeepsequentialmodels.
+Forexample,wemayneedabetter-tunedSGDop-
+timizer or some form of batch normalization, in
+ordertorobustlytraindeepnetworkswithresidual
+connections.
+4.4 Unidirectionalvs. BidirectionalEncoder
+In the literature, we see bidirectional encoders
+(Bahdanau et al., 2015), unidirectional encoders(Luong et al., 2015a), and a mix of both (Wu We call the dimensionality of W h and W s
+1 j 2 i
+et al., 2016) being used. Bidirectional encoders the ”attention dimensionality” and vary it from
+areabletocreaterepresentationsthattakeintoac- 128 to 1024 by changing the layer size. We also
+count both past and future inputs, while unidirec- experimentwithusingnoattentionmechanismby
+tional encoders can only take past inputs into ac- initializingthedecoderstatewiththelastencoder
+count. The benefit of unidirectional encoders is state (None-State), or concatenating the last de-
+thattheircomputationcanbeeasilyparallelizedon coder state to each decoder input (None-Input).
+GPUs,allowingthemtorunfasterthantheirbidi- TheresultsareshowninTable5.
+rectional counterparts. We are not aware of any
+Attention newstest2013 Params
+studiesthatexplorethenecessityofbidirectional-
+Mul-128 22.03±0.08(22.14) 65.73M
+ity. Inthissetofexperiments,weexploreunidirec-
+Mul-256 22.33±0.28(22.64) 65.93M
+tionalencodersofvaryingdepthwithandwithout
+Mul-512 21.78±0.05(21.83) 66.32M
+reversedsourceinputs,asthisisacommonlyused
+Mul-1024 18.22±0.03(18.26) 67.11M
+trickthatallowstheencodertocreatericherrepre-
+Add-128 22.23±0.11(22.38) 65.73M
+sentations for earlier words. Given that errors on
+Add-256 22.33±0.04(22.39) 65.93M
+the decoder side can easily cascade, the correct-
+Add-512 22.47±0.27(22.79) 66.33M
+nessofearlywordshasdisproportionateimpact.
+Add-1028 22.10±0.18(22.36) 67.11M
+Cell newstest2013 Params None-State 9.98±0.28(10.25) 64.23M
+Bidi-2 21.78±0.05(21.83) 66.32M None-Input 11.57±0.30(11.85) 64.49M
+Uni-1 20.54±0.16(20.73) 63.44M
+Uni-1R 21.16±0.35(21.64) 63.44M Table 5: BLEU scores on newstest2013, varying
+Uni-2 20.98±0.10(21.07) 65.01M thetypeofattentionmechanism.
+Uni-2R 21.76±0.21(21.93) 65.01M
+Uni-4 21.47±0.22(21.70) 68.16M Wefoundthattheparameterizedadditiveatten-
+Uni-4R 21.32±0.42(21.89) 68.16M tion mechanism slightly but consistently outper-
+formed the multiplicative one, with the attention
+Table 4: BLEU scores on newstest2013, varying dimensionalityhavinglittleeffect.
+the type of encoder. The ”R” suffix indicates a While we did expect the attention-based mod-
+reversedsourcesequence. els to significantly outperform those without an
+attention mechanism, we were surprised by just
+Table 4 shows that bidirectional encoders gen- how poorly the ”Non-Input” models fared, given
+erallyoutperformunidirectionalencoders,butnot that they had access to encoder information at
+by a large margin. The encoders with reversed each time step. Furthermore, we found that
+source consistently outperform their non-reversed the attention-based models exhibited significantly
+counterparts, but do not beat shallower bidirec- larger gradient updates to decoder states through-
+tionalencoders. outtraining. Thissuggeststhattheattentionmech-
+anismactsmorelikea”weightedskipconnection”
+4.5 AttentionMechanism thatoptimizesgradientflowthanlikea”memory”
+that allows the encoder to access source states, as
+The two most commonly used attention mecha-
+is commonly stated in the literature. We believe
+nismsaretheadditive(Bahdanauetal.,2015)vari-
+that further research in this direction is necessary
+ant, equation (6) below, and the computationally
+to shed light on the role of the attention mecha-
+lessexpensivemultiplicativevariant(Luongetal.,
+nism and whether it may be purely a vehicle for
+2015a),equation(7)below. Givenanattentionkey
+easieroptimization.
+h (anencoderstate)andattentionquerys (ade-
+j i
+coderstate),theattentionscoreforeachpairiscal-
+4.6 BeamSearchStrategies
+culatedasfollows:
+Beam Search is a commonly used technique to
+findtargetsequencesthatmaximizesomescoring
+function s(y,x) through tree search. In the sim-
+score(h ,s ) = (cid:104)v,tanh(W h +W s )(cid:105) (6)
+j i 1 j 2 i
+plest case, the score to be maximized is the log
+score(h ,s ) = (cid:104)W h ,W s (cid:105) (7)
+j i 1 j 2 i probabilityofthetargetsequencegiventhesource.Recently, extensions such as coverage penalties Hyperparameter Value
+(Tu et al., 2016) and length normalizations (Wu embeddingdim 512
+et al., 2016) have been shown to improve decod- rnncellvariant LSTMCell
+ing results. It has also been observed (Tu et al., encoderdepth 4
+2017)thatverylargebeamsizes,evenwithlength decoderdepth 4
+penalty, perform worse than smaller ones. Thus, attentiondim 512
+choosingthecorrectbeamwidthcanbecrucialto attentiontype Bahdanau
+achievingthebestresults. encoder bidirectional
+beamsize 10
+Beam newstest2013 Params lengthpenalty 1.0
+B1 20.66±0.31(21.08) 66.32M
+B3 21.55±0.26(21.94) 66.32M Table 7: Hyperparameter settings for our final
+B5 21.60±0.28(22.03) 66.32M combinedmodel,consistingofalloftheindividu-
+B10 21.57±0.26(21.91) 66.32M allyoptimizedvalues.
+B25 21.47±0.30(21.77) 66.32M
+B100 21.10±0.31(21.39) 66.32M
+is significantly more complex and lacks a public
+B10-LP-0.5 21.71±0.25(22.04) 66.32M
+implementation.
+B10-LP-1.0 21.80±0.25(22.16) 66.32M
+Model newstest14 newstest15
+Table 6: BLEU scores on newstest2013, varying
+Ours(experimental) 22.03 24.75
+thebeamwidthandaddinglengthpenalties(LP).
+Ours(combined) 22.19 25.23
+OpenNMT 19.34 -
+Table6showstheeffectofvaryingbeamwidths
+Luong 20.9 -
+and adding length normalization penalties. A
+BPE-Char 21.5 23.9
+beamwidthof1correspondstogreedysearch. We
+BPE - 20.5
+found that a well-tuned beam search is crucial to
+RNNSearch-LV 19.4 -
+achievinggoodresults,andthatitleadstoconsis-
+RNNSearch - 16.5
+tent gains of more than one BLEU point. Similar
+Deep-Att* 20.6 -
+to(Tuetal.,2017)wefoundthatverylargebeams
+GNMT* 24.61 -
+yieldworseresultsandthatthereisa”sweetspot”
+Deep-Conv* - 24.3
+ofoptimalbeamwidth. Webelievethatfurtherre-
+search into the robustness of hyperparameters in
+Table 8: Comparison to RNNSearch (Jean et al.,
+beam search is crucial to progress in NMT. We
+2015), RNNSearch-LV (Jean et al., 2015), BPE
+also experimented with a coverage penalty, but
+(Sennrich et al., 2016b), BPE-Char (Chung et al.,
+found no additional gain over a sufficiently large
+2016), Deep-Att (Zhou et al., 2016), Luong (Lu-
+lengthpenalty.
+ong et al., 2015a), Deep-Conv (Gehring et al.,
+4.7 FinalSystemComparison 2016), GNMT (Wu et al., 2016), and OpenNMT
+(Kleinetal.,2017). Systemswithan*donothave
+Finally, we compare our best performing model
+apublicimplementation.
+across all experiments (base model with 512-
+dimensional additive attention), as chosen on the
+newstest2013 validation set, to historical results
+5 OpenSourceRelease
+found in the literature in Table 8. While not the
+focus on this work, we were able to achieve fur- We demonstrated empirically how small changes
+ther improvements by combining all of our in- to hyperparameter values and different initializa-
+sightsintoasinglemodeldescribedinTable7. tion can affect results, and how seemingly triv-
+Although we do not offer architectural innova- ial factors such as a well-tuned beam search are
+tions, we do show that through careful hyperpa- crucial. To move towards reproducible research,
+rameter tuning and good initialization, it is pos- we believe it is important that researchers start
+sible to achieve state of the art performance on building upon common frameworks and data pro-
+standardWMTbenchmarks. Ourmodelisoutper- cessing pipelines. With this goal in mind, we
+formed only by (Wu et al., 2016), a model which specifically built a modular software frameworkthat allows researchers to explore novel archi- • A well-tuned beam search with length
+tectures with minimal code changes, and define penalty is crucial. Beam widths of 5 to 10
+experimental parameters in a reproducible man- together with a length penalty of 1.0 seemed
+ner. While our initial experiments are in Ma- toworkwell.
+chine Translation, our framework can easily be
+adaptedtoproblemsinSummarization,Conversa- Wehighlightedseveralimportantresearchques-
+tional Modeling or Image-To-Text. Systems such tions,includingtheefficientuseofembeddingpa-
+as OpenNMT (Klein et al., 2017) share similar rameters (4.1), the role of attention mechanisms
+goals, but do not yet achieve state of the art re- as weighted skip connections (4.5) as opposed to
+sults(see Table8) andlackwhat webelieve to be memory units, the need for better optimization
+crucial features, such as distributed training sup- methodsfordeeprecurrentnetworks(4.3),andthe
+port. We hope that by open sourcing our experi- needforabetterbeamsearch(4.6)robusttohyper-
+mental toolkit, we enable the field to make more parametervariations.
+rapidprogressinthefuture. In addition, we release to the public an open
+All of our code is freely available at source NMT framework specifically built to ex-
+https://github.com/google/seq2seq/. plore architectural innovations and generate re-
+producible experiments, along with configuration
+6 Conclusion filesforallourexperiments.
+Weconductedwhatwebelievetobethefirstlarge- Acknowledgments
+scaleanalysisofarchitecturevariationsforNeural
+WewouldliketothankEugeneBrevdoforadapt-
+MachineTranslation,teasingapartthekeyfactors
+ing the TensorFlow RNN APIs in a way that
+to achieving state of the art results. We demon-
+allowed us to write our framework much more
+strated a number of surprising insights, including
+cleanly. We are also grateful to Andrew Dai and
+the fact that beam search tuning is just as crucial
+SamyBengiofortheirhelpfulfeedback.
+asmostarchitecturalvariations,andthatwithcur-
+rent optimization techniques deep models do not
+always outperform shallow ones. Here, we sum- References
+marizeourpracticalfindings:
+Martin Abadi, Paul Barham, Jianmin Chen, Zhifeng
+Chen, Andy Davis, Jeffrey Dean, Matthieu Devin,
+• Large embeddings with 2048 dimensions
+Sanjay Ghemawat, Geoffrey Irving, Michael Isard,
+achievedthebestresults,butonlybyasmall Manjunath Kudlur, Josh Levenberg, Rajat Monga,
+margin. Evensmallembeddingswith128di- Sherry Moore, Derek G. Murray, Benoit Steiner,
+PaulTucker,VijayVasudevan,PeteWarden,Martin
+mensions seem to have sufficient capacity to
+Wicke,YuanYu,andXiaoqiangZheng.2016. Ten-
+capturemostofthenecessarysemanticinfor-
+sorFlow:Asystemforlarge-scalemachinelearning.
+mation. InOSDI.
+• LSTMCellsconsistentlyoutperformedGRU DzmitryBahdanau,KyunghyunCho,andYoshuaBen-
+gio. 2015. Neural machine translation by jointly
+Cells.
+learningtoalignandtranslate. InICLR.
+• Bidirectionalencoderswith2to4layersper-
+Kyunghyun Cho, Bart van Merrienboer, C¸aglar
+formed best. Deeper encoders were signifi- Gu¨lc¸ehre, Fethi Bougares, Holger Schwenk, and
+cantly more unstable to train, but show po- Yoshua Bengio. 2014. Learning phrase representa-
+tentialiftheycanbeoptimizedwell. tionsusingRNNencoder-decoderforstatisticalma-
+chinetranslation. InEMNLP.
+• Deep4-layerdecodersslightlyoutperformed
+Junyoung Chung, Kyunghyun Cho, and Yoshua Ben-
+shallower decoders. Residual connections gio. 2016. A character-level decoder without ex-
+were necessary to train decoders with 8 lay- plicit segmentation for neural machine translation.
+ers and dense residual connections offer ad- InACL.
+ditionalrobustness.
+Jonas Gehring, Michael Auli, David Grangier, and
+Yann N. Dauphin. 2016. A convolutional en-
+• Parameterized additive attention yielded the
+coder model for neural machine translation. CoRR
+overallbestresults. abs/1611.02344.Klaus Greff, Rupesh Kumar Srivastava, Jan Koutn´ık, Christian Szegedy, Wei Liu, Yangqing Jia, Pierre Ser-
+BasR.Steunebrink,andJu¨rgenSchmidhuber.2016. manet, Scott E. Reed, Dragomir Anguelov, Du-
+LSTM: A search space odyssey. IEEE Transac- mitru Erhan, Vincent Vanhoucke, and Andrew Ra-
+tions on Neural Networks and Learning Systems binovich.2015. Goingdeeperwithconvolutions. In
+PP(99):1–11. CVPR.
+KaimingHe,XiangyuZhang,ShaoqingRen,andJian Zhaopeng Tu, Yang Liu, Lifeng Shang, Xiaohua Liu,
+Sun.2016. Deepresiduallearningforimagerecog- andHangLi.2017. Neuralmachinetranslationwith
+nition. InCVPR. reconstruction. InAAAI.
+ZhaopengTu,ZhengdongLu,YangLiu,XiaohuaLiu,
+Sepp Hochreiter and Ju¨rgen Schmidhuber. 1997.
+and Hang Li. 2016. Modeling coverage for neural
+Long short-term memory. Neural Computation
+machinetranslation. InACL.
+9(8):1735–1780.
+Yonghui Wu, Mike Schuster, Zhifeng Chen, Quoc V.
+Gao Huang, Zhuang Liu, and Kilian Q. Weinberger. Le, Mohammad Norouzi, Wolfgang Macherey,
+2016a. Densely connected convolutional networks. Maxim Krikun, Yuan Cao, Qin Gao, Klaus
+CoRRabs/1608.06993. Macherey, Jeff Klingner, Apurva Shah, Melvin
+Johnson, Xiaobing Liu, Lukasz Kaiser, Stephan
+Jonathan Huang, Vivek Rathod, Chen Sun, Meng- Gouws, Yoshikiyo Kato, Taku Kudo, Hideto
+longZhu,AnoopKorattikara,AlirezaFathi,IanFis- Kazawa, Keith Stevens, George Kurian, Nishant
+cher, Zbigniew Wojna, Yang Song, Sergio Guadar- Patil, Wei Wang, Cliff Young, Jason Smith, Jason
+rama, and Kevin Murphy. 2016b. Speed/accuracy Riesa, Alex Rudnick, Oriol Vinyals, Greg Corrado,
+trade-offsformodernconvolutionalobjectdetectors. MacduffHughes,andJeffreyDean.2016. Google’s
+CoRRabs/1611.10012. neuralmachinetranslationsystem:Bridgingthegap
+between human and machine translation. CoRR
+Se´bastien Jean, Kyunghyun Cho, Roland Memisevic, abs/1609.08144.
+andYoshuaBengio.2015. Onusingverylargetar-
+get vocabulary for neural machine translation. In JieZhou,YingCao,XuguangWang,PengLi,andWei
+ACL. Xu.2016. Deeprecurrentmodelswithfast-forward
+connections for neural machine translation. Trans-
+NalKalchbrennerandPhilBlunsom.2013. Recurrent actions of the Association for Computational Lin-
+continuoustranslationmodels. InEMNLP. guistics4:371–383.
+Guillaume Klein, Yoon Kim, Yuntian Deng, Jean
+Senellart, and Alexander M. Rush. 2017. Open-
+NMT:Open-sourcetoolkitforneuralmachinetrans-
+lation. CoRRabs/1701.02810.
+Minh-Thang Luong and Christopher D. Manning.
+2016. Achieving open vocabulary neural machine
+translation with hybrid word-character models. In
+ACL.
+Minh-Thang Luong, Hieu Pham, and Christopher D.
+Manning.2015a. Effectiveapproachestoattention-
+basedneuralmachinetranslation. InEMNLP.
+Minh-ThangLuong,IlyaSutskever,QuocV.Le,Oriol
+Vinyals,andWojciechZaremba.2015b. Addressing
+therarewordprobleminneuralmachinetranslation.
+InACL.
+Rico Sennrich, Barry Haddow, and Alexandra Birch.
+2016a. Edinburgh neural machine translation sys-
+temsforwmt16. InACL.
+Rico Sennrich, Barry Haddow, and Alexandra Birch.
+2016b. Neural machine translation of rare words
+withsubwordunits. InACL.
+Ilya Sutskever, Oriol Vinyals, and Quoc V. Le. 2014.
+Sequence to sequence learning with neural net-
+works. InNIPS.

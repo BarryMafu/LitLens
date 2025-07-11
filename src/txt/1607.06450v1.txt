@@ -1,0 +1,905 @@
+Layer Normalization
+JimmyLeiBa JamieRyanKiros GeoffreyE.Hinton
+UniversityofToronto UniversityofToronto UniversityofToronto
+jimmy@psi.toronto.edu rkiros@cs.toronto.edu andGoogleInc.
+hinton@cs.toronto.edu
+Abstract
+Trainingstate-of-the-art,deepneuralnetworksiscomputationallyexpensive. One
+way to reduce the training time is to normalize the activities of the neurons. A
+recentlyintroducedtechniquecalledbatchnormalizationusesthedistributionof
+the summed input to a neuron over a mini-batch of training cases to compute a
+mean and variance which are then used to normalize the summed input to that
+neurononeachtrainingcase. Thissignificantlyreducesthetrainingtimeinfeed-
+forwardneuralnetworks. However,theeffectofbatchnormalizationisdependent
+onthemini-batchsizeanditisnotobvioushowtoapplyittorecurrentneuralnet-
+works.Inthispaper,wetransposebatchnormalizationintolayernormalizationby
+computingthemeanandvarianceusedfornormalizationfromallofthesummed
+inputstotheneuronsinalayeronasingletrainingcase.Likebatchnormalization,
+we also give each neuron its own adaptive bias and gain which are applied after
+thenormalizationbutbeforethenon-linearity. Unlikebatchnormalization,layer
+normalization performs exactly the same computation at training and test times.
+Itisalsostraightforwardtoapplytorecurrentneuralnetworksbycomputingthe
+normalizationstatisticsseparatelyateachtimestep. Layernormalizationisvery
+effective at stabilizing the hidden state dynamics in recurrent networks. Empiri-
+cally,weshowthatlayernormalizationcansubstantiallyreducethetrainingtime
+comparedwithpreviouslypublishedtechniques.
+1 Introduction
+DeepneuralnetworkstrainedwithsomeversionofStochasticGradientDescenthavebeenshown
+to substantially outperform previous approaches on various supervised learning tasks in computer
+vision [Krizhevsky et al., 2012] and speech processing [Hinton et al., 2012]. But state-of-the-art
+deep neural networks often require many days of training. It is possible to speed-up the learning
+bycomputinggradientsfordifferentsubsetsofthetrainingcasesondifferentmachinesorsplitting
+theneuralnetworkitselfovermanymachines[Deanetal.,2012],butthiscanrequirealotofcom-
+municationandcomplexsoftware. Italsotendstoleadtorapidlydiminishingreturnsasthedegree
+of parallelization increases. An orthogonal approach is to modify the computations performed in
+theforwardpassoftheneuralnettomakelearningeasier. Recently,batchnormalization[Ioffeand
+Szegedy, 2015] has been proposed to reduce training time by including additional normalization
+stagesindeepneuralnetworks. Thenormalizationstandardizeseachsummedinputusingitsmean
+anditsstandarddeviationacrossthetrainingdata. Feedforwardneuralnetworkstrainedusingbatch
+normalizationconvergefasterevenwithsimpleSGD.Inadditiontotrainingtimeimprovement,the
+stochasticityfromthebatchstatisticsservesasaregularizerduringtraining.
+Despite its simplicity, batch normalization requires running averages of the summed input statis-
+tics. Infeed-forwardnetworkswithfixeddepth,itisstraightforwardtostorethestatisticsseparately
+for each hidden layer. However, the summed inputs to the recurrent neurons in a recurrent neu-
+ral network (RNN) often vary with the length of the sequence so applying batch normalization to
+RNNsappearstorequiredifferentstatisticsfordifferenttime-steps. Furthermore,batchnormaliza-
+6102
+luJ
+12
+]LM.tats[
+1v05460.7061:viXration cannot be applied to online learning tasks or to extremely large distributed models where the
+minibatcheshavetobesmall.
+This paper introduces layer normalization, a simple normalization method to improve the training
+speedforvariousneuralnetworkmodels. Unlikebatchnormalization,theproposedmethoddirectly
+estimatesthenormalizationstatisticsfromthesummedinputstotheneuronswithinahiddenlayer
+sothenormalizationdoesnotintroduceanynewdependenciesbetweentrainingcases.Weshowthat
+layernormalizationworkswellforRNNsandimprovesboththetrainingtimeandthegeneralization
+performanceofseveralexistingRNNmodels.
+2 Background
+Afeed-forwardneuralnetworkisanon-linearmappingfromainputpatternxtoanoutputvector
+y. Consider the lth hidden layer in a deep feed-forward, neural network, and let al be the vector
+representationofthesummedinputstotheneuronsinthatlayer. Thesummedinputsarecomputed
+throughalinearprojectionwiththeweightmatrixWlandthebottom-upinputshlgivenasfollows:
+al =wl(cid:62) hl hl+1 =f(al +bl) (1)
+i i i i i
+wheref(·)isanelement-wisenon-linearfunctionandwl istheincomingweightstotheith hidden
+i
+units and bl is the scalar bias parameter. The parameters in the neural network are learnt using
+i
+gradient-basedoptimizationalgorithmswiththegradientsbeingcomputedbyback-propagation.
+Oneofthechallengesofdeeplearningisthatthegradientswithrespecttotheweightsinonelayer
+arehighlydependentontheoutputsoftheneuronsinthepreviouslayerespeciallyiftheseoutputs
+change in a highly correlated way. Batch normalization [Ioffe and Szegedy, 2015] was proposed
+to reduce such undesirable “covariate shift”. The method normalizes the summed inputs to each
+hiddenunitoverthetrainingcases. Specifically,fortheith summedinputinthelth layer,thebatch
+normalizationmethodrescalesthesummedinputsaccordingtotheirvariancesunderthedistribution
+ofthedata
+a¯l = g i l (cid:0) al −µl(cid:1) µl = E (cid:2) al(cid:3) σl = (cid:114) E (cid:104)(cid:0) al −µl (cid:1)2 (cid:105) (2)
+i σl i i i i i i i
+i x∼P(x) x∼P(x)
+wherea¯l isnormalizedsummedinputstotheithhiddenunitinthelthlayerandg isagainparame-
+i i
+terscalingthenormalizedactivationbeforethenon-linearactivationfunction. Notetheexpectation
+isunderthewholetrainingdatadistribution. Itistypicallyimpracticaltocomputetheexpectations
+inEq. (2)exactly,sinceitwouldrequireforwardpassesthroughthewholetrainingdatasetwiththe
+currentsetofweights. Instead,µandσ areestimatedusingtheempiricalsamplesfromthecurrent
+mini-batch. This puts constraints on the size of a mini-batch and it is hard to apply to recurrent
+neuralnetworks.
+3 Layernormalization
+Wenowconsiderthelayernormalizationmethodwhichisdesignedtoovercomethedrawbacksof
+batchnormalization.
+Notice that changes in the output of one layer will tend to cause highly correlated changes in the
+summed inputs to the next layer, especially with ReLU units whose outputs can change by a lot.
+Thissuggeststhe“covariateshift”problemcanbereducedbyfixingthemeanandthevarianceof
+thesummedinputswithineachlayer. We,thus,computethelayernormalizationstatisticsoverall
+thehiddenunitsinthesamelayerasfollows:
+(cid:118)
+H (cid:117) H
+µl = 1 (cid:88) al σl = (cid:117) (cid:116) 1 (cid:88)(cid:0) al −µl (cid:1)2 (3)
+H i H i
+i=1 i=1
+whereH denotesthenumberofhiddenunitsinalayer. ThedifferencebetweenEq. (2)andEq. (3)
+isthatunderlayernormalization,allthehiddenunitsinalayersharethesamenormalizationterms
+µandσ,butdifferenttrainingcaseshavedifferentnormalizationterms.Unlikebatchnormalization,
+layernormaliztiondoesnotimposeanyconstraintonthesizeofamini-batchanditcanbeusedin
+thepureonlineregimewithbatchsize1.
+23.1 Layernormalizedrecurrentneuralnetworks
+The recent sequence to sequence models [Sutskever et al., 2014] utilize compact recurrent neural
+networks to solve sequential prediction problems in natural language processing. It is common
+amongtheNLPtaskstohavedifferentsentencelengthsfordifferenttrainingcases. Thisiseasyto
+dealwithinanRNNbecausethesameweightsareusedateverytime-step.Butwhenweapplybatch
+normalizationtoanRNNintheobviousway,weneedtotocomputeandstoreseparatestatisticsfor
+eachtimestepinasequence. Thisisproblematicifatestsequenceislongerthananyofthetraining
+sequences.Layernormalizationdoesnothavesuchproblembecauseitsnormalizationtermsdepend
+onlyonthesummedinputstoalayeratthecurrenttime-step. Italsohasonlyonesetofgainand
+biasparameterssharedoveralltime-steps.
+In a standard RNN, the summed inputs in the recurrent layer are computed from the current input
+xtandpreviousvectorofhiddenstatesht−1whicharecomputedasat =W ht−1+W xt. The
+hh xh
+layernormalizedrecurrentlayerre-centersandre-scalesitsactivationsusingtheextranormalization
+termssimilartoEq. (3):
+(cid:118)
+H (cid:117) H
+ht =f (cid:104) g (cid:12) (cid:0) at−µt(cid:1) +b (cid:105) µt = 1 (cid:88) at σt = (cid:117) (cid:116) 1 (cid:88) (at−µt)2 (4)
+σt H i H i
+i=1 i=1
+where W is the recurrent hidden to hidden weights and W are the bottom up input to hidden
+hh xh
+weights. (cid:12)istheelement-wisemultiplicationbetweentwovectors. bandgaredefinedasthebias
+andgainparametersofthesamedimensionasht.
+InastandardRNN,thereisatendencyfortheaveragemagnitudeofthesummedinputstotherecur-
+rentunitstoeithergroworshrinkateverytime-step,leadingtoexplodingorvanishinggradients. In
+alayernormalizedRNN,thenormalizationtermsmakeitinvarianttore-scalingallofthesummed
+inputstoalayer,whichresultsinmuchmorestablehidden-to-hiddendynamics.
+4 Relatedwork
+Batchnormalizationhasbeenpreviouslyextendedtorecurrentneuralnetworks[Laurentetal.,2015,
+Amodeietal.,2015,Cooijmansetal.,2016]. Thepreviouswork[Cooijmansetal.,2016]suggests
+thebestperformanceofrecurrentbatchnormalizationisobtainedbykeepingindependentnormal-
+ization statistics for each time-step. The authors show that initializing the gain parameter in the
+recurrent batch normalization layer to 0.1 makes significant difference in the final performance of
+the model. Our work is also related to weight normalization [Salimans and Kingma, 2016]. In
+weight normalization, instead of the variance, the L2 norm of the incoming weights is used to
+normalizethesummedinputstoaneuron. Applyingeitherweightnormalizationorbatchnormal-
+ization using expected statistics is equivalent to have a different parameterization of the original
+feed-forward neural network. Re-parameterization in the ReLU network was studied in the Path-
+normalized SGD [Neyshabur et al.,2015]. Our proposed layer normalization method, however, is
+not a re-parameterization of the original neural network. The layer normalized model, thus, has
+differentinvariancepropertiesthantheothermethods,thatwewillstudyinthefollowingsection.
+5 Analysis
+Inthissection,weinvestigatetheinvariancepropertiesofdifferentnormalizationschemes.
+5.1 Invarianceunderweightsanddatatransformations
+The proposedlayer normalizationis related tobatch normalization andweight normalization. Al-
+though, theirnormalizationscalarsarecomputeddifferently, thesemethodscanbesummarizedas
+normalizingthesummedinputsa toaneuronthroughthetwoscalarsµandσ. Theyalsolearnan
+i
+adaptivebiasbandgaingforeachneuronafterthenormalization.
+g
+h =f( i (a −µ )+b ) (5)
+i σ i i i
+i
+Notethatforlayernormalizationandbatchnormalization,µandσiscomputedaccordingtoEq. 2
+and3. Inweightnormalization,µis0,andσ =(cid:107)w(cid:107) .
+2
+3Weightmatrix Weightmatrix Weightvector Dataset Dataset Singletrainingcase
+re-scaling re-centering re-scaling re-scaling re-centering re-scaling
+Batchnorm Invariant No Invariant Invariant Invariant No
+Weightnorm Invariant No Invariant No No No
+Layernorm Invariant Invariant No Invariant No Invariant
+Table1: Invariancepropertiesunderthenormalizationmethods.
+Table1highlightsthefollowinginvarianceresultsforthreenormalizationmethods.
+Weight re-scaling and re-centering: First, observe that under batch normalization and weight
+normalization, any re-scaling to the incoming weights w of a single neuron has no effect on the
+i
+normalized summed inputs to a neuron. To be precise, under batch and weight normalization, if
+the weight vector is scaled by δ, the two scalar µ and σ will also be scaled by δ. The normalized
+summedinputsstaysthesamebeforeandafterscaling. Sothebatchandweightnormalizationare
+invariant to the re-scaling of the weights. Layer normalization, on the other hand, is not invariant
+to the individual scaling of the single weight vectors. Instead, layer normalization is invariant to
+scaling of the entire weight matrix and invariant to a shift to all of the incoming weights in the
+weightmatrix. Lettherebetwosetsofmodelparametersθ, θ(cid:48) whoseweightmatricesW andW(cid:48)
+differ by a scaling factor δ and all of the incoming weights in W(cid:48) are also shifted by a constant
+vectorγ,thatisW(cid:48) =δW +1γ(cid:62). Underlayernormalization,thetwomodelseffectivelycompute
+thesameoutput:
+h(cid:48) =f( g (W(cid:48)x−µ(cid:48))+b)=f( g (cid:0) (δW +1γ(cid:62))x−µ(cid:48)(cid:1) +b)
+σ(cid:48) σ(cid:48)
+g
+=f( (Wx−µ)+b)=h. (6)
+σ
+Notice that if normalization is only applied to the input before the weights, the model will not be
+invarianttore-scalingandre-centeringoftheweights.
+Data re-scaling and re-centering: We can show that all the normalization methods are invariant
+to re-scaling the dataset by verifying that the summed inputs of neurons stays constant under the
+changes. Furthermore, layer normalization is invariant to re-scaling of individual training cases,
+becausethenormalizationscalarsµandσ inEq. (3)onlydependonthecurrentinputdata. Letx(cid:48)
+beanewdatapointobtainedbyre-scalingxbyδ. Thenwehave,
+h(cid:48) =f( g i (cid:0) w(cid:62)x(cid:48)−µ(cid:48)(cid:1) +b )=f( g i (cid:0) δw(cid:62)x−δµ (cid:1) +b )=h . (7)
+i σ(cid:48) i i δσ i i i
+Itiseasytoseere-scalingindividualdatapointsdoesnotchangethemodel’spredictionunderlayer
+normalization. Similartothere-centeringoftheweightmatrixinlayernormalization,wecanalso
+showthatbatchnormalizationisinvarianttore-centeringofthedataset.
+5.2 Geometryofparameterspaceduringlearning
+Wehaveinvestigatedtheinvarianceofthemodel’spredictionunderre-centeringandre-scalingof
+the parameters. Learning, however, can behave very differently under different parameterizations,
+eventhoughthemodelsexpressthesameunderlyingfunction. Inthissection,weanalyzelearning
+behaviorthroughthegeometryandthemanifoldoftheparameterspace. Weshowthatthenormal-
+izationscalarσcanimplicitlyreducelearningrateandmakeslearningmorestable.
+5.2.1 Riemannianmetric
+Thelearnableparametersinastatisticalmodelformasmoothmanifoldthatconsistsofallpossible
+input-outputrelationsofthemodel. Formodelswhoseoutputisaprobabilitydistribution,anatural
+way to measure the separation of two points on this manifold is the Kullback-Leibler divergence
+betweentheirmodeloutputdistributions. UndertheKLdivergencemetric,theparameterspaceisa
+Riemannianmanifold.
+The curvature of a Riemannian manifold is entirely captured by its Riemannian metric, whose
+quadratic form is denoted as ds2. That is the infinitesimal distance in the tangent space at a point
+intheparameterspace. Intuitively,itmeasuresthechangesinthemodeloutputfromtheparameter
+spacealongatangentdirection. TheRiemannianmetricunderKLwaspreviouslystudied[Amari,
+1998]andwasshowntobewellapproximatedundersecondorderTaylorexpansionusingtheFisher
+4informationmatrix:
+ds2 =D (cid:2) P(y|x; θ)(cid:107)P(y|x; θ+δ) (cid:3) ≈ 1 δ(cid:62)F(θ)δ, (8)
+KL 2
+(cid:34) (cid:35)
+∂logP(y|x; θ)∂logP(y|x; θ)(cid:62)
+F(θ)= E , (9)
+∂θ ∂θ
+x∼P(x),y∼P(y|x)
+where, δ is a small change to the parameters. The Riemannian metric above presents a geometric
+viewofparameterspaces. ThefollowinganalysisoftheRiemannianmetricprovidessomeinsight
+intohownormalizationmethodscouldhelpintrainingneuralnetworks.
+5.2.2 Thegeometryofnormalizedgeneralizedlinearmodels
+We focus our geometric analysis on the generalized linear model. The results from the following
+analysiscanbeeasilyappliedtounderstanddeepneuralnetworkswithblock-diagonalapproxima-
+tiontotheFisherinformationmatrix, whereeachblockcorrespondstotheparametersforasingle
+neuron.
+A generalized linear model (GLM) can be regarded as parameterizing an output distribution from
+theexponentialfamilyusingaweightvectorwandbiasscalarb. Tobeconsistentwiththeprevious
+sections,theloglikelihoodoftheGLMcanbewrittenusingthesummedinputsaasthefollowing:
+(a+b)y−η(a+b)
+logP(y|x; w,b)= +c(y,φ), (10)
+φ
+E[y|x]=f(a+b)=f(w(cid:62)x+b), Var[y|x]=φf(cid:48)(a+b), (11)
+where, f(·)isthetransferfunctionthatistheanalogofthenon-linearityinneuralnetworks, f(cid:48)(·)
+is the derivative of the transfer function, η(·) is a real valued function and c(·) is the log parti-
+tion function. φ is a constant that scales the output variance. Assume a H-dimensional output
+vector y = [y ,y ,··· ,y ] is modeled using H independent GLMs and logP(y|x; W,b) =
+1 2 H
+(cid:80)H
+logP(y |x; w ,b ). Let W be the weightmatrix whose rows are theweight vectors of the
+i=1 i i i
+individualGLMs,bdenotethebiasvectoroflengthH andvec(·)denotetheKroneckervectorop-
+erator. TheFisherinformationmatrixforthemulti-dimensionalGLMwithrespecttoitsparameters
+θ = [w(cid:62),b ,··· ,w(cid:62),b ](cid:62) = vec([W,b](cid:62))issimplytheexpectedKroneckerproductofthedata
+1 1 H H
+featuresandtheoutputcovariancematrix:
+(cid:20) (cid:20) (cid:21)(cid:21)
+Cov[y|x] xx(cid:62) x
+F(θ)= E ⊗ . (12)
+φ2 x(cid:62) 1
+x∼P(x)
+We obtain normalized GLMs by applying the normalization methods to the summed inputs a in
+the original model through µ and σ. Without loss of generality, we denote F¯ as the Fisher infor-
+mation matrix under the normalized multi-dimensional GLM with the additional gain parameters
+θ =vec([W,b,g](cid:62)):
+F¯(θ)=     F¯ . . . 11 · . · .. · F¯ 1 . . . H     , F¯ ij = x∼ E P(x)     Cov[y i φ , 2 y j |x]     σ gi i χ g σ j j (cid:62) j χ σ g i j j χ(cid:62) j χ i 1 σ gi i χ i g a i j ( σ − σ a j j i µ σ − j j µj)        
+F¯ ··· F¯ χ(cid:62)gj(ai−µi) ai−µi (ai−µi)(aj−µj)
+H1 HH j σiσj σi σiσj
+(13)
+∂µ a −µ ∂σ
+χ =x− i − i i i. (14)
+i ∂w σ ∂w
+i i i
+Implicit learning rate reduction through the growth of the weight vector: Notice that, com-
+paring to standard GLM, the block F¯ along the weight vector w direction is scaled by the gain
+ij i
+parametersandthenormalizationscalarσ .Ifthenormoftheweightvectorw growstwiceaslarge,
+i i
+even though the model’s output remains the same, the Fisher information matrix will be different.
+Thecurvaturealongthew directionwillchangebyafactorof 1 becausetheσ willalsobetwice
+i 2 i
+aslarge. Asaresult,forthesameparameterupdateinthenormalizedmodel,thenormoftheweight
+vector effectively controls the learning rate for the weight vector. During learning, it is harder to
+changetheorientationoftheweightvectorwithlargenorm. Thenormalizationmethods,therefore,
+543
+42 41
+40
+39
+38 37
+36 35
+34 0 50 100 150 200 250 300
+iteration x 300
+1@llaceR
+naem
+Image Retrieval (Validation)
+78
+77
+76
+75
+74
+73
+Order-Embedding + LN 72 Order-Embedding
+71 0 50 100 150 200 250 300
+iteration x 300
+(a) Recall@1
+5@llaceR
+naem
+Image Retrieval (Validation)
+90
+89
+88
+87
+86
+Order-Embedding + LN 85 Order-Embedding
+84 0 50 100 150 200 250 300
+iteration x 300
+(b) Recall@5
+01@llaceR
+naem
+Image Retrieval (Validation)
+Order-Embedding + LN Order-Embedding
+(c) Recall@10
+Figure1: Recall@Kcurvesusingorder-embeddingswithandwithoutlayernormalization.
+MSCOCO
+CaptionRetrieval ImageRetrieval
+Model R@1 R@5 R@10 Meanr R@1 R@5 R@10 Meanr
+Sym[Vendrovetal.,2016] 45.4 88.7 5.8 36.3 85.8 9.0
+OE[Vendrovetal.,2016] 46.7 88.9 5.7 37.9 85.9 8.1
+OE(ours) 46.6 79.3 89.1 5.2 37.8 73.6 85.7 7.9
+OE+LN 48.5 80.6 89.8 5.1 38.9 74.3 86.3 7.6
+Table 2: Average results across 5 test splits for caption and image retrieval. R@K is Recall@K
+(highisgood). Meanristhemeanrank(lowisgood). Symcorrespondstothesymmetricbaseline
+whileOEindicatesorder-embeddings.
+haveanimplicit“earlystopping”effectontheweightvectorsandhelptostabilizelearningtowards
+convergence.
+Learningthemagnitudeofincomingweights:Innormalizedmodels,themagnitudeoftheincom-
+ingweightsisexplicitlyparameterizedbythegainparameters. Wecomparehowthemodeloutput
+changesbetweenupdatingthegainparametersinthenormalizedGLMandupdatingthemagnitude
+oftheequivalentweightsunderoriginalparameterizationduringlearning. Thedirectionalongthe
+gainparametersinF¯ capturesthegeometryforthemagnitudeoftheincomingweights. Weshow
+thatRiemannianmetricalongthemagnitudeoftheincomingweightsforthestandardGLMisscaled
+by the norm of its input, whereas learning the gain parameters for the batch normalized and layer
+normalizedmodelsdependsonlyonthemagnitudeofthepredictionerror. Learningthemagnitude
+of incoming weights in the normalized model is therefore, more robust to the scaling of the input
+anditsparametersthaninthestandardmodel. SeeAppendixfordetailedderivations.
+6 Experimentalresults
+Weperformexperimentswithlayernormalizationon6tasks,withafocusonrecurrentneuralnet-
+works: image-sentence ranking, question-answering, contextual language modelling, generative
+modelling, handwriting sequence generation and MNIST classification. Unless otherwise noted,
+thedefaultinitializationoflayernormalizationistosettheadaptivegainsto1andthebiasesto0in
+theexperiments.
+6.1 Orderembeddingsofimagesandlanguage
+Inthisexperiment,weapplylayernormalizationtotherecentlyproposedorder-embeddingsmodel
+ofVendrovetal.[2016]forlearningajointembeddingspaceofimagesandsentences. Wefollow
+the same experimental protocol as Vendrov et al. [2016] and modify their publicly available code
+to incorporate layer normalization 1 which utilizes Theano [Team et al., 2016]. Images and sen-
+tences from the Microsoft COCO dataset [Lin et al., 2014] are embedded into a common vector
+space,whereaGRU[Choetal.,2014]isusedtoencodesentencesandtheoutputsofapre-trained
+VGGConvNet[SimonyanandZisserman,2015](10-crop)areusedtoencodeimages. Theorder-
+embedding model represents images and sentences as a 2-level partial ordering and replaces the
+cosinesimilarityscoringfunctionusedinKirosetal.[2014]withanasymmetricone.
+1https://github.com/ivendrov/order-embedding
+61.0
+0.9
+0.8
+0.7
+0.6
+0.5
+0.4
+0 100 200 300 400 500 600 700 800
+training steps (thousands)
+etar
+rorre
+noitadilav
+Attentive reader
+LSTM
+BN-LSTM
+BN-everywhere
+LN-LSTM
+Figure 2: Validation curves for the attentive reader model. BN results are taken from [Cooijmans
+etal.,2016].
+Wetrainedtwomodels: thebaselineorder-embeddingmodelaswellasthesamemodelwithlayer
+normalizationappliedtotheGRU.Afterevery300iterations,wecomputeRecall@K(R@K)values
+on a held out validation set and save the model whenever R@K improves. The best performing
+modelsarethenevaluatedon5separatetestsets,eachcontaining1000imagesand5000captions,
+for which the mean results are reported. Both models use Adam [Kingma and Ba, 2014] with the
+same initial hyperparameters and both models are trained using the same architectural choices as
+used in Vendrov et al. [2016]. We refer the reader to the appendix for a description of how layer
+normalizationisappliedtoGRU.
+Figure1illustratesthevalidationcurvesofthemodels, withandwithoutlayernormalization. We
+plotR@1,R@5andR@10fortheimageretrievaltask. Weobservethatlayernormalizationoffers
+aper-iterationspeedupacrossallmetricsandconvergestoitsbestvalidationmodelin60%ofthe
+timeittakesthebaselinemodeltodoso. InTable2,thetestsetresultsarereportedfromwhichwe
+observethatlayernormalizationalsoresultsinimprovedgeneralizationovertheoriginalmodel.The
+resultswereportarestate-of-the-artforRNNembeddingmodels,withonlythestructure-preserving
+model of Wang et al. [2016] reporting better results on this task. However, they evaluate under
+differentconditions(1testsetinsteadofthemeanover5)andarethusnotdirectlycomparable.
+6.2 Teachingmachinestoreadandcomprehend
+In order to compare layer normalization to the recently proposed recurrent batch normalization
+[Cooijmansetal.,2016],wetrainanunidirectionalattentivereadermodelontheCNNcorpusboth
+introducedbyHermannetal.[2015]. Thisisaquestion-answeringtaskwhereaquerydescription
+aboutapassagemustbeansweredbyfillinginablank. Thedataisanonymizedsuchthatentities
+aregivenrandomizedtokenstopreventdegeneratesolutions,whichareconsistentlypermuteddur-
+ingtrainingandevaluation. WefollowthesameexperimentalprotocolasCooijmansetal.[2016]
+andmodifytheirpubliccodetoincorporatelayernormalization2 whichusesTheano[Teametal.,
+2016]. Weobtainedthepre-processeddatasetusedbyCooijmansetal.[2016]whichdiffersfrom
+the original experiments of Hermann et al. [2015] in that each passage is limited to 4 sentences.
+InCooijmansetal.[2016], twovariantsofrecurrentbatchnormalizationareused: onewhereBN
+isonlyappliedtotheLSTMwhiletheotherappliesBNeverywherethroughoutthemodel. Inour
+experiment,weonlyapplylayernormalizationwithintheLSTM.
+TheresultsofthisexperimentareshowninFigure2. Weobservethatlayernormalizationnotonly
+trains faster but converges to a better validation result over both the baseline and BN variants. In
+Cooijmansetal.[2016],itisarguedthatthescaleparameterinBNmustbecarefullychosenandis
+setto0.1intheirexperiments. Weexperimentedwithlayernormalizationforboth1.0and0.1scale
+initializationandfoundthattheformermodelperformedsignificantlybetter. Thisdemonstratesthat
+layernormalizationisnotsensitivetotheinitialscaleinthesamewaythatrecurrentBNis. 3
+6.3 Skip-thoughtvectors
+Skip-thoughts[Kirosetal.,2015]isageneralizationoftheskip-grammodel[Mikolovetal.,2013]
+forlearningunsuperviseddistributedsentencerepresentations. Givencontiguoustext,asentenceis
+2https://github.com/cooijmanstim/Attentive_reader/tree/bn
+3Weonlyproduceresultsonthevalidationset,asinthecaseofCooijmansetal.[2016]
+786.0
+85.5 85.0 84.5
+84.0
+83.5
+83.0
+82.5
+82.0
+5 10 15 20
+iteration x 50000
+001
+x
+nosraeP
+34
+33 32
+31
+30
+Skip-Thoughts + LN 29
+Skip-Thoughts 28
+Original
+27
+5 10 15 20
+iteration x 50000
+(a) SICK(r)
+001
+x
+ESM
+82
+Skip-Thoughts + LN Skip-Thoughts 80 Original 78
+76
+74
+72
+70
+5 10 15 20
+iteration x 50000
+(b) SICK(MSE)
+ycaruccA
+Skip-Thoughts + LN
+Skip-Thoughts
+Original
+(c) MR
+86
+84
+82
+80
+78
+76
+74
+5 10 15 20
+iteration x 50000
+ycaruccA
+94.5
+94.0
+93.5
+93.0
+92.5
+92.0
+91.5
+Skip-Thoughts + LN Skip-Thoughts 91.0
+Original 90.5
+90.0
+5 10 15 20
+iteration x 50000
+(d) CR
+ycaruccA
+91
+90
+89
+88
+87
+86
+Skip-Thoughts + LN 85 Skip-Thoughts
+84 Original
+83
+5 10 15 20
+iteration x 50000
+(e) SUBJ
+ycaruccA
+Skip-Thoughts + LN Skip-Thoughts
+Original
+(f) MPQA
+Figure3:Performanceofskip-thoughtvectorswithandwithoutlayernormalizationondownstream
+tasksasafunctionoftrainingiterations. Theoriginallinesarethereportedresultsin[Kirosetal.,
+2015]. Plotswitherroruse10-foldcrossvalidation. Bestseenincolor.
+Method SICK(r) SICK(ρ) SICK(MSE) MR CR SUBJ MPQA
+Original[Kirosetal.,2015] 0.848 0.778 0.287 75.5 79.3 92.1 86.9
+Ours 0.842 0.767 0.298 77.3 81.8 92.6 87.9
+Ours+LN 0.854 0.785 0.277 79.5 82.6 93.4 89.0
+Ours+LN† 0.858 0.788 0.270 79.4 83.1 93.7 89.3
+Table3:Skip-thoughtsresults.ThefirsttwoevaluationcolumnsindicatePearsonandSpearmancor-
+relation,thethirdismeansquarederrorandtheremainingindicateclassificationaccuracy.Higheris
+betterforallevaluationsexceptMSE.Ourmodelsweretrainedfor1Miterationswiththeexception
+of(†)whichwastrainedfor1month(approximately1.7Miterations)
+encoded with a encoder RNN and decoder RNNs are used to predict the surrounding sentences.
+Kiros et al. [2015] showed that this model could produce generic sentence representations that
+perform well on several tasks without being fine-tuned. However, training this model is time-
+consuming,requiringseveraldaysoftraininginordertoproducemeaningfulresults.
+Inthisexperimentwedeterminetowhateffectlayernormalizationcanspeeduptraining. Usingthe
+publiclyavailablecodeofKirosetal.[2015]4,wetraintwomodelsontheBookCorpusdataset[Zhu
+etal.,2015]: onewithandonewithoutlayernormalization. Theseexperimentsareperformedwith
+Theano[Teametal.,2016].WeadheretotheexperimentalsetupusedinKirosetal.[2015],training
+a2400-dimensionalsentenceencoderwiththesamehyperparameters. Giventhesizeofthestates
+used,itisconceivablelayernormalizationwouldproduceslowerper-iterationupdatesthanwithout.
+However,wefoundthatprovidedCNMeM5isused,therewasnosignificantdifferencebetweenthe
+twomodels.Wecheckpointbothmodelsafterevery50,000iterationsandevaluatetheirperformance
+on five tasks: semantic-relatedness (SICK) [Marelli et al., 2014], movie review sentiment (MR)
+[PangandLee,2005],customerproductreviews(CR)[HuandLiu,2004],subjectivity/objectivity
+classification(SUBJ)[PangandLee,2004]andopinionpolarity(MPQA)[Wiebeetal.,2005]. We
+plot the performance of both models for each checkpoint on all tasks to determine whether the
+performanceratecanbeimprovedwithLN.
+TheexperimentalresultsareillustratedinFigure 3. Weobservethatapplyinglayernormalization
+results both in speedup over the baseline as well as better final results after 1M iterations are per-
+formed as shown in Table 3. We also let the model with layer normalization train for a total of a
+month,resultinginfurtherperformancegainsacrossallbutonetask. Wenotethattheperformance
+4https://github.com/ryankiros/skip-thoughts
+5https://github.com/NVIDIA/cnmem
+80
+−100
+−200
+−300
+−400
+−500
+−600
+−700
+−800
+−900
+100 101 102 103
+Updates x 200
+doohilekiL
+goL
+evitageN
+Baseline test
+Baseline train
+LN test
+LN train
+Figure 5: Handwriting sequence generation model negative log likelihood with and without layer
+normalization. Themodelsaretrainedwithmini-batchsizeof8andsequencelengthof500,
+differencesbetweentheoriginalreportedresultsandoursarelikelyduetothefactthatthepublicly
+availablecodedoesnotconditionateachtimestepofthedecoder,wheretheoriginalmodeldoes.
+6.4 ModelingbinarizedMNISTusingDRAW
+100
+95
+90
+85
+80
+0 20 40 60 80 100
+Epoch
+dnuoB
+lanoitairaV
+tseT
+We also experimented with the generative modeling on the
+Baseline
+MNIST dataset. Deep Recurrent Attention Writer (DRAW)
+WN
+[Gregoretal.,2015]haspreviouslyachievedthestate-of-the-
+LN
+artperformanceonmodelingthedistributionofMNISTdig-
+its. The model uses a differential attention mechanism and
+arecurrentneuralnetworktosequentiallygeneratepiecesof
+an image. We evaluate the effect of layer normalization on
+a DRAW model using 64 glimpses and 256 LSTM hidden
+units. ThemodelistrainedwiththedefaultsettingofAdam
+[Kingma and Ba, 2014] optimizer and the minibatch size of
+128. Previous publications on binarized MNIST have used
+various training protocols to generate their datasets. In this
+experiment, we used the fixed binarization from Larochelle
+and Murray [2011]. The dataset has been split into 50,000 Figure 4: DRAW model test nega-
+training,10,000validationand10,000testimages. tiveloglikelihoodwithandwithout
+layernormalization.
+Figure 4 shows the test variational bound for the first 100
+epoch.Ithighlightsthespeedupbenefitofapplyinglayernor-
+malizationthatthelayernormalizedDRAWconvergesalmosttwiceasfastthanthebaselinemodel.
+After200epoches,thebaselinemodelconvergestoavariationalloglikelihoodof82.36natsonthe
+testdataandthelayernormalizationmodelobtains82.09nats.
+6.5 Handwritingsequencegeneration
+ThepreviousexperimentsmostlyexamineRNNsonNLPtaskswhoselengthsareintherangeof10
+to40. Toshowtheeffectivenessoflayernormalizationonlongersequences, weperformedhand-
+writinggenerationtasksusingtheIAMOnlineHandwritingDatabase[LiwickiandBunke,2005].
+IAM-OnDBconsistsofhandwrittenlinescollectedfrom221differentwriters.Whengiventheinput
+characterstring,thegoalistopredictasequenceofxandypenco-ordinatesofthecorresponding
+handwritinglineonthewhiteboard.Thereare,intotal,12179handwritinglinesequences.Theinput
+stringistypicallymorethan25charactersandtheaveragehandwritinglinehasalengtharound700.
+WeusedthesamemodelarchitectureasinSection(5.2)ofGraves[2013]. Themodelarchitecture
+consists of three hidden layers of 400 LSTM cells, which produce 20 bivariate Gaussian mixture
+componentsattheoutputlayer,andasize3inputlayer. Thecharactersequencewasencodedwith
+one-hot vectors, and hencethe window vectorswere size 57. Amixture of10 Gaussian functions
+was used for the window parameters, requiring a size 30 parameter vector. The total number of
+weights was increased to approximately 3.7M. The model is trained using mini-batches of size 8
+andtheAdam[KingmaandBa,2014]optimizer.
+Thecombinationofsmallmini-batchsizeandverylongsequencesmakesitimportanttohavevery
+stable hidden dynamics. Figure 5 shows that layer normalization converges to a comparable log
+likelihoodasthebaselinemodelbutismuchfaster.
+9100
+10-1
+10-2
+10-3
+10-4
+10-5
+10-6
+10-7
+0 10 20 30 40 50 60
+Epoch
+LLN
+niarT
+BatchNorm bz128
+Baseline bz128
+LayerNorm bz128
+0.025
+0.020
+0.015
+0.010
+0.005
+0 10 20 30 40 50 60
+Epoch
+.rrE
+tseT
+100
+10-1
+10-2
+10-3
+10-4
+10-5
+10-6
+10-7
+0 10 20 30 40 50 60
+Epoch
+BatchNorm bz128
+Baseline bz128
+LayerNorm bz128
+LLN
+niarT
+LayerNorm bz4
+Baseline bz4
+BatchNorm bz4
+0.025
+0.020
+0.015
+0.010
+0.005
+0 10 20 30 40 50 60
+Epoch
+.rrE
+tseT
+LayerNorm bz4
+Baseline bz4
+BatchNorm bz4
+Figure6: PermutationinvariantMNIST784-1000-1000-10modelnegativeloglikelihoodandtest
+errorwithlayernormalizationandbatchnormalization. (Left)Themodelsaretrainedwithbatch-
+sizeof128. (Right)Themodelsaretrainedwithbatch-sizeof4.
+6.6 PermutationinvariantMNIST
+InadditiontoRNNs,weinvestigatedlayernormalizationinfeed-forwardnetworks. Weshowhow
+layer normalization compares with batch normalization on the well-studied permutation invariant
+MNISTclassificationproblem. Fromthepreviousanalysis,layernormalizationisinvarianttoinput
+re-scaling which is desirable for the internal hidden layers. But this is unnecessary for the logit
+outputs where the prediction confidence is determined by the scale of the logits. We only apply
+layernormalizationtothefully-connectedhiddenlayersthatexcludesthelastsoftmaxlayer.
+Allthemodelsweretrainedusing55000trainingdatapointsandtheAdam[KingmaandBa,2014]
+optimizer. Forthesmallerbatch-size,thevariancetermforbatchnormalizationiscomputedusing
+theunbiasedestimator. TheexperimentalresultsfromFigure6highlightthatlayernormalizationis
+robusttothebatch-sizesandexhibitsafastertrainingconvergencecomparingtobatchnormalization
+thatisappliedtoalllayers.
+6.7 ConvolutionalNetworks
+Wehavealsoexperimentedwithconvolutionalneuralnetworks. Inourpreliminaryexperiments,we
+observedthatlayernormalizationoffersaspeedupoverthebaselinemodelwithoutnormalization,
+butbatchnormalizationoutperformstheothermethods. Withfullyconnectedlayers,allthehidden
+units in a layer tend to make similar contributions to the final prediction and re-centering and re-
+scalingthesummedinputstoalayerworkswell. However,theassumptionofsimilarcontributions
+is no longer true for convolutional neural networks. The large number of the hidden units whose
+receptivefieldslieneartheboundaryoftheimagearerarelyturnedonandthushaveverydifferent
+statisticsfromtherestofthehiddenunitswithinthesamelayer. Wethinkfurtherresearchisneeded
+tomakelayernormalizationworkwellinConvNets.
+7 Conclusion
+In this paper, we introduced layer normalization to speed-up the training of neural networks. We
+providedatheoreticalanalysisthatcomparedtheinvariancepropertiesoflayernormalizationwith
+batchnormalizationandweightnormalization. Weshowedthatlayernormalizationisinvariantto
+pertraining-casefeatureshiftingandscaling.
+Empirically,weshowedthatrecurrentneuralnetworksbenefitthemostfromtheproposedmethod
+especiallyforlongsequencesandsmallmini-batches.
+Acknowledgments
+ThisresearchwasfundedbygrantsfromNSERC,CFI,andGoogle.
+10References
+AlexKrizhevsky,IlyaSutskever,andGeoffreyEHinton.Imagenetclassificationwithdeepconvolutionalneural
+networks. InNIPS,2012.
+GeoffreyHinton,LiDeng,DongYu,GeorgeEDahl,Abdel-rahmanMohamed,NavdeepJaitly,AndrewSenior,
+VincentVanhoucke,PatrickNguyen,TaraNSainath,etal. Deepneuralnetworksforacousticmodelingin
+speechrecognition:Thesharedviewsoffourresearchgroups. IEEE,2012.
+JeffreyDean,GregCorrado,RajatMonga,KaiChen,MatthieuDevin,MarkMao,AndrewSenior,PaulTucker,
+KeYang,QuocVLe,etal. Largescaledistributeddeepnetworks. InNIPS,2012.
+Sergey Ioffe and Christian Szegedy. Batch normalization: Accelerating deep network training by reducing
+internalcovariateshift. ICML,2015.
+Ilya Sutskever, Oriol Vinyals, and Quoc V Le. Sequence to sequence learning with neural networks. In
+Advancesinneuralinformationprocessingsystems,pages3104–3112,2014.
+Ce´sarLaurent,GabrielPereyra,Phile´monBrakel,YingZhang,andYoshuaBengio.Batchnormalizedrecurrent
+neuralnetworks. arXivpreprintarXiv:1510.01378,2015.
+DarioAmodei,RishitaAnubhai,EricBattenberg,CarlCase,JaredCasper,BryanCatanzaro,JingdongChen,
+MikeChrzanowski,AdamCoates,GregDiamos,etal. Deepspeech2: End-to-endspeechrecognitionin
+englishandmandarin. arXivpreprintarXiv:1512.02595,2015.
+TimCooijmans, NicolasBallas, Ce´sarLaurent, andAaronCourville. Recurrentbatchnormalization. arXiv
+preprintarXiv:1603.09025,2016.
+TimSalimansandDiederikPKingma. Weightnormalization:Asimplereparameterizationtoacceleratetrain-
+ingofdeepneuralnetworks. arXivpreprintarXiv:1602.07868,2016.
+BehnamNeyshabur,RuslanRSalakhutdinov,andNatiSrebro.Path-sgd:Path-normalizedoptimizationindeep
+neuralnetworks. InAdvancesinNeuralInformationProcessingSystems,pages2413–2421,2015.
+Shun-IchiAmari. Naturalgradientworksefficientlyinlearning. Neuralcomputation,1998.
+Ivan Vendrov, Ryan Kiros, Sanja Fidler, and Raquel Urtasun. Order-embeddings of images and language.
+ICLR,2016.
+TheTheanoDevelopmentTeam,RamiAl-Rfou,GuillaumeAlain,AmjadAlmahairi,ChristofAngermueller,
+DzmitryBahdanau,NicolasBallas,Fre´de´ricBastien,JustinBayer,AnatolyBelikov,etal.Theano:Apython
+frameworkforfastcomputationofmathematicalexpressions. arXivpreprintarXiv:1605.02688,2016.
+Tsung-YiLin,MichaelMaire,SergeBelongie,JamesHays,PietroPerona,DevaRamanan,PiotrDolla´r,and
+CLawrenceZitnick. Microsoftcoco:Commonobjectsincontext. ECCV,2014.
+Kyunghyun Cho, Bart Van Merrie¨nboer, Caglar Gulcehre, Dzmitry Bahdanau, Fethi Bougares, Holger
+Schwenk, and Yoshua Bengio. Learning phrase representations using rnn encoder-decoder for statistical
+machinetranslation. EMNLP,2014.
+KarenSimonyanandAndrewZisserman. Verydeepconvolutionalnetworksforlarge-scaleimagerecognition.
+ICLR,2015.
+RyanKiros,RuslanSalakhutdinov,andRichardSZemel. Unifyingvisual-semanticembeddingswithmulti-
+modalneurallanguagemodels. arXivpreprintarXiv:1411.2539,2014.
+D.KingmaandJ.L.Ba. Adam:amethodforstochasticoptimization. ICLR,2014. arXiv:1412.6980.
+Liwei Wang, Yin Li, and Svetlana Lazebnik. Learning deep structure-preserving image-text embeddings.
+CVPR,2016.
+Karl Moritz Hermann, Tomas Kocisky, Edward Grefenstette, Lasse Espeholt, Will Kay, Mustafa Suleyman,
+andPhilBlunsom. Teachingmachinestoreadandcomprehend. InNIPS,2015.
+RyanKiros,YukunZhu,RuslanRSalakhutdinov,RichardZemel,RaquelUrtasun,AntonioTorralba,andSanja
+Fidler. Skip-thoughtvectors. InNIPS,2015.
+TomasMikolov, KaiChen, GregCorrado, andJeffreyDean. Efficientestimationofwordrepresentationsin
+vectorspace. arXivpreprintarXiv:1301.3781,2013.
+Yukun Zhu, Ryan Kiros, Rich Zemel, Ruslan Salakhutdinov, Raquel Urtasun, Antonio Torralba, and Sanja
+Fidler. Aligningbooksandmovies:Towardsstory-likevisualexplanationsbywatchingmoviesandreading
+books. InICCV,2015.
+MarcoMarelli,LuisaBentivogli,MarcoBaroni,RaffaellaBernardi,StefanoMenini,andRobertoZamparelli.
+Semeval-2014task1:Evaluationofcompositionaldistributionalsemanticmodelsonfullsentencesthrough
+semanticrelatednessandtextualentailment. SemEval-2014,2014.
+11BoPangandLillianLee. Seeingstars:Exploitingclassrelationshipsforsentimentcategorizationwithrespect
+toratingscales. InACL,pages115–124,2005.
+Minqing Hu and Bing Liu. Mining and summarizing customer reviews. In Proceedings of the tenth ACM
+SIGKDDinternationalconferenceonKnowledgediscoveryanddatamining,2004.
+BoPangandLillianLee. Asentimentaleducation:Sentimentanalysisusingsubjectivitysummarizationbased
+onminimumcuts. InACL,2004.
+JanyceWiebe,TheresaWilson,andClaireCardie. Annotatingexpressionsofopinionsandemotionsinlan-
+guage. Languageresourcesandevaluation,2005.
+K.Gregor,I.Danihelka,A.Graves,andD.Wierstra. DRAW:arecurrentneuralnetworkforimagegeneration.
+arXiv:1502.04623,2015.
+HugoLarochelleandIainMurray. Theneuralautoregressivedistributionestimator. InAISTATS,volume6,
+page622,2011.
+MarcusLiwickiandHorstBunke. Iam-ondb-anon-lineenglishsentencedatabaseacquiredfromhandwritten
+textonawhiteboard. InICDAR,2005.
+AlexGraves. Generatingsequenceswithrecurrentneuralnetworks. arXivpreprintarXiv:1308.0850,2013.
+12SupplementaryMaterial
+Applicationoflayernormalizationtoeachexperiment
+This section describes how layer normalization is applied to each of the papers’ experiments. For
+notationconvenience,wedefinelayernormalizationasafunctionmappingLN : RD → RD with
+twosetofadaptiveparameters,gainsαandbiasesβ:
+(z−µ)
+LN(z;α,β)= (cid:12)α+β, (15)
+σ
+(cid:118)
+D (cid:117) D
+1 (cid:88) (cid:117)1 (cid:88)
+µ= z , σ =(cid:116) (z −µ)2, (16)
+D i D i
+i=1 i=1
+where,z istheithelementofthevectorz.
+i
+Teachingmachinestoreadandcomprehendandhandwritingsequencegeneration
+ThebasicLSTMequationsusedfortheseexperimentaregivenby:
+f 
+t
+i
+ t = W h +W x +b (17)
+o  h t−1 x t
+t
+g
+t
+c = σ(f )(cid:12)c +σ(i )(cid:12)tanh(g ) (18)
+t t t−1 t t
+h = σ(o )(cid:12)tanh(c ) (19)
+t t t
+Theversionthatincorporateslayernormalizationismodifiedasfollows:
+f 
+t
+i
+ t = LN(W h ;α ,β )+LN(W x ;α ,β )+b (20)
+o  h t−1 1 1 x t 2 2
+t
+g
+t
+c = σ(f )(cid:12)c +σ(i )(cid:12)tanh(g ) (21)
+t t t−1 t t
+h = σ(o )(cid:12)tanh(LN(c ;α ,β )) (22)
+t t t 3 3
+whereα ,β aretheadditiveandmultiplicativeparameters,respectively. Eachα isinitializedtoa
+i i i
+vectorofzerosandeachβ isinitializedtoavectorofones.
+i
+Orderembeddingsandskip-thoughts
+Theseexperimentsutilizeavariantofgatedrecurrentunitwhichisdefinedasfollows:
+(cid:18) (cid:19)
+z
+t = W h +W x (23)
+r h t−1 x t
+t
+hˆ = tanh(Wx +σ(r )(cid:12)(Uh )) (24)
+t t t t−1
+h = (1−σ(z ))h +σ(z )hˆ (25)
+t t t−1 t t
+Layernormalizationisappliedasfollows:
+(cid:18) (cid:19)
+z
+t = LN(W h ;α ,β )+LN(W x ;α ,β ) (26)
+r h t−1 1 1 x t 2 2
+t
+hˆ = tanh(LN(Wx ;α ,β )+σ(r )(cid:12)LN(Uh ;α ,β )) (27)
+t t 3 3 t t−1 4 4
+h = (1−σ(z ))h +σ(z )hˆ (28)
+t t t−1 t t
+justasbefore,α isinitializedtoavectorofzerosandeachβ isinitializedtoavectorofones.
+i i
+13ModelingbinarizedMNISTusingDRAW
+ThelayernormisonlyappliedtotheoutputoftheLSTMhiddenstatesinthisexperiment:
+Theversionthatincorporateslayernormalizationismodifiedasfollows:
+f 
+t
+i
+ t = W h +W x +b (29)
+o  h t−1 x t
+t
+g
+t
+c = σ(f )(cid:12)c +σ(i )(cid:12)tanh(g ) (30)
+t t t−1 t t
+h = σ(o )(cid:12)tanh(LN(c ;α,β)) (31)
+t t t
+whereα,β aretheadditiveandmultiplicativeparameters,respectively. αisinitializedtoavector
+ofzerosandβisinitializedtoavectorofones.
+Learningthemagnitudeofincomingweights
+Wenowcomparehowgradientdescentupdateschangingmagnitudeoftheequivalentweightsbe-
+tween the normalized GLM and original parameterization. The magnitude of the weights are ex-
+plicitlyparameterizedusingthegainparameterinthenormalizedmodel. Assumethereisagradient
+update that changes norm of the weight vectors by δ . We can project the gradient updates to the
+g
+weight vector for the normal GLM. The KL metric, ie how much the gradient update changes the
+modelprediction,forthenormalizedmodeldependsonlyonthemagnitudeofthepredictionerror.
+Specifically,
+underbatchnormalization:
+(cid:20) (cid:21)
+1 1 Cov[y|x]
+ds2 = vec([0,0,δ ](cid:62))(cid:62)F¯(vec([W,b,g](cid:62))vec([0,0,δ ](cid:62))= δ(cid:62) E δ .
+2 g g 2 g φ2 g
+x∼P(x)
+(32)
+Underlayernormalization:
+1
+ds2 = vec([0,0,δ ](cid:62))(cid:62)F¯(vec([W,b,g](cid:62))vec([0,0,δ ](cid:62))
+2 g g
+
+Cov(y ,y
+|x)(a1−µ)2
+··· Cov(y ,y
+|x)(a1−µ)(aH−µ)
+1 1 σ2 1 H σ2
+= 1 2 δ g (cid:62) φ 1 2 x∼ E P(x)    . . . ... . . .    δ g
+Cov(y ,y |x)(aH−µ)(a1−µ) ··· Cov(y ,y |x)(aH−µ)2
+H 1 σ2 H H σ2
+(33)
+Underweightnormalization:
+1
+ds2 = vec([0,0,δ ](cid:62))(cid:62)F¯(vec([W,b,g](cid:62))vec([0,0,δ ](cid:62))
+2 g g
+= 1 2 δ g (cid:62) φ 1 2 E     Cov(y 1 ,y 1 . . . |x) (cid:107)w a 1 2 1 (cid:107)2 2 · . · .. · Cov(y 1 ,y H |x . . . ) (cid:107)w1 a (cid:107) 1 2 a (cid:107)w H H(cid:107)2     δ g . (34)
+x∼P(x) 
+Cov(y H ,y 1 |x) (cid:107)wH a (cid:107) H 2 a (cid:107)w 1 1(cid:107)2 ··· Cov(y H ,y H |x) (cid:107)w a H 2 H (cid:107)2 2
+Whereas,theKLmetricinthestandardGLMisrelatedtoitsactivitiesa =w(cid:62)x,thatisdepended
+i i
+onbothitscurrentweightsandinputdata. Weprojectthegradientupdatestothegainparameterδ i
+g
+oftheithneurontoitsweightvectorasδ gi(cid:107)w w i i (cid:107)2 inthestandardGLMmodel:
+1 w w w w
+vec([δ i ,0,δ j ,0](cid:62))(cid:62)F([w(cid:62),b ,w(cid:62),b ](cid:62))vec([δ i ,0,δ j ,0](cid:62))
+2 gi(cid:107)w (cid:107) gj(cid:107)w (cid:107) i i j j gi(cid:107)w (cid:107) gj(cid:107)w (cid:107)
+i 2 i 2 i 2 j 2
+(cid:20) (cid:21)
+δ δ a a
+= gi gj E Cov(y ,y |x) i j (35)
+2φ2 i j (cid:107)w (cid:107) (cid:107)w (cid:107)
+x∼P(x) i 2 j 2
+Thebatchnormalizedandlayernormalizedmodelsarethereforemorerobusttothescalingofthe
+inputanditsparametersthanthestandardmodel.
+14

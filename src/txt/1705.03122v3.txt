@@ -1,0 +1,1092 @@
+Convolutional Sequence to Sequence Learning
+JonasGehring
+MichaelAuli
+DavidGrangier
+DenisYarats
+YannN.Dauphin
+FacebookAIResearch
+Abstract Convolutional neural networks are less common for se-
+quencemodeling,despiteseveraladvantages(Waibeletal.,
+Theprevalentapproachtosequencetosequence
+1989;LeCun&Bengio,1995).Comparedtorecurrentlay-
+learning maps an input sequence to a variable
+ers,convolutionscreaterepresentationsforfixedsizecon-
+length output sequence via recurrent neural net-
+texts,however,theeffectivecontextsizeofthenetworkcan
+works. We introduce an architecture based en-
+easily be made larger by stacking several layers on top of
+tirely on convolutional neural networks.1 Com- eachother. Thisallowstopreciselycontrolthemaximum
+paredtorecurrentmodels,computationsoverall
+lengthofdependenciestobemodeled. Convolutionalnet-
+elementscanbefullyparallelizedduringtraining
+works do not depend on the computations of the previous
+tobetterexploittheGPUhardwareandoptimiza-
+timestepandthereforeallowparallelizationovereveryele-
+tioniseasiersincethenumberofnon-linearities
+mentinasequence.ThiscontrastswithRNNswhichmain-
+isfixedandindependentoftheinputlength. Our
+tain a hidden state of the entire past that prevents parallel
+useofgatedlinearunitseasesgradientpropaga-
+computationwithinasequence.
+tionandweequipeachdecoderlayerwithasep-
+arateattentionmodule. Weoutperformtheaccu- Multi-layerconvolutionalneuralnetworkscreatehierarchi-
+racyofthedeepLSTMsetupofWuetal.(2016) calrepresentationsovertheinputsequenceinwhichnearby
+onbothWMT’14English-GermanandWMT’14 input elements interact at lower layers while distant ele-
+English-Frenchtranslationatanorderofmagni- mentsinteractathigherlayers. Hierarchicalstructurepro-
+tudefasterspeed,bothonGPUandCPU. vides a shorter path to capture long-range dependencies
+comparedtothechainstructuremodeledbyrecurrentnet-
+works, e.g. wecanobtainafeaturerepresentationcaptur-
+ingrelationshipswithinawindowofnwordsbyapplying
+1.Introduction
+only (n) convolutional operations for kernels of width
+O k
+Sequence to sequence learning has been successful in k, compared to a linear number (n) for recurrent neu-
+O
+many tasks such as machine translation, speech recogni- ral networks. Inputs to a convolutional network are fed
+tion (Sutskever et al., 2014; Chorowski et al., 2015) and through a constant number of kernels and non-linearities,
+text summarization (Rush et al., 2015; Nallapati et al., whereas recurrent networks apply up to n operations and
+2016; Shen et al., 2016) amongst others. The dominant non-linearities to the first word and only a single set of
+approach to date encodes the input sequence with a se- operations to the last word. Fixing the number of non-
+riesofbi-directionalrecurrentneuralnetworks(RNN)and linearitiesappliedtotheinputsalsoeaseslearning.
+generates a variable length output with another set of de-
+Recentworkhasappliedconvolutionalneuralnetworksto
+coder RNNs, both of which interface via a soft-attention
+sequencemodelingsuchasBradburyetal.(2016)whoin-
+mechanism (Bahdanau et al., 2014; Luong et al., 2015).
+troduce recurrent pooling between a succession of convo-
+In machine translation, this architecture has been demon-
+lutional layers or Kalchbrenner et al. (2016) who tackle
+strated to outperform traditional phrase-based models by
+neural translation without attention. However, none of
+large margins (Sennrich et al., 2016b; Zhou et al., 2016;
+these approaches has been demonstrated improvements
+Wuetal.,2016; 2).
+§ over state of the art results on large benchmark datasets.
+1The source code and models are available at https:// Gatedconvolutionshavebeenpreviouslyexploredforma-
+github.com/facebookresearch/fairseq. chinetranslationbyMengetal.(2015)buttheirevaluation
+was restricted to a small dataset and the model was used
+intandemwithatraditionalcount-basedmodel. Architec-
+1
+7102
+luJ
+52
+]LC.sc[
+3v22130.5071:viXraConvolutionalSequencetoSequenceLearning
+tures which are partially convolutional have shown strong stateh andthelastpredictiony ; theresultisnormalized
+i i
+performanceonlargertasksbuttheirdecoderisstillrecur- tobeadistributionoverinputelements.
+rent(Gehringetal.,2016).
+Popularchoicesforrecurrentnetworksinencoder-decoder
+Inthispaperweproposeanarchitectureforsequencetose- models are long short term memory networks (LSTM;
+quencemodelingthatisentirelyconvolutional. Ourmodel Hochreiter&Schmidhuber,1997)andgatedrecurrentunits
+is equipped with gated linear units (Dauphin et al., 2016) (GRU; Cho et al., 2014). Both extend Elman RNNs (El-
+and residual connections (He et al., 2015a). We also use man,1990)withagatingmechanismthatallowsthemem-
+attentionineverydecoderlayeranddemonstratethateach orizationofinformationfromprevioustimestepsinorder
+attentionlayeronlyaddsanegligibleamountofoverhead. tomodellong-termdependencies. Mostrecentapproaches
+Thecombinationofthesechoicesenablesustotacklelarge alsorelyonbi-directionalencoderstobuildrepresentations
+scaleproblems( 3). of both past and future contexts (Bahdanau et al., 2014;
+§
+Zhouetal.,2016;Wuetal.,2016).Modelswithmanylay-
+Weevaluateourapproachonseverallargedatasetsforma-
+ersoftenrelyonshortcutorresidualconnections(Heetal.,
+chinetranslationaswellassummarizationandcompareto
+2015a;Zhouetal.,2016;Wuetal.,2016).
+thecurrentbestarchitecturesreportedintheliterature. On
+WMT’16English-Romaniantranslationweachieveanew
+state of the art, outperforming the previous best result by 3.AConvolutionalArchitecture
+1.9 BLEU. On WMT’14 English-German we outperform
+Nextweintroduceafullyconvolutionalarchitectureforse-
+the strong LSTM setup of Wu et al. (2016) by 0.5 BLEU
+quencetosequencemodeling. InsteadofrelyingonRNNs
+and on WMT’14 English-French we outperform the like-
+tocomputeintermediateencoderstateszanddecoderstates
+lihood trained system of Wu et al. (2016) by 1.6 BLEU.
+hweuseconvolutionalneuralnetworks(CNN).
+Furthermore, our model can translate unseen sentences at
+an order of magnitude faster speed than Wu et al. (2016)
+3.1.PositionEmbeddings
+onGPUandCPUhardware( 4, 5).
+§ §
+First, we embed input elements x = (x ,...,x ) in dis-
+1 m
+2.RecurrentSequencetoSequenceLearning tributional space as w = (w 1 ,...,w m ), where w j R f
+∈
+isacolumninanembeddingmatrix R V × f. Wealso
+D ∈
+Sequence to sequence modeling has been synonymous equipourmodelwithasenseoforderbyembeddingtheab-
+with recurrent neural network based encoder-decoder ar- solutepositionofinputelementsp = (p ,...,p )where
+1 m
+chitectures(Sutskeveretal.,2014;Bahdanauetal.,2014). p j R f. Botharecombinedtoobtaininputelementrep-
+The encoder RNN processes an input sequence x = rese ∈ ntations e = (w +p ,...,w +p ). We proceed
+1 1 m m
+(x 1 ,...,x m ) of m elements and returns state representa- similarly for output elements that were already generated
+tions z = (z 1 ....,z m ). The decoder RNN takes z and by the decoder network to yield output element represen-
+generates the output sequence y = (y 1 ,...,y n ) left to tations that are being fed back into the decoder network
+right, oneelementatatime. Togenerateoutputy i+1 , the g = (g 1 ,...,g n ). Position embeddings are useful in our
+decoder computes a new hidden state h i+1 based on the architecture since they give our model a sense of which
+previous state h i , an embedding g i of the previous target portionofthesequenceintheinputoroutputitiscurrently
+languagewordy i ,aswellasaconditionalinputc i derived dealingwith( 5.4).
+fromtheencoderoutputz. Basedonthisgenericformula- §
+tion,variousencoder-decoderarchitectureshavebeenpro-
+3.2.ConvolutionalBlockStructure
+posed,whichdiffermainlyintheconditionalinputandthe
+typeofRNN. Both encoder and decoder networks share a simple block
+structurethatcomputesintermediatestatesbasedonafixed
+Models without attention consider only the final encoder
+number of input elements. We denote the output of the l-
+statez m bysettingc i = z m foralli(Choetal.,2014),or th block as hl = (hl,...,hl) for the decoder network,
+1 n
+simplyinitializethefirstdecoderstatewithz m (Sutskever and zl = (zl,...,zl ) for the encoder network; we refer
+1 m
+et al., 2014), in which case c is not used. Architectures
+i toblocksandlayersinterchangeably. Eachblockcontains
+with attention(Bahdanau etal., 2014;Luong etal., 2015)
+aonedimensionalconvolutionfollowedbyanon-linearity.
+computec asaweightedsumof(z ....,z )ateachtime
+i 1 m Foradecodernetworkwithasingleblockandkernelwidth
+step. The weights of the sum are referred to as attention k,eachresultingstateh1containsinformationoverkinput
+i
+scoresandallowthenetworktofocusondifferentpartsof
+elements. Stackingseveralblocksontopofeachotherin-
+theinputsequenceasitgeneratestheoutputsequences.At-
+creasesthenumberofinputelementsrepresentedinastate.
+tentionscoresarecomputedbyessentiallycomparingeach
+Forinstance,stacking6blockswithk =5resultsinanin-
+encoderstatez toacombinationofthepreviousdecoder
+j put field of 25 elements, i.e. each output depends on 25
+2ConvolutionalSequencetoSequenceLearning
+inputs. Non-linearities allow the networks to exploit the
+fullinputfield,ortofocusonfewerelementsifneeded.
+EachconvolutionkernelisparameterizedasW R 2d × kd,
+∈
+b w R 2d and takes as input X R k × d which is a
+∈ ∈
+concatenation of k input elements embedded in d dimen-
+sionsandmapsthemtoasingleoutputelementY R 2d
+∈
+that has twice the dimensionality of the input elements;
+subsequent layers operate over the k output elements of
+the previous layer. We choose gated linear units (GLU;
+Dauphin et al., 2016) as non-linearity which implement a
+simple gating mechanism over the output of the convolu-
+tionY =[AB] R 2d:
+∈
+v([AB])=A σ(B)
+⊗
+whereA,B R d aretheinputstothenon-linearity, is
+∈ ⊗
+the point-wise multiplication and the output v([A B])
+∈
+R d is half the size of Y. The gates σ(B) control which
+inputsAofthecurrentcontextarerelevant. Asimilarnon-
+linearity has been introduced in Oord et al. (2016b) who
+applytanhtoAbutDauphinetal.(2016)showsthatGLUs
+performbetterinthecontextoflanguagemodelling.
+To enable deep convolutional networks, we add residual
+connectionsfromtheinputofeachconvolutiontotheout-
+putoftheblock(Heetal.,2015a).
+hl
+i
+=v(Wl[hl
+i−
+1
+k/2
+,...,hl
+i−+
+1
+k/2
+]+bl
+w
+)+hl
+i−
+1
+s
+F
+o
+ig
+u
+u
+rc
+r
+e
+e1
+s
+.
+en
+Il
+t
+l
+e
+u
+n
+s
+c
+tr
+e
+at
+i
+i
+s
+on
+en
+o
+c
+f
+od
+b
+e
+a
+d
+tch
+(t
+i
+o
+n
+p
+g
+)
+d
+a
+u
+n
+r
+d
+in
+w
+g
+e
+tr
+c
+a
+o
+in
+m
+in
+p
+g
+u
+.
+te
+T
+al
+h
+l
+e
+a
+E
+tte
+n
+n
+g
+t
+l
+i
+i
+o
+sh
+n
+−
+valuesforthefourGermantargetwords(center)simultaneously.
+Forencodernetworksweensurethattheoutputofthecon- Ourattentionsarejustdotproductsbetweendecodercontextrep-
+volutional layers matches the input length by padding the resentations (bottom left) and encoder representations. We add
+inputateachlayer.However,fordecodernetworkswehave theconditionalinputscomputedbytheattention(centerright)to
+totakecarethatnofutureinformationisavailabletothede- the decoder states which then predict the target words (bottom
+coder (Oord et al., 2016a). Specifically, we pad the input right).ThesigmoidandmultiplicativeboxesillustrateGatedLin-
+by k 1 elements on both the left and right side by zero earUnits.
+−
+vectors, and then remove k elements from the end of the
+convolutionoutput. targetelementg :
+i
+Wealsoaddlinearmappingstoprojectbetweentheembed- dl =Wlhl+bl +g (1)
+i d i d i
+dingsizef andtheconvolutionoutputsthatareofsize2d.
+Weapplysuchatransformtowwhenfeedingembeddings Fordecoderlayerltheattentional ij ofstateiandsourceel-
+totheencodernetwork,totheencoderoutputzu,tothefi- ementj iscomputedasadot-productbetweenthedecoder
+j
+nallayerofthedecoderjustbeforethesoftmaxhL,andto state summary dl i and each output z j u of the last encoder
+alldecoderlayershlbeforecomputingattentionscores(1). blocku:
+exp dl zu
+al = i· j
+Finally,wecomputeadistributionovertheT possiblenext ij m exp dl zu
+targetelementsy bytransformingthetopdecoderout-
+t=1 (cid:0) i· (cid:1)t
+i+1
+puthL i viaalinearlayerwithweightsW o andbiasb o : The conditional input Pcl i to the c(cid:0)urrent d(cid:1)ecoder layer is a
+weighted sum of the encoder outputs as well as the input
+p(y i+1 | y 1 ,...,y i ,x)=softmax(W o hL i +b o ) ∈ R T elementembeddingse j (Figure1,centerright):
+m
+cl = al (zu+e ) (2)
+3.3.Multi-stepAttention i ij j j
+j=1
+X
+Weintroduceaseparateattentionmechanismforeachde-
+coderlayer.Tocomputetheattention,wecombinethecur- This is slightly different to recurrent approaches which
+rent decoder state hl with an embedding of the previous computeboth theattentionand theweightedsum overzu
+i j
+3ConvolutionalSequencetoSequenceLearning
+only. We found adding e to be beneficial and it resem- of attention mechanisms we use; we exclude source word
+j
+bleskey-valuememorynetworkswherethekeysarethezu embeddings. We found this to stabilize learning since the
+j
+and the values are the zu +e (Miller et al., 2016). En- encoderreceivedtoomuchgradientotherwise.
+j j
+coderoutputszu representpotentiallylargeinputcontexts
+j
+ande j providespointinformationaboutaspecificinputel- 3.5.Initialization
+ement that is useful when making a prediction. Once cl
+i
+Normalizing activations when adding the output of dif-
+hasbeencomputed,itissimplyaddedtotheoutputofthe
+correspondingdecoderlayerhl. ferent layers, e.g. residual connections, requires careful
+i
+weight initialization. The motivation for our initialization
+This can be seen as attention with multiple ’hops’ isthesameasforthenormalization: maintainthevariance
+(Sukhbaataretal.,2015)comparedtosinglestepattention ofactivationsthroughouttheforwardandbackwardpasses.
+(Bahdanau et al., 2014; Luong et al., 2015; Zhou et al., All embeddings are initialized from a normal distribution
+2016; Wu et al., 2016). In particular, the attention of withmean0andstandarddeviation0.1. Forlayerswhose
+the first layer determines a useful source context which outputisnotdirectlyfedtoagatedlinearunit, weinitial-
+is then fed to the second layer that takes this information izeweightsfrom (0, 1/n)wheren isthenumberof
+l l
+N
+into account when computing attention etc. The decoder input connections to each neuron. This ensures that the
+p
+also has immediate access to the attention history of the varianceofanormallydistributedinputisretained.
+k 1 previous time steps because the conditional inputs
+c to l i− − − h 1 k l , . .. T . h , i c s l i− m 1 a a k r e e s p it ar e t a o si f e h r l i f − − o 1 k r , t . h . e . m ,h o l i d − e 1 l w to hi t c a h ke ar in e t i o np a u c- t F po o s r e la a y w er e s i w gh h t ic in h it a i r a e li f z o a l t l i o o w n e s d ch b e y m a e G b L y U ad a a c p ti t v i a n t g io t n h , e w d e er p iv ro a - -
+i tions in (He et al., 2015b; Glorot & Bengio, 2010; Ap-
+countwhichpreviousinputshavebeenattendedtoalready
+pendix A). If the GLU inputs are distributed with mean 0
+comparedtorecurrentnetswherethisinformationisinthe
+and have sufficiently small variance, then we can approx-
+recurrentstateandneedstosurviveseveralnon-linearities.
+imate the output variance with 1/4 of the input variance
+Overall, our attention mechanism considers which words
+(Appendix A.1). Hence, we initialize the weights so that
+wepreviouslyattendedto(Yangetal.,2016)andperforms
+theinputtotheGLUactivationshave4timesthevariance
+multiple attention ’hops’ per time step. In Appendix C,
+§ ofthelayerinput. Thisisachievedbydrawingtheirinitial
+weplot attentionscores foradeep decoderandshow that
+valuesfrom (0, 4/n).Biasesareuniformlysettozero
+at different layers, different portions of the source are at- N l
+whenthenetworkisconstructed.
+tendedto. p
+We apply dropout to the input of some layers so that in-
+Ourconvolutionalarchitecturealsoallowstobatchtheat-
+putsareretainedwithaprobabilityofp. Thiscanbeseen
+tentioncomputationacrossallelementsofasequencecom-
+as multiplication with a Bernoulli random variable taking
+paredtoRNNs(Figure1,middle). Webatchthecomputa-
+value 1/p with probability p and 0 otherwise (Srivastava
+tionsofeachdecoderlayerindividually.
+et al., 2014). The application of dropout will then cause
+the variance to be scaled by 1/p. We aim to restore the
+3.4.NormalizationStrategy
+incomingvariancebyinitializingtherespectivelayerswith
+We stabilize learning through careful weight initialization largerweights.Specifically,weuse (0, 4p/n l )forlay-
+N
+( 3.5)andbyscalingpartsofthenetworktoensurethatthe ers whose output is subject to a GLU and (0, p/n)
+§ p N l
+variancethroughoutthenetworkdoesnotchangedramati- otherwise(AppendixA.3).
+p
+cally. Inparticular, wescaletheoutputofresidualblocks
+as well as the attention to preserve the variance of activa-
+4.ExperimentalSetup
+tions. We multiply the sum of the input and output of a
+residual block by √0.5 to halve the variance of the sum. 4.1.Datasets
+Thisassumesthatbothsummandshavethesamevariance
+WeconsiderthreemajorWMTtranslationtasksaswellas
+whichisnotalwaystruebuteffectiveinpractice.
+atextsummarizationtask.
+The conditional input cl generated by the attention is a
+i WMT’16English-Romanian. Weusethesamedataand
+weightedsumofmvectors(2)andwecounteractachange
+pre-processingas Sennrichet al.(2016b) butremove sen-
+in variance through scaling by m 1/m; we multiply by
+tenceswithmorethan175words.Thisresultsin2.8Msen-
+mtoscaleuptheinputstotheiroriginalsize,assumingthe
+p tencepairsfortrainingandweevaluateonnewstest2016.2
+attentionscoresareuniformlydistributed.Thisisgenerally
+notthecasebutwefoundittoworkwellinpractice. 2We followed the pre-processing of https://github.
+com/rsennrich/wmt16-scripts/blob/80e21e5/
+For convolutional decoders with multiple attention, we
+sample/preprocess.shandaddedtheback-translateddata
+scale the gradients for the encoder layers by the number from http://data.statmt.org/rsennrich/wmt16_
+4ConvolutionalSequencetoSequenceLearning
+Weexperimentwithword-basedmodelsusingasourcevo- still fit in GPU memory. If the threshold is exceeded, we
+cabulary of 200K types and a target vocabulary of 80K simply split the batch until the threshold is met and pro-
+types. Wealsoconsiderajointsourceandtargetbyte-pair cessthepartsseparatedly. Gradientsarenormalizedbythe
+encoding(BPE)with40Ktypes(Sennrichetal.,2016a;b). numberofnon-paddingtokenspermini-batch.Wealsouse
+weightnormalizationforalllayersexceptforlookuptables
+WMT’14English-German.WeusethesamesetupasLu-
+(Salimans&Kingma,2016).
+ongetal.(2015)whichcomprises4.5Msentencepairsfor
+trainingandwetestonnewstest2014.3 Asvocabularywe Besides dropout on the embeddings and the decoder out-
+use40Ksub-wordtypesbasedonBPE. put, we also apply dropout to the input of the convolu-
+tionalblocks(Srivastavaetal.,2014). Allmodelsareim-
+WMT’14English-French. Weusethefulltrainingsetof
+plementedinTorch(Collobertetal.,2011)andtrainedon
+36Msentencepairs,andremovesentenceslongerthan175
+a single Nvidia M40 GPU except for WMT’14 English-
+wordsaswellaspairswithasource/targetlengthratioex-
+French for which we use a multi-GPU setup on a single
+ceeding1.5. Thisresultsin35.5Msentence-pairsfortrain-
+machine. WetrainonuptoeightGPUssynchronouslyby
+ing.Resultsarereportedonnewstest2014.Weuseasource
+maintainingcopiesofthemodeloneachcardandsplitthe
+andtargetvocabularywith40KBPEtypes.
+batchsothateachworkercomputes1/8-thofthegradients;
+Inallsetupsasmallsubsetofthetrainingdataservesasval- attheendwesumthegradientsviaNvidiaNCCL.
+idation set (about 0.5-1% for each dataset) for early stop-
+pingandlearningrateannealing. 4.3.Evaluation
+Abstractive summarization. We train on the Gigaword We report average results over three runs of each model,
+corpus (Graff et al., 2003) and pre-process it identically whereeachdiffersonlyintheinitialrandomseed. Trans-
+to Rush et al. (2015) resulting in 3.8M training examples lations are generated by a beam search and we normalize
+and 190K for validation. We evaluate on the DUC-2004 log-likelihood scores by sentence length. We use a beam
+test data comprising 500 article-title pairs (Over et al., of width 5. We divide the log-likelihoods of the final hy-
+2007) and report three variants of recall-based ROUGE pothesisinbeamsearchbytheirlength y. ForWMT’14
+| |
+(Lin,2004),namely,ROUGE-1(unigrams),ROUGE-2(bi- English-German we tune a length normalization constant
+grams), and ROUGE-L (longest-common substring). We onaseparatedevelopmentset(newstest2015)andwenor-
+also evaluate on a Gigaword test set of 2000 pairs which malizelog-likelihoodsby yα (Wuetal.,2016). Onother
+| |
+is identical to the one used by Rush et al. (2015) and we datasetswedidnotfindanybenefitwithlengthnormaliza-
+report F1 ROUGE similar to prior work. Similar to Shen tion.
+etal.(2016)weuseasourceandtargetvocabularyof30K
+For word-based models, we perform unknown word re-
+wordsandrequireoutputstobeatleast14wordslong.
+placementbasedonattentionscoresaftergeneration(Jean
+et al.,2015). Unknown wordsare replaced bylooking up
+4.2.ModelParametersandOptimization
+thesourcewordwiththemaximumattentionscoreinapre-
+We use 512 hidden units for both encoders and decoders, computed dictionary. If the dictionary contains no trans-
+unlessotherwisestated.Allembeddings,includingtheout- lation, then we simply copy the source word. Dictionar-
+put produced by the decoder before the final linear layer, ieswereextractedfromthewordalignedtrainingdatathat
+havedimensionality512;weusethesamedimensionalities weobtainedwithfast align(Dyeretal.,2013). Each
+forlinearlayersmappingbetweenthehiddenandembed- source word is mapped to the target word it is most fre-
+dingsizes( 3.2). quently aligned to. In our multi-step attention ( 3.3) we
+§ §
+simply average the attention scores over all layers. Fi-
+We train our convolutional models with Nesterov’s accel-
+nally, wecomputecase-sensitivetokenizedBLEU,except
+eratedgradientmethod(Sutskeveretal.,2013)usingamo-
+forWMT’16English-Romanianwhereweusedetokenized
+mentum value of 0.99 and renormalize gradients if their
+BLEUtobecomparablewithSennrichetal.(2016b).4
+norm exceeds 0.1 (Pascanu et al., 2013). We use a learn-
+ing rate of 0.25 and once the validation perplexity stops 4https://github.com/moses-smt/
+improving,wereducethelearningratebyanorderofmag- mosesdecoder/blob/617e8c8/scripts/generic/
+nitudeaftereachepochuntilitfallsbelow10 4. {multi-bleu.perl,mteval-v13a.pl}
+−
+Unless otherwise stated, we use mini-batches of 64 sen-
+tences. We restrict the maximum number of words in a
+mini-batch to make sure that batches with long sentences
+backtranslations/en-ro.
+3http://nlp.stanford.edu/projects/nmt
+5ConvolutionalSequencetoSequenceLearning
+5.Results
+WMT’16English-Romanian BLEU
+5.1.Recurrentvs. ConvolutionalModels Sennrichetal.(2016b)GRU(BPE90K) 28.1
+Wefirstevaluateourconvolutionalmodelonthreetransla- ConvS2S(Word80K) 29.45
+tiontasks. OnWMT’16English-Romaniantranslationwe ConvS2S(BPE40K) 30.02
+compare to Sennrich et al. (2016b) which is the winning
+entryonthislanguagepairatWMT’16(Bojaretal.,2016).
+Their model implements the attention-based sequence to WMT’14English-German BLEU
+sequence architecture of Bahdanau et al. (2014) and uses Luongetal.(2015)LSTM(Word50K) 20.9
+GRU cells both in the encoder and decoder. We test both Kalchbrenneretal.(2016)ByteNet(Char) 23.75
+word-basedandBPEvocabularies( 4). Wuetal.(2016)GNMT(Word80K) 23.12
+§
+Wuetal.(2016)GNMT(Wordpieces) 24.61
+Table1showsthatourfullyconvolutionalsequencetose-
+quence model (ConvS2S) outperforms the WMT’16 win- ConvS2S(BPE40K) 25.16
+ningentryforEnglish-Romanianby1.9BLEUwithaBPE
+encoding and by 1.3 BLEU with a word factored vocabu-
+lary. This instance of our architecture has 20 layes in the WMT’14English-French BLEU
+encoder and 20 layers in the decoder, both using kernels
+Wuetal.(2016)GNMT(Word80K) 37.90
+ofwidth3andhiddensize512throughout. Trainingtook
+Wuetal.(2016)GNMT(Wordpieces) 38.95
+between6and7.5daysonasingleGPU.
+Wuetal.(2016)GNMT(Wordpieces)+RL 39.92
+OnWMT’14EnglishtoGermantranslationwecompareto
+ConvS2S(BPE40K) 40.51
+thefollowingpriorwork: Luongetal.(2015)isbasedona
+fourlayerLSTMattentionmodel, ByteNet(Kalchbrenner
+Table1.Accuracy on WMT tasks comapred to previous work.
+etal.,2016)proposeaconvolutionalmodelbasedonchar-
+ConvS2SandGNMTresultsareaveragedoverseveralruns.
+acterswithoutattention,with30layersintheencoderand
+30 layers in the decoder, GNMT (Wu et al., 2016) repre-
+sentsthestateoftheartonthisdatasetandtheyuseeight
+encoderLSTMsaswellaseightdecoderLSTMs,wequote BLEU.Reinforcementlearningisequallyapplicabletoour
+their result for a word-based model, such as ours, as well architecture and we believe that it would further improve
+asaword-piecemodel(Schuster&Nakajima,2012).5 ourresults.
+The results (Table 1) show that our convolutional model TheConvS2Smodelforthisexperimentuses15layersin
+outpeformsGNMTby0.5BLEU.Ourencoderhas15lay- the encoder and 15 layers in the decoder, both with 512
+ers and the decoder has 15 layers, both with 512 hidden hiddenunitsinthefirstfivelayers,768unitsinthesubse-
+unitsinthefirsttenlayersand768unitsinthesubsequent quentfourlayers,1024unitsinthenext3layers,allusing
+threelayers,allusingkernelwidth3. Thefinaltwolayers kernel width 3; the final two layers have 2048 units and
+have2048unitswhicharejustlinearmappingswithasin- 4096unitseachbutthetheyarelinearmappingswithker-
+gle input. We trained this model on a single GPU over a nel width 1. This model has an effective context size of
+periodof18.5dayswithabatchsizeof48. LSTMsparse only 25 words, beyond which it cannot access any infor-
+mixtureshaveshownstrongaccuracyat26.03BLEUfora mationonthetargetsize. Ourresultsarebasedontraining
+singlerun(Shazeeretal.,2016)whichcomparesto25.39 with8GPUsforabout37daysandbatchsize32oneach
+BLEU for our best run. This mixture sums the output of worker.6 ThesameconfigurationasforWMT’14English-
+fourexperts,notunlikeanensemblewhichsumstheoutput Germanachieves39.41BLEUintwoweeksonthisdataset
+ofmultiplenetworks. ConvS2Salsobenefitsfromensem- inaneightGPUsetup.
+bling( 5.2),thereforemixturesareapromisingdirection.
+§ Zhou et al. (2016) report a non-averaged result of 39.2
+Finally, we train on the much larger WMT’14 English- BLEU. More recently, Ha et al. (2016) showed that one
+French task where we compare to the state of the art re- can generate weights with one LSTM for another LSTM.
+sultofGNMT(Wuetal.,2016). Ourmodelistrainedwith This approach achieves 40.03 BLEU but the result is not
+a simple token-level likelihood objective and we improve averaged. Shazeer et al. (2016) compares at 40.56 BLEU
+overGNMTinthesamesettingby1.6BLEUonaverage. toourbestsinglerunof40.70BLEU.
+Wealsooutperformtheirreinforcement(RL)modelsby0.5
+6ThisishalfoftheGPUtimeconsumedbyabasicmodelof
+5Wedidnotusetheexactsamevocabularysizebecauseword Wuetal.(2016)whouse96GPUsfor6days.Weexpectthetime
+piecesandBPEestimatethevocabularydifferently. to train our model to decrease substantially in a multi-machine
+setup.
+6ConvolutionalSequencetoSequenceLearning
+WMT’14English-German BLEU BLEU Time(s)
+Wuetal.(2016)GNMT 26.20 GNMTGPU(K80) 31.20 3,028
+Wuetal.(2016)GNMT+RL 26.30 GNMTCPU88cores 31.20 1,322
+GNMTTPU 31.21 384
+ConvS2S 26.43
+ConvS2SGPU(K40)b=1 33.45 327
+ConvS2SGPU(M40)b=1 33.45 221
+WMT’14English-French BLEU ConvS2SGPU(GTX-1080ti)b=1 33.45 142
+ConvS2SCPU48coresb=1 33.45 142
+Zhouetal.(2016) 40.4
+Wuetal.(2016)GNMT 40.35 ConvS2SGPU(K40)b=5 34.10 587
+Wuetal.(2016)GNMT+RL 41.16 ConvS2SCPU48coresb=5 34.10 482
+ConvS2SGPU(M40)b=5 34.10 406
+ConvS2S 41.44
+ConvS2SGPU(GTX-1080ti)b=5 34.10 256
+ConvS2S(10models) 41.62
+Table3.CPU and GPU generation speed in seconds on the de-
+Table2.Accuracy of ensembles with eight models. We show
+velopmentsetofWMT’14English-French. Weshowresultsfor
+bothlikelihoodandReinforce(RL)resultsforGNMT;Zhouetal.
+differentbeamsizesb. GNMTfiguresaretakenfromWuetal.
+(2016)andConvS2Susesimplelikelihoodtraining.
+(2016).CPUspeedsarenotdirectlycomparablebecauseWuetal.
+(2016)usea88coremachineversusour48coresetup.
+The translations produced by our models often match the
+lengthofthereferences,particularlyforthelargeWMT’14 useNvidiaK80GPUswhichareessentiallytwoK40s. We
+English-Frenchtask,orareverycloseforsmalltomedium did not have such a GPU available and therefore run ex-
+data sets such as WMT’14 English-German or WMT’16 perimentsonanolderK40cardwhichisinferiortoaK80,
+English-Romanian. inadditiontothenewerM40andGTX-1080ticards. The
+results(Table3)showthatourmodelcangeneratetransla-
+5.2.EnsembleResults tionsonaK40GPUat9.3timesthespeedand2.25higher
+BLEU;onanM40thespeed-upisupto13.7timesandon
+Next,weensembleeightlikelihood-trainedmodelsforboth
+aGTX-1080ticardthespeedis21.3timesfaster. Alarger
+WMT’14 English-German and WMT’14 English-French
+beamofsize5decreasesspeedbutgivesbetterBLEU.
+andcomparetopreviousworkwhichalsoreportedensem-
+ble results. For the former, we also show the result when OnCPU,ourmodelisupto9.3timesfaster,however,the
+ensembling10models. Table2showsthatweoutperform GNMTCPUresultswereobtainedwithan88coremachine
+thebestcurrentensemblesonbothdatasets. whereas our results were obtained with just over half the
+number of cores. On a per CPU core basis, our model is
+5.3.GenerationSpeed 17timesfasteratabetterBLEU.Finally,ourCPUspeedis
+2.7timeshigherthanGNMTonacustomTPUchipwhich
+Next, we evaluate the inference speed of our architecture
+showsthathighspeedcanbeachievedoncommodityhard-
+on the development set of the WMT’14 English-French
+ware. WedonoreportTPUfiguresaswedonothaveac-
+taskwhichistheconcatenationofnewstest2012andnew-
+cesstothishardware.
+stest2013;itcomprises6003sentences.Wemeasuregener-
+ationspeedbothonGPUandCPUhardware. Specifically,
+5.4.PositionEmbeddings
+we measure GPU speed on three generations of Nvidia
+cards: a GTX-1080ti, an M40 as well as an older K40 Inthefollowingsections,weanalyzethedesignchoicesin
+card.CPUtimingsaremeasuredononehostwith48hyper- our architecture. The remaining results in this paper are
+threaded cores (Intel Xeon E5-2680 @ 2.50GHz) with 40 based on the WMT’14 English-German task with 13 en-
+workers.Inallsettings,webatchupto128sentences,com- coderlayersatkernelsize3and5decoderlayersatkernel
+posing batches with sentences of equal length. Note that size5.Weuseatargetvocabularyof160Kwordsaswellas
+themajorityofbatchesissmallerbecauseofthesmallsize vocabularyselection(Mietal.,2016;L’Hostisetal.,2016)
+ofthedevelopmentset. Weexperimentwithbeamsofsize to decrease the size of the output layer which speeds up
+5aswellasgreedysearch,i.ebeamofsize1.Tomakegen- trainingandtesting. Theaveragevocabularysizeforeach
+eration fast, we do not recompute convolution states that trainingbatchisabout20Ktargetwords.Allfiguresareav-
+have not changed compared to the previous time step but eragedoverthreeruns( 4)andBLEUisreportedonnew-
+§
+rathercopy(shift)theseactivations. stest2014beforeunknownwordreplacement.
+We compare to results reported in Wu et al. (2016) who Westartwithanexperimentthatremovesthepositionem-
+7ConvolutionalSequencetoSequenceLearning
+PPL BLEU AttnLayers PPL BLEU
+ConvS2S 6.64 21.7 1,2,3,4,5 6.65 21.63
+-sourceposition 6.69 21.3 1,2,3,4 6.70 21.54
+-targetposition 6.63 21.5 1,2,3 6.95 21.36
+-source&targetposition 6.68 21.2 1,2 6.92 21.47
+1,3,5 6.97 21.10
+Table4.Effectofremovingpositionembeddingsfromourmodel
+1 7.15 21.26
+intermsofvalidationperplexity(validPPL)andBLEU.
+2 7.09 21.30
+3 7.11 21.19
+4 7.19 21.31
+beddingsfromtheencoderanddecoder( 3.1). Theseem-
+5 7.66 20.24
+§
+beddingsallowourmodeltoidentifywhichportionofthe
+source and target sequence it is dealing with but also im-
+Table5.Multi-step attention in all five decoder layers or fewer
+pose a restriction on the maximum sentence length. Ta- layersintermsofvalidationperplexity(PPL)andtestBLEU.
+ble 4 shows that position embeddings are helpful but that
+our model still performs well without them. Removing
+thesourcepositionembeddingsresultsinalargeraccuracy 22
+decrease than target position embeddings. However, re-
+21.5
+movingbothsourceandtargetpositionsdecreasesaccuracy
+onlyby0.5BLEU.Wehadassumedthatthemodelwould
+21
+notbeabletocalibratethelengthoftheoutputsequences
+very well without explicit position information, however,
+20.5
+theoutputlengthsofmodelswithoutpositionembeddings
+closelymatchesmodelswithpositioninformation.Thisin- 20
+dicatesthatthemodelscanlearnrelativepositioninforma-
+tionwithinthecontextsvisibletotheencoderanddecoder 19.5
+networkswhichcanobserveupto27and25wordsrespec-
+19
+tively. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25
+Recurrentmodelstypicallydonotuseexplicitpositionem-
+beddings since they can learn where they are in the se-
+quencethroughtherecurrenthiddenstatecomputation. In
+oursetting,theuseofpositionembeddingsrequiresonlya
+simple addition to the input word embeddings which is a
+negligibleoverhead.
+5.5.Multi-stepAttention
+The multiple attention mechanism ( 3.3) computes a sep-
+§
+arate source context vector for each decoder layer. The
+computationalsotakesintoaccountcontextscomputedfor
+preceding decoder layers of the current time step as well
+asprevioustimestepsthatarewithinthereceptivefieldof
+the decoder. How does multiple attention compare to at-
+tention in fewer layers or even only in a single layer as is
+usual? Table 5 shows that attention in all decoder layers
+achievesthebestvalidationperplexity(PPL).Furthermore,
+removing more and more attention layers decreases accu-
+racy,bothintermsofBLEUaswellasPPL.
+The computational overhead for attention is very small
+compared to the rest of the network. Training with atten-
+tioninallfivedecoderlayersprocesses3624targetwords
+persecondonaverageonasingleGPU,comparedto3772
+wordspersecondforattentioninasinglelayer.Thisisonly
+UELB
+Encoder
+Decoder
+Layers
+Figure2.Encoderanddecoderwithdifferentnumberoflayers.
+a 4% slow down when adding 4 attention modules. Most
+neuralmachinetranslationsystemsonlyuseasinglemod-
+ule. Thisdemonstratesthatattentionisnotthebottleneck
+inneuralmachinetranslation,eventhoughitisquadraticin
+thesequencelength(cf. Kalchbrenneretal.,2016). Partof
+thereasonforthelowimpactonspeedisthatwebatchthe
+computation of an attention module over all target words,
+similartoKalchbrenneretal.(2016). However,forRNNs
+batching of the attention may be less effective because of
+thedependenceontheprevioustimestep.
+5.6.KernelsizeandDepth
+Figure 2 shows accuracy when we change the number of
+layersintheencoderordecoder. Thekernelwidthforlay-
+ersintheencoderis3andforthedecoderitis5. Deeper
+architecturesareparticularlybeneficialfortheencoderbut
+lesssoforthedecoder. Decodersetupswithtwolayersal-
+readyperformwellwhereasfortheencoderaccuracykeeps
+increasing steadily with more layers until up to 9 layers
+whenaccuracystartstoplateau.
+8ConvolutionalSequencetoSequenceLearning
+DUC-2004 Gigaword
+RG-1(R) RG-2(R) RG-L(R) RG-1(F) RG-2(F) RG-L(F)
+RNNMLE(Shenetal.,2016) 24.92 8.60 22.25 32.67 15.23 30.56
+RNNMRT(Shenetal.,2016) 30.41 10.87 26.79 36.54 16.59 33.44
+WFE(Suzuki&Nagata,2017) 32.28 10.54 27.80 36.30 17.31 33.88
+ConvS2S 30.44 10.84 26.90 35.88 17.48 33.29
+Table6. AccuracyontwosummarizationtasksintermsofRouge-1(RG-1),Rouge-2(RG-2),andRouge-L(RG-L).
+Kernelwidth Encoderlayers modelstructure.Weexpectourmodeltobenefitfromthese
+5 9 13 improvementsaswell.
+3 20.61 21.17 21.63
+5 20.80 21.02 21.42 6.ConclusionandFutureWork
+7 20.81 21.30 21.09
+We introduce the first fully convolutional model for se-
+quence to sequence learning that outperforms strong re-
+Table7.EncoderwithdifferentkernelwidthintermsofBLEU.
+currentmodelsonverylargebenchmarkdatasetsatanor-
+derofmagnitudefasterspeed. Comparedtorecurrentnet-
+Kernelwidth Decoderlayers
+3 5 7 works,ourconvolutionalapproachallowstodiscovercom-
+positionalstructureinthesequencesmoreeasilysincerep-
+3 21.10 21.71 21.62
+resentations are built hierarchically. Our model relies on
+5 21.09 21.63 21.24
+gatingandperformsmultipleattentionsteps.
+7 21.40 21.31 21.33
+We achieve a new state of the art on several public trans-
+Table8.DecoderwithdifferentkernelwidthintermsofBLEU. lation benchmark data sets. On the WMT’16 English-
+Romanian task we outperform the previous best result by
+1.9BLEU,onWMT’14English-Frenchtranslationweim-
+Aside from increasing the depth of the networks, we can prove over the LSTM model of Wu et al. (2016) by 1.6
+alsochangethekernelwidth. Table7showsthatencoders BLEUinacomparablesetting, andonWMT’14English-
+with narrow kernels and many layers perform better than German translation we ouperform the same model by 0.5
+widerkernels. Thesenetworkscanalsobefastersincethe BLEU. In future work, we would like to apply convolu-
+amountofworktocomputeakerneloperatingover3input tional architectures to other sequence to sequence learn-
+elements is less than half compared to kernels over 7 ele- ingproblemswhichmaybenefitfromlearninghierarchical
+ments. Weseeasimilarpicturefordecodernetworkswith representationsaswell.
+large kernel sizes (Table 8). Dauphin et al. (2016) shows
+thatcontextsizesof20wordsareoftensufficienttoachieve
+Acknowledgements
+verygoodaccuracyonlanguagemodelingforEnglish.
+WethankBenjaminGrahamforprovidingafast1-Dcon-
+5.7.Summarization volution, andRonanCollobertaswellasYannLeCunfor
+helpfuldiscussionsrelatedtothiswork.
+Finally, we evaluate our model on abstractive sentence
+summarization which takes a long sentence as input and
+References
+outputs a shortened version. The current best models on
+this task are recurrent neural networks which either opti- Ba, Jimmy Lei, Kiros, Jamie Ryan, and Hinton, Ge-
+mize the evaluation metric (Shen et al., 2016) or address offrey E. Layer normalization. arXiv preprint
+specific problems of summarization such as avoiding re- arXiv:1607.06450,2016.
+peatedgenerations(Suzuki&Nagata,2017). Weusestan-
+dard likelhood training for our model and a simple model Bahdanau, Dzmitry, Cho, Kyunghyun, and Bengio,
+with six layers in the encoder and decoder each, hidden Yoshua. Neuralmachinetranslationbyjointlylearning
+size256,batchsize128,andwetrainedonasingleGPUin to align and translate. arXiv preprint arXiv:1409.0473,
+onenight. Table6showsthatourlikelhoodtrainedmodel 2014.
+outperforms the likelihood trained model (RNN MLE) of
+Shenetal.(2016)andisnotfarbehindthebestmodelson Bojar, Ondej, Chatterjee, Rajen, Federmann, Christian,
+thistaskwhichbenefitfromtask-specificoptimizationand Graham, Yvette, Haddow, Barry, Huck, Matthias,
+9ConvolutionalSequencetoSequenceLearning
+Jimeno-Yepes, Antonio, Koehn, Philipp, Logacheva, He, Kaiming, Zhang, Xiangyu, Ren, Shaoqing, and Sun,
+Varvara, Monz, Christof, Negri, Matteo, Ne´ve´ol, Jian. Delving deep into rectifiers: Surpassing human-
+Aure´lie, Neves, Mariana L., Popel, Martin, Post, Matt, level performance on imagenet classification. In Pro-
+Rubino, Raphae¨l, Scarton, Carolina, Specia, Lucia, ceedingsoftheIEEEInternationalConferenceonCom-
+Turchi,Marco,Verspoor,KarinM.,andZampieri,Mar- puterVision,pp.1026–1034,2015b.
+cos. Findingsofthe2016conferenceonmachinetrans-
+Hochreiter, Sepp and Schmidhuber, Ju¨rgen. Long short-
+lation. InProc.ofWMT,2016.
+term memory. Neural computation, 9(8):1735–1780,
+Bradbury, James, Merity, Stephen, Xiong, Caiming, and 1997.
+Socher, Richard. Quasi-Recurrent Neural Networks.
+Ioffe,SergeyandSzegedy,Christian. Batchnormalization:
+arXivpreprintarXiv:1611.01576,2016.
+Acceleratingdeepnetworktrainingbyreducinginternal
+Cho, Kyunghyun, Van Merrie¨nboer, Bart, Gulcehre, covariateshift.InProceedingsofThe32ndInternational
+Caglar, Bahdanau, Dzmitry, Bougares, Fethi, Schwenk, ConferenceonMachineLearning,pp.448–456,2015.
+Holger,andBengio,Yoshua.LearningPhraseRepresen-
+Jean, Se´bastien, Firat, Orhan, Cho, Kyunghyun, Memi-
+tationsusingRNNEncoder-DecoderforStatisticalMa-
+sevic, Roland, and Bengio, Yoshua. Montreal Neural
+chineTranslation. InProc.ofEMNLP,2014.
+Machine Translation systems for WMT15. In Proc. of
+Chorowski, JanK,Bahdanau, Dzmitry, Serdyuk, Dmitriy,
+WMT,pp.134–140,2015.
+Cho,Kyunghyun,andBengio,Yoshua. Attention-based
+Kalchbrenner, Nal, Espeholt, Lasse, Simonyan, Karen,
+models for speech recognition. In Advances in Neural
+van den Oord, Aaron, Graves, Alex, and Kavukcuoglu,
+InformationProcessingSystems,pp.577–585,2015.
+Koray. Neural Machine Translation in Linear Time.
+arXiv,2016.
+Collobert, Ronan, Kavukcuoglu, Koray, and Farabet,
+Clement. Torch7: A Matlab-like Environment for Ma- LeCun,YannandBengio,Yoshua.Convolutionalnetworks
+chine Learning. In BigLearn, NIPS Workshop, 2011. for images, speech, and time series. The handbook of
+URLhttp://torch.ch. braintheoryandneuralnetworks,3361(10):1995,1995.
+Dauphin,YannN.,Fan,Angela,Auli,Michael,andGrang- L’Hostis,Gurvan,Grangier,David,andAuli,Michael. Vo-
+ier, David. Language modeling with gated linear units. cabularySelectionStrategiesforNeuralMachineTrans-
+arXivpreprintarXiv:1612.08083,2016. lation. arXivpreprintarXiv:1610.00072,2016.
+Dyer, Chris, Chahuneau, Victor, and Smith, Noah A. A Lin, Chin-Yew. Rouge: A package for automatic evalu-
+Simple, Fast, and Effective Reparameterization of IBM ation of summaries. In Text Summarization Branches
+Model2. InProc.ofACL,2013. Out: Proceedings of the ACL-04 Workshop, pp. 74–81,
+2004.
+Elman, Jeffrey L. Finding Structure in Time. Cognitive
+Science,14:179–211,1990. Luong, Minh-Thang, Pham, Hieu, and Manning, Christo-
+pher D. Effective approaches to attention-based neural
+Gehring, Jonas, Auli, Michael, Grangier, David, and
+machinetranslation. InProc.ofEMNLP,2015.
+Dauphin, Yann N. A Convolutional Encoder Model
+for Neural Machine Translation. arXiv preprint Meng, Fandong, Lu, Zhengdong, Wang, Mingxuan, Li,
+arXiv:1611.02344,2016. Hang, Jiang, Wenbin, and Liu, Qun. Encoding Source
+Language with Convolutional Neural Network for Ma-
+Glorot, Xavier and Bengio, Yoshua. Understanding the chineTranslation. InProc.ofACL,2015.
+difficultyoftrainingdeepfeedforwardneuralnetworks.
+The handbook of brain theory and neural networks, Mi, Haitao, Wang, Zhiguo, and Ittycheriah, Abe. Vocab-
+2010. ularyManipulationforNeuralMachineTranslation. In
+Proc.ofACL,2016.
+Graff, David, Kong, Junbo, Chen, Ke, and Maeda,
+Miller,AlexanderH.,Fisch,Adam,Dodge,Jesse,Karimi,
+Kazuaki. English gigaword. Linguistic Data Consor-
+Amir-Hossein, Bordes, Antoine, and Weston, Jason.
+tium,Philadelphia,2003.
+Key-value memory networks for directly reading docu-
+Ha,David,Dai,Andrew,andLe,QuocV. Hypernetworks. ments. InProc.ofEMNLP,2016.
+arXivpreprintarXiv:1609.09106,2016.
+Nallapati, Ramesh, Zhou, Bowen, Gulcehre, Caglar, Xi-
+He, Kaiming, Zhang, Xiangyu, Ren, Shaoqing, and Sun, ang, Bing, et al. Abstractive text summarization us-
+Jian. DeepResidualLearningforImageRecognition. In ingsequence-to-sequencernnsandbeyond. InProc.of
+Proc.ofCVPR,2015a. EMNLP,2016.
+10ConvolutionalSequencetoSequenceLearning
+Oord, Aaron van den, Kalchbrenner, Nal, and Sutskever,Ilya,Martens,James,Dahl,GeorgeE.,andHin-
+Kavukcuoglu, Koray. Pixel recurrent neural networks. ton,GeoffreyE. Ontheimportanceofinitializationand
+arXivpreprintarXiv:1601.06759,2016a. momentumindeeplearning. InICML,2013.
+Oord, Aaron van den, Kalchbrenner, Nal, Vinyals, Oriol, Sutskever,Ilya,Vinyals,Oriol,andLe,QuocV. Sequence
+Espeholt,Lasse,Graves,Alex,andKavukcuoglu,Koray. toSequenceLearningwithNeuralNetworks.InProc.of
+Conditional image generation with pixelcnn decoders. NIPS,pp.3104–3112,2014.
+arXivpreprintarXiv:1606.05328,2016b.
+Suzuki, Jun and Nagata, Masaaki. Cutting-off redundant
+Over,Paul,Dang,Hoa,andHarman,Donna. Ducincon- repeatinggenerationsforneuralabstractivesummariza-
+text. Information Processing & Management, 43(6): tion. arXivpreprintarXiv:1701.00138,2017.
+1506–1520,2007.
+Waibel, Alex, Hanazawa, Toshiyuki, Hinton, Geoffrey,
+Pascanu, Razvan, Mikolov, Tomas, and Bengio, Yoshua. Shikano,Kiyohiro,andLang,KevinJ. PhonemeRecog-
+On the difficulty of training recurrent neural networks. nitionusingTime-delayNeuralNetworks. IEEEtrans-
+InProceedingsofThe30thInternationalConferenceon actionsonacoustics, speech, andsignalprocessing, 37
+MachineLearning,pp.1310–1318,2013. (3):328–339,1989.
+Rush,AlexanderM,Chopra,Sumit,andWeston,Jason. A Wu,Yonghui,Schuster,Mike,Chen,Zhifeng,Le,QuocV,
+neural attention model for abstractive sentence summa- Norouzi, Mohammad, Macherey, Wolfgang, Krikun,
+rization. InProc.ofEMNLP,2015. Maxim, Cao, Yuan, Gao, Qin, Macherey, Klaus, et al.
+Google’sNeuralMachineTranslationSystem: Bridging
+Salimans, Tim and Kingma, Diederik P. Weight nor- theGapbetweenHumanandMachineTranslation.arXiv
+malization: A simple reparameterization to acceler- preprintarXiv:1609.08144,2016.
+ate training of deep neural networks. arXiv preprint
+arXiv:1602.07868,2016. Yang, Zichao, Hu, Zhiting, Deng, Yuntian, Dyer, Chris,
+and Smola, Alex. Neural Machine Translation
+Schuster, MikeandNakajima, Kaisuke. Japaneseandko- with Recurrent Attention Modeling. arXiv preprint
+reanvoicesearch. InAcoustics,SpeechandSignalPro- arXiv:1607.05108,2016.
+cessing(ICASSP),2012IEEEInternationalConference
+on,pp.5149–5152.IEEE,2012. Zhou, Jie, Cao, Ying, Wang, Xuguang, Li, Peng, and Xu,
+Wei. Deep Recurrent Models with Fast-Forward Con-
+Sennrich, Rico, Haddow, Barry, and Birch, Alexandra. nectionsforNeuralMachineTranslation. arXivpreprint
+Neural Machine Translation of Rare Words with Sub- arXiv:1606.04199,2016.
+wordUnits. InProc.ofACL,2016a.
+Sennrich,Rico,Haddow,Barry,andBirch,Alexandra. Ed-
+inburghNeuralMachineTranslationSystemsforWMT
+16. InProc.ofWMT,2016b.
+Shazeer, Noam, Mirhoseini, Azalia, Maziarz, Krzysztof,
+Davis, Andy, Le, Quoc, Hinton, Geoffrey, and Dean,
+Jeff. Outrageouslylargeneuralnetworks: Thesparsely-
+gated mixture-of-experts layer. ArXiv e-prints, January
+2016.
+Shen, Shiqi, Zhao, Yu, Liu, Zhiyuan, Sun, Maosong,
+etal. Neuralheadlinegenerationwithsentence-wiseop-
+timization. arXivpreprintarXiv:1604.01904,2016.
+Srivastava,Nitish,Hinton,GeoffreyE.,Krizhevsky,Alex,
+Sutskever,Ilya,andSalakhutdinov,Ruslan. Dropout: a
+simplewaytopreventNeuralNetworksfromoverfitting.
+JMLR,15:1929–1958,2014.
+Sukhbaatar, Sainbayar, Weston, Jason, Fergus, Rob, and
+Szlam,Arthur. End-to-endMemoryNetworks. InProc.
+ofNIPS,pp.2440–2448,2015.
+11ConvolutionalSequencetoSequenceLearning
+A.WeightInitialization Withx (0,std(x)),thisyields
+∼N
+We derive a weight initialization scheme tailored to the 1 1 1
+E σ(x)2 E x2 + (13)
+GLU activation function similar to Glorot & Bengio ≤ 16 − 4 2
+(2010); He et al. (2015b) by focusing on the variance of (cid:2) (cid:3) 1 (cid:2) (cid:3) 1
+= Var x + . (14)
+activationswithinthenetworkforbothforwardandback- 16 4
+ward passes. We also detail how we modify the weight (cid:2) (cid:3)
+With (7) and Var[ya ] = Var[yb ] = Var[y ], this
+initializationfordropout. l 1 l 1 l 1
+resultsin − − −
+A.1.ForwardPass 1 2 1
+Var x Var y + Var y . (15)
+l l 1 l 1
+≤ 16 − 4 −
+Assumingthattheinputsx ofaconvolutionallayerland
+l (cid:2) (cid:3) (cid:2) (cid:3) (cid:2) (cid:3)
+itsweightsW areindependentandidenticallydistributed
+l We initialize the embedding matrices in our network with
+(i.i.d.),thevarianceofitsoutput,computedasy =Wx +
+l l l smallvariances(around0.01), whichallowsustodismiss
+b,is
+l the quadratic term and approximate the GLU output vari-
+Var y =nVar wx (3)
+l l l l ancewith
+1
+where n l is the num(cid:2)be(cid:3)r inputs to(cid:2) the(cid:3)layer. For one- Var[x l ] Var[y l 1 ]. (16)
+dimensional convolutional layers with kernel width k and ≈ 4 −
+inputdimensionc,thisiskc. Weadoptthenotationin(He IfLnetworklayersofequalsizeandwithGLUactivations
+etal.,2015b),i.e. y l ,w l andx l representtherandomvari- arecombined, thevarianceofthefinaloutputy L isgiven
+ablesiny, W andx. Withw andx independentfrom by
+l l l l l
+each other and normally distributed with zero mean, this
+L
+amountsto 1
+Var[y ] Var[y ] nVar[w] . (17)
+L 1 l l
+≈  4 
+Var y l =n l Var w l Var x l . (4) Y l=2
+ 
+x is the resu(cid:2)lt (cid:3)of the G(cid:2)LU(cid:3) act(cid:2)iva(cid:3)tion function Following(Heetal.,2015b), weaimtosatisfythecondi-
+l
+ya σ(yb ) with y = (ya ,yb ), and ya ,yb tion
+l 1 l 1 l 1 l 1 l 1 l 1 l 1 1
+i.i.−d. Nex−t, we formu − late upper−and −lower bound−s in o−r- nVar w =1, l (18)
+l l
+4 ∀
+der to approximate Var[x]. If y follows a symmetric
+l l 1
+− so that the activations in a(cid:2)net(cid:3)work are neither exponen-
+distributionwithmean0,then
+tiallymagnifiednorreduced. Thisisachievedbyinitializ-
+Var x =Var ya σ(yb ) (5) ingW from (0, 4/n).
+l l − 1 l − 1 l N l
+(cid:2) (cid:3)=E y(cid:2)a σ(yb ) 2 (cid:3) E2 ya σ(yb ) p
+l − 1 l − 1 − l − 1 l − 1 (6) A.2.BackwardPass
+(cid:2)(cid:0) (cid:1) (cid:3) (cid:2) (cid:3)
+=Var[ya ]E σ(yb )2 . (7) Thegradientofaconvolutionallayeriscomputedviaback-
+l − 1 l − 1 propagationas∆x = Wˆ y. Consideringseparategradi-
+l l l
+Alowerboundisgivenby(cid:2)(1/4)Var(cid:3)[ya ]whenexpand- ents∆yaand∆ybforGLU,thegradientofxisgivenby
+l 1 l l
+ing(6)withE2[σ(yb )]=1/4: −
+l − 1 ∆x =Wˆa∆ya+Wˆb∆yb. (19)
+l l l l l
+Var x =Var ya σ(yb ) (8)
+l l − 1 l − 1 Wˆ corresponds to W with re-arranged weights to enable
+(cid:2) (cid:3)=Var(cid:2)y l a 1 E2 σ(y(cid:3)l b 1 ) + back-propagation. Analogously to the forward pass, ∆x,
+− − (9) l
+Va(cid:2)r y l a (cid:3)1 V(cid:2)ar σ(y l b (cid:3)1 ) wˆ l and ∆y l represent the random variables for the values
+1 − − in ∆x l , Wˆ l and ∆y l , respectively. Note that W and Wˆ
+= 4 Var(cid:2)y l a − 1 (cid:3)+V(cid:2)ar y l a − 1 (cid:3)Var σ(y l b − 1 ) contain the same values, i.e. wˆ = w. Similar to (3), the
+(cid:2) (cid:3) (cid:2) (cid:3) (cid:2) (1(cid:3)0) varianceof∆x l is
+and Var[ya ]Var[σ(yb )] > 0. We utilize the relation Var[∆x]=nˆ Var[wa]Var[∆ya]+Var[wb]Var[∆yb] .
+l 1 l 1 l l l l l l
+σ(x)2
+≤
+(1−/16)x2
+−
+1/4−+σ(x)(AppendixB)toprovide
+(cid:16) (20)(cid:17)
+anupperboundonE[σ(x)2]:
+Here,nˆ isthenumberofinputstolayerl+1.Thegradients
+l
+1 1 fortheGLUinputsare:
+E[σ(x)2] E x2 +σ(x) (11)
+≤ 16 − 4 ∆ya =∆x σ(yb) and (21)
+1(cid:2) 1 (cid:3) l l+1 l
+=
+16
+E[x2]
+− 4
++E[σ(x)] (12) ∆y
+l
+b =∆x
+l+1
+y
+l
+aσ0(y
+l
+b). (22)
+12ConvolutionalSequencetoSequenceLearning
+The approximation for the forward pass can be used for ofrandE[x]=0,thevarianceafterdropoutis
+Var[∆ya],andforestimatingVar[∆yb]weassumeanup-
+per boun l d on E[σ (yb)2] of 1/16 sinc l e σ (yb) [0,1]. Var[xr]=E[r]2Var[x]+Var[r]Var[x] (29)
+0 l 0 l ∈ 4
+Hence, 1 p
+= 1+ − Var[x] (30)
+p
+1 1 (cid:18) (cid:19)
+Var[∆ya] Var[∆x ] Var[∆x ]Var[yb)] 1
+l − 4 l+1 ≤ 16 l+1 l = Var[x] (31)
+p
+(23)
+1
+Var[∆yb] ∆Var[∆x ]Var[ya] (24) Assumingthatatheinputofaconvolutionallayerhasbeen
+l ≤ 16 l+1 l subject to dropout with a retain probability p, the varia-
+tions of the forward and backward activations from A.1
+Weobserverelativelysmallgradientsinournetwork,typ- §
+and A.2cannowbeapproximatedwith
+ically around 0.001 at the start of training. Therefore, we §
+approximatebydiscardingthequadratictermsabove,i.e. 1
+Var[x ] nVar[w]Var[x] and (32)
+l+1 l l l
+≈ 4p
+Var[∆y l a] ≈ 1 4 Var[∆x l+1 ] (25) Var[∆x l ] ≈ 4 1 p n l Var[w l a]Var[∆x l+1 ]. (33)
+Var[∆yb] 0 (26)
+l ≈ ThisamountstoamodifiedinitializationofW fromanor-
+1 l
+Var[∆x] nˆ Var[wa]Var[∆x ] (27) maldistributionwithzeromeanandastandarddeviationof
+l ≈ 4 l l l+1
+4p/n. For layers without a succeeding GLU activation
+function, we initialize weights from (0, p/n) to cali-
+As for the forward pass, the above result can be general- p N
+brateforanyimmediatelyprecedingdropoutapplication.
+ized to backpropagation through many successive layers, p
+resultingin
+B.UpperBoundonSquaredSigmoid
+L
+Var[∆x ] Var[∆x ] 1 nˆ Var[wa] (28) The sigmoid function σ(x) can be expressed as a hyper-
+2 ≈ L+1  4 l l  bolictangentbyusingtheidentitytanh(x)=2σ(2x) 1.
+
+Y l=2
+
+The derivative of tanh is tanh0(x) = 1
+−
+tanh2(x), − and
+withtanh(x) [0,1],x 0itholdsthat
+andasimilarcondition, i.e. (1/4)nˆ l Var[w l a] = 1. Inthe ∈ ≥
+networksweconsider,successionsofconvolutionallayers tanh0(x) 1,x 0 (34)
+usuallyoperateonthesamenumberofinputssothatmost ≤ ≥
+x x
+cases n l = nˆ l . Note that W l b is discarded in the approx- tanh0(x)dx ≤ 1dx (35)
+imation; however, for the sake of consistency we use the Z0 Z0
+sameinitializationforWaandWb. tanh(x) x,x 0 (36)
+l l ≤ ≥
+Forarbitrarilylargevariancesofnetworkinputsandactiva- Wecanexpressthisrelationwithσ(x)asfollows:
+tions,ourapproximationsareinvalid; inthatcase,theini-
+1
+tialvaluesforWa andWb wouldhavetobebalancedfor 2σ(x) 1 x,x 0 (37)
+l l − ≤ 2 ≥
+the input distribution to be retained. Alternatively, meth-
+odsthatexplicitlycontrolthevarianceinthenetwork,e.g. Bothtermsofthisinequalityhaverotationalsymmetryw.r.t
+batchnormalization(Ioffe&Szegedy,2015)orlayernor- 0,andthus
+malization(Baetal.,2016)couldbeemployed.
+2 1 2
+2σ(x) 1 x x (38)
+− ≤ 2 ∀
+A.3.Dropout (cid:18) (cid:19)
+(cid:0) (cid:1) 1 1
+Dropoutretainsactivationsinaneuralnetworkwithaprob- σ(x)2 x2 +σ(x). (39)
+⇔ ≤ 16 − 4
+abilitypandsetsthemtozerootherwise(Srivastavaetal.,
+2014). It is common practice to scale the retained activa-
+C.AttentionVisualization
+tionsby1/pduringtrainingsothattheweightsofthenet-
+workdonothavetobemodifiedattesttimewhenpissetto Figure 3 shows attention scores for a generated sentence
+1. Inthiscase,dropoutamountstomultiplyingactivations fromtheWMT’14English-Germantask. Themodelused
+xbyaBernoullirandomvariablerwherePr[r=1/p]=p forthisplothas8decoderlayersanda80KBPEvocabu-
+and Pr[r = 0] = 1 p (Srivastavaet al.,2014). Itholds lary. The attention passes in different decoder layers cap-
+−
+thatE[r]=1andVar[r]=(1 p)/p.Ifxisindependent ture different portions of the source sentence. Layer 1, 3
+−
+13ConvolutionalSequencetoSequenceLearning
+and6exhibitalinearalignment. Thefirstlayershowsthe
+clearestalignment,althoughitisslightlyoffandfrequently
+attendstothecorrespondingsourcewordofthepreviously
+generated target word. Layer 2 and 8 lack a clear struc-
+ture and are presumably collecting information about the
+wholesourcesentence. Thefourthlayershowshighalign-
+mentscoresonnounssuchas“festival”,“way”and“work”
+forboththegeneratedtargetnounsaswellastheirpreced-
+ing words. Note that in German, those preceding words
+depend on gender and object relationship of the respec-
+tive noun. Finally, the attention scores in layer 5 and 7
+focus on “built”, which is reordered in the German trans-
+lationandismovedfromthebeginningtotheveryendof
+thesentence. Oneinterpretationforthisisthatasgenera-
+tion progresses, the model repeatedly tries to perform the
+re-ordering. “aufgebaut”canbegeneratedafteranounor
+pronounonly,whichisreflectedinthehigherscoresatpo-
+sitions2,5,8,11and13.
+14ConvolutionalSequencetoSequenceLearning
+Layer1 Layer2 Layer3
+Layer4 Layer5 Layer6
+Layer7 Layer8
+Figure3.AttentionscoresfordifferentdecoderlayersforasentencetranslatedfromEnglish(y-axis)toGerman(x-axis). Thismodel
+uses8decoderlayersanda80kBPEvocabulary.
+15

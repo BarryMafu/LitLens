@@ -1,0 +1,1703 @@
+9102
+luJ
+52
+]hp-tnauq[
+1v75111.7091:viXra
+July26,2019
+Quantum Error Correction: An Introductory Guide
+Joschka Roffe
+Department of Physics & Astronomy, University of Sheffield, Sheffield, S3 7RH, United Kingdom
+Quantum error correction protocols will play a central role in the realisation of quantum computing;
+the choice of error correction code will influence the full quantum computing stack, from the layout of
+qubitsat thephysicalleveltogate compilation strategies at thesoftware level. Assuch,familiarity with
+quantumcodingisanessentialprerequisitefortheunderstandingofcurrentandfuturequantumcomput-
+ing architectures. In this review, we provide an introductory guide to the theory and implementation of
+quantumerror correction codes. Where possible, fundamental concepts are described using thesimplest
+examples of detection and correction codes, the working of which can be verified by hand. We outline
+theconstructionandoperationofthesurfacecode,themostwidelypursuederrorcorrectionprotocolfor
+experiment.Finally, we discuss issues that arise in thepractical implementation of thesurface codeand
+other quantumerror correction codes.
+Keywords: Quantumcomputing; quantum error correction; stabilizer codes; surface codes
+1. Introduction
+In place of the bits in traditional computers, quantum computers work by controlling and ma-
+nipulating quantum bits (qubits). Through the precise control of quantum phenomena such as
+entanglement, it is in principle possible for such qubit-based devices to outperform their classi-
+cal counterparts. To this end, efficient quantum computing algorithms have been developed with
+applications such as integer factorisation [1], search [2], optimisation [3] and quantum chemistry
+[4].
+Thereis currently nopreferredqubittechnology; avariety of physical systems are beingexplored
+for use as qubits, including photons [5,6], trapped ions [7–10], superconductingcircuits [11–13] and
+spins in semiconductors [14–16]. A shortcoming shared by all of these approaches is that it is
+difficult to sufficiently isolate the qubits from the effects of external noise, meaning errors during
+quantum computation are inevitable. In contrast, bits in a classical computer are typically realised
+as the robust on/off states of transistor switches which are differentiated by billions of electrons.
+This provides classical bits with high error margins that near-eradicate failures at the physical
+level. For quantum computers, where qubits are realised as fragile quantum systems, there is no
+such security against errors. As such, any circuit-model quantum computer based on current and
+future qubit technologies will require some sort of active error correction.
+Driven by the demands of high-performance communication networks and the Internet, there is
+a well-developed theory of classical error correction [17–19]. However, adapting existing classical
+methods for quantum error correction is not straightforward. Qubits are subject to the no-cloning
+theorem [20], meaning quantum information cannot be duplicated in the same way as classical
+information. Furthermore, it is not possible to perform arbitrary measurements on a qubit register
+due to the problem of wavefunction collapse. It was initially feared that these constraints would
+posean insurmountablechallenge to theviability of quantumcomputing.However, abreakthrough
+CONTACTJoschkaRoffe.Email:j.roffe@sheffield.ac.ukJuly26,2019
+was reached in 1995 by Peter Shor with a paper proposing the first quantum error correction
+scheme [21]. Shor’s method demonstrated how quantum information can be redundantly encoded
+by entangling it across an expanded system of qubits. Subsequent results then demonstrated that
+extensions to this technique can in principle be used to arbitrarily suppress the quantum error
+rate, provided certain physical conditions on the qubits themselves are met [22–26]. It was with
+these developments in quantum error correction that the field of quantum computing moved from
+a theoretical curiosity to a practical possibility.
+Many reviews have been written covering quantum error correction and its associated subfields
+[27–33]. This work is intended as an introductory guide where we describe the essential concepts
+behind quantum error correction codes through the use of simple examples. The ultimate aim is to
+provide the reader with sufficient background to understand the construction and operating prin-
+ciples behind the surface code, the most widely pursued error correction scheme for experimental
+implementation [34]. Crucially, our descriptions of the surface code do not rely upon terminology
+from topology and homology, as is the case with many of the original sources. Whilst this review
+does not require prior knowledge of coding theory or error correction, we do assume an under-
+standing of elementary quantum mechanics and the circuit model of quantum computing. The
+reader should be comfortable with quantum circuit notation, as seen for example in [35], and be
+familiar with standard gates such as the Hadamard gate (H), the controlled-NOT gate (CNOT) and
+measurement operations in the computational basis. A brief outline of these gates, as well as the
+conventions we adopt for labelling quantum states and operators, can be found in appendices A-C.
+In section 2, we begin by explaining the differences between bits and qubits, before describing
+the principal challenges in designing quantum error correction codes. Section 3 outlines how quan-
+tum information is redundantly encoded, and explains how errors can be detected by performing
+projective measurements. In section 4, we introduce the stabilizer framework which allows for the
+construction a large class of quantum error correction codes. Following this, the surface code is
+described in section 5. Finally, in section 6, we discuss some of the practical issues that arise when
+considering the implementation of quantum error correction codes on realistic hardware.
+2. From classical to quantum error correction
+Classical information technologies employ binary encodings in which data is represented as se-
+quences of bits takings values ‘0’ or ‘1’. The basic principle behind error correction is that the
+number of bits used to encode a given amount of information is increased. The exact way in which
+thisredundant encodingisachieved isspecifiedbyasetofinstructionsknownasanerror correction
+code [18,19].
+The simplest example of an error correction code is the three-bit repetition code, the encoder for
+which duplicates each bit value 0 000 and 1 111. More formally, we can define the three-bit
+→ →
+encoder as a mapping from a ‘raw’ binary alphabet to a code alphabet C
+3
+B
+three bit encoding
+= 0,1 − C 3 = 000,111 , (1)
+B { } −−−−−−−−−−−−→ { }
+where the encoded bit-strings ‘000’ and ‘111’ are referred to as the logical codewords of the code
+C . As an example, consider the simple case where we wish to communicate a single-bit message
+3
+‘0’ to a recipient in a different location. Using the three bit encoding, the message that we would
+send would be the ‘000’ codeword.
+Now, imagine that the message is subject to a single bit-flip error during transmission so that
+the bit-string the recipient receives is ‘010’. In this scenario, the recipient will be able to infer that
+the intended codeword is ‘000’ via a majority vote. The same will be true for all cases where the
+codeword is subjecttoonly a singleerror.However, if thecodeword is subjectto two bit-flip errors,
+the majority vote will lead to the incorrect codeword. The final scenario to consider is when all
+2July26,2019
+zˆ = 0
+| i
+ψ
+| i
+θ
+yˆ
+φ
+xˆ
+Figure1. Inthegeometricrepresentation,thestateofaqubit ψ =cosθ 0 +eiφsinθ 1 canberepresentedasapointon
+| i 2| i 2| i
+thesurfaceofaBlochsphere.
+three bits are flippedso that the codeword ‘000’ becomes ‘111’. In this case, the corrupted message
+is also a codeword: the recipient will therefore have no way of knowing an error has occurred. The
+distance of a code is defined as the minimum number of errors that will change one codeword to
+another in this way. We can relate the distance d of a code to the number of errors it can correct
+as follows
+d = 2t+1. (2)
+where t is the number of errors the code can correct. It is clear that the above equation is satisfied
+for the three-bit code where t = 1 and d= 3.
+In general, error correction codes are described in terms of the [n,k,d] notation, where n is the
+total number of bits per codeword, k is the number of encoded bits (the length of the original
+bit-string) and d is the code distance. Under this notation, the three-bit repetition code is labelled
+[3,1,3].
+2.1. From bits to qubits
+In place of bits in classical systems, the fundamental unit of quantum information is the qubit. The
+general qubit state can be written as follows
+ψ = α 0 +β 1 , (3)
+| i | i | i
+where α and β are complex numbers that satisfy the condition α2 + β 2 = 1. Details regarding
+| | | |
+the notation we use to represent quantum states can be found in appendix A. Qubits can encode
+information in a superposition of their basis states, meaning quantum computers have access to a
+computational space that scales as 2n where n is the total number of qubits [35]. It is by exploiting
+superposition, in combination with other quantum effects such as entanglement, that it is possible
+to construct algorithms that provide a quantum advantage [1,2]. However, if such algorithms are
+ever to be realised on current or future quantum hardware, it will be necessary for the qubits to
+be error corrected.
+2.2. The digitisation of quantum errors
+In classical information, bits are either in the ‘0’ or ‘1’ state. Therefore, the only error-type to be
+consideredisthebit-flipthattakes0 1andvice-versa.Incontrast,thegeneralqubitstatedefined
+→
+in equation (3) can assume a continuum of values between its basis states. From the perspective of
+3July26,2019
+developing error correction codes, this property is problematic as it means the qubit is subject to
+an infinite number of errors. To illustrate this more clearly, it is useful to rewrite the general qubit
+state in terms of a geometric representation given by
+θ θ
+ψ = cos 0 +eiφsin 1 , (4)
+| i 2 | i 2 | i
+where the probability amplitudes maintain the condition that cos θ 2 + eiφsin θ 2 = 1. In this
+| 2| | 2|
+form, the qubit state corresponds to a point, specified by the angles θ and φ, on the surface of a
+so-called Bloch sphere. An example state in this representation is shown in figure 1.
+Qubiterrors can occur by avariety of physicalprocesses.Thesimplestcase to examineare errors
+which cause the qubit to coherently rotate from one point on the Bloch sphere to another. Such
+qubiterrorscould,forexample, arisefromsystematic control faults inthehardwarewith whichthe
+qubits are realised. Mathematically, coherent errors are described by a unitary operation U(δθ,δφ)
+which evolves the qubit state as follows
+θ+δθ θ+δθ
+U(δθ,δφ) ψ = cos 0 +ei(φ+δφ)sin 1 , (5)
+| i 2 | i 2 | i
+whereθ+δθ and φ+δφ are the new coordinates on the Bloch sphere. From this, we see that qubits
+are susceptible to a continuum of coherent errors obtained by varying the parameters δθ and δφ.
+It would therefore seem, at first glance, that quantum error correction protocols should have to be
+based on techniques from classical analogue computation for which the theory of error correction
+is not well developed. Luckily, however, it turns out that quantum errors can be digitised so that
+the ability to correct for a finite set of errors is sufficient to correct for any error [36]. To see how
+this is possible, we first note that coherent noise processes are described by matrices that can be
+expanded terms of a Pauli basis.1 For example, the Pauli basis for two-dimensional matrices is
+given by
+1 0 0 1 0 i 1 0
+11 = , X = , Y = − , Z = . (6)
+(cid:18)0 1(cid:19) (cid:18)1 0(cid:19) (cid:18)i 0 (cid:19) (cid:18)0 1(cid:19)
+−
+The single-qubit coherent error process described in equation (5) can be expanded in the above
+basis as follows
+U(δθ,δφ) ψ = α 11 ψ +α X ψ +α Z ψ +α Y ψ (7)
+I X Z Y
+| i | i | i | i | i
+where α are the expansion coefficients. By noting that the Pauli Y-matrix is equivalent (up
+I,X,Y,Z
+to a phase) to the product XZ, this expression can be further simplified to
+U(δθ,δφ) ψ = α 11 ψ +α X ψ +α Z ψ +α XZ ψ . (8)
+I X Z XZ
+| i | i | i | i | i
+The above expression shows that any coherent error process can be decomposed into a sum from
+the Pauli set 11,X,Z,XZ . In the following sections, we will see that the error correction process
+{ }
+itself involves performing projective measurements that cause the above superposition to collapse
+to a subset of its terms. As a result, a quantum error correction code with the ability to correct
+errors described the by the X- and Z-Pauli matrices will be able to correct any coherent error.
+This effect, referred to as the digitisation of the error, is crucial to the success of quantum error
+correction codes.
+1ForamoredetaileddefinitionofthePauligroup,anddetailsofthePaulinotationusedinthisreview,seeappendixB.
+4July26,2019
+2.3. Quantum error-types
+As a result of the digitisation of the error there are two fundamental quantum error-types that
+need to be accounted for by quantum codes. Pauli X-type errors can be thought of as quantum
+bit-flips that map X 0 = 1 and X 1 = 0 . The action of an X-error on the general qubit state
+| i | i | i | i
+is
+X ψ = αX 0 +βX 1 =α 1 +β 0 . (9)
+| i | i | i | i | i
+Thesecond quantum error type, theZ-error,is often referredto as a phase-flipand has noclassical
+analogue. Phase-flips map the qubit basis states Z 0 = 0 and Z 1 = 1 , and therefore have
+| i | i | i −| i
+the following action on the general qubit state
+Z ψ = αZ 0 +βZ 1 = α 0 β 1 . (10)
+| i | i | i | i− | i
+Sofar,forsimplicity,Ihaverestricteddiscussiontocoherenterrorsactingonsingle-qubits.However,
+the digitisation of the error result generalises to arbitrary quantum error processes, including those
+that describe incoherent evolution of the quantum state as a result of the qubits’ interaction with
+their environment [36].
+2.4. The challenges of quantum error correction
+The digitisation of quantum errors means it is possible to reuse certain techniques from classical
+coding theory in quantum error correction. However, there remain a number of complications that
+preventthestraight-forward translation of classical codestoquantumcodes.Thefirstcomplication
+is the no-cloning theorem for quantum states [20], which asserts that it is not possible to construct
+a unitary operator U which performs the following operation
+clone
+U (ψ 0 ) ψ ψ , (11)
+clone
+| i⊗| i → | i⊗| i
+where ψ is the state to be cloned. In contrast, classical codes work under the assumption that
+| i
+data can bearbitrarily duplicated. For quantum coding,it is therefore necessary to findalternative
+ways of adding redundancy to the system.
+The second complication in quantum coding arises from the fact that qubits are susceptible to
+bothbit-flips (X-errors) andphase-flips (Z-errors).Quantumerror correction codes musttherefore
+be designed with the ability to detect both error-types simultaneously. In contrast, in classical
+coding, only bit-flip errors need to be considered.
+The final complication specific to quantum error correction is the problem of wavefunction col-
+lapse. In a classical system, it is possibleto measure arbitrary properties of the bit register without
+risk of compromising the encoded information. For quantum codes, however, any measurements of
+the qubits performed as part of the error correction procedure must be carefully chosen so as not
+to cause the wavefunction to collapse and erase the encoded information. In the next section, we
+will see how this is achieved through the use of a special type of projective measurement referred
+to as a stabilizer measurement [37].
+3. Quantum redundancy & stabilizer measurement
+As outlined in the previous section, quantum error correction is complicated by the no-cloning
+theorem, wavefunction collapse and the existence of a uniquely quantum error-type, the phase-flip.
+So, faced with these challenges, how is redundancy added to a quantum system to allow errors to
+5July26,2019
+Encoder Syndrome extraction
+ψ
+| i1
+ψ E E ψ Z Z E ψ
+| iL | iL 1 2 | iL
+0
+| i2
+0 H H
+| iA
+Figure2. Circuitdiagramforthetwoqubitcode.Encodestage: theinformationcontained in ψ 1 isentangled withare-
+| i
+dundancyqubit | 0 i 2 tocreatealogicalstate | ψ iL .Errorstage:duringtheerrorwindow(shownbythecircuitelementE),
+thetwocodequbits arepotentiallysubjecttobit-fliperrors.Syndromeextraction stage:theZ1Z2 operator,controlledby
+theancillaqubitA,isappliedtothecodequbits.Thesubsequent measurementoftheancillagivesthecodesyndromeS.
+bedetected in real time? Classical repetition codes work by increasingtheresources used toencode
+the data beyond the theoretical minimum. Analogously, in quantum codes redundancy is added by
+expanding the Hilbert space in which the qubits are encoded [21]. To see how this is achieved in
+practice, we now describe the two-qubit code, a prototypical quantum code designed to detect a
+single-bit flip error. The encode stage of the two-qubit code, acting on the general state ψ , has
+| i
+the following action
+two-qubitencoder
+ψ = α 0 +β 1 ψ = α 00 +β 11 = α 0 +β 1 , (12)
+| i | i | i −−−−−−−−−−−→ | iL | i | i | iL | iL
+where after encoding the logical codewords are 0 = 00 and 1 = 11 . Note that this does
+| iL | i | iL | i
+not correspond to cloning the state as
+ψ = α 00 +β 11 = ψ ψ . (13)
+| iL | i | i 6 | i⊗| i
+The effect of the encoding operation is to distribute the quantum information in the initial state
+ψ across the entangled two-party logical state ψ . This introduces redundancy to the encoding
+| i | iL
+that can be exploited for error detection. To understandexactly how this works, it is instructive to
+consider the computational Hilbert spaces before and after encoding. Prior to encoding, the single
+qubit is parametrised within a two-dimensional Hilbert space ψ = span 0 , 1 . After
+2
+| i ∈ H {| i | i}
+encoding the logical qubit occupies a four-dimensional Hilbert space
+ψ = span 00 , 01 , 10 , 11 . (14)
+4
+| i ∈ H {| i | i | i | i}
+More specifically the logical qubit is defined within a two-dimensional subspace of this expanded
+Hilbert space
+ψ = span 00 , 11 , (15)
+| iL ∈ C {| i | i}⊂ H 4
+where is called the codespace. Now, imagine that the logical qubit is subject a bit-flip error on
+C
+the first qubit resulting in the state
+X ψ = α 10 +β 01 , (16)
+1 | iL | i | i
+6July26,2019
+Table1. Thesyndrome
+tableforthetwo-qubit
+code.ThesyndromeS is
+bitastringwhereeach
+bitcorrespondstothe
+outcomeofastabilizer
+measurement.
+Error Syndrome,S
+I1I2 0
+X1I2 1
+I1X2 1
+X1X2 0
+where X is a bit-flip error acting on the first qubit. The resultant state is rotated into a new
+1
+subspace
+X ψ , (17)
+1 | iL ∈ F ⊂ H 4
+where we call the error subspace. Notice that an X -error will also rotate the logical state into
+2
+F
+the subspace. If the logical state ψ is uncorrupted, it occupies the codespace , whereas if it
+F | iL C
+has been subject to a single-qubit bit-flip, it occupies the error space . As the and subspaces
+F C F
+are mutually orthogonal, it is possible to distinguish which subspace the logical qubit occupies via
+aprojective measurementwithout compromisingtheencoded quantuminformation. Inthecontext
+of quantum coding, measurements of this type are called stabilizer measurements.
+For the purposes of differentiating between the codespace and the error space , a projective
+C F
+measurement of the form Z Z is performed. The Z Z operator yields a (+1) eigenvalue when
+1 2 1 2
+applied to the logical state
+Z Z ψ = Z Z (α 00 +β 11 )= (+1) ψ . (18)
+1 2 | iL 1 2 | i | i | iL
+The Z Z operator is said to stabilize the logical qubit ψ as it leaves it unchanged [28].
+1 2 | iL
+Conversely, the Z Z operator projects the errored states, X ψ and X ψ , onto the ( 1)
+1 2 1 | iL 2 | iL −
+eigenspace. Notice that for either outcome, the information encoded in the α and β coefficients of
+the logical state remains undisturbed.
+Figure2showsthecircuitimplementationofthetwo-qubitcode.Intheencodestage,aCNOTgate
+is used to entangle the ψ state with a redundancyqubitto create thelogical state ψ . Following
+| i | iL
+this, we assume the logical qubit is subject to a bit-flip error E, applied during the stage of the
+circuit labelled ‘E’. Following the error stage, an ancilla qubit 0 is introduced to perform the
+| iA
+measurement of the Z Z stabilizer. The syndrome extraction stage of the circuit transforms the
+1 2
+quantum state as follows
+syndromeextraction 1 1
+E ψ 0 (11 11 +Z Z )E ψ 0 + (11 11 Z Z )E ψ 1 , (19)
+| iL| iA −−−−−−−−−−−−→ 2 1 2 1 2 | iL| iA 2 1 2 − 1 2 | iL| iA
+where E is an error from the set 11,X ,X ,X X . Now, consider the case where E = X so that
+1 2 1 2 1
+{ }
+the logical state occupies the error space E ψ . In this scenario, it can be seen that the first
+| iL ∈ F
+term in equation (19) goes to zero. The ancilla qubit is therefore measured deterministically as
+‘1’. Considering the other error patterns, we see that if the logical state is in the codespace (i.e.,
+if E = 11,X X ) then the ancilla is measured as ‘0’. Likewise, if the logical state is in the error
+1 2
+{ }
+subspace (i.e., if E = X ,X ) then the ancilla is measured as ‘1’. The outcome of the ancilla
+1 2
+{ }
+qubit measurement is referred to as a syndrome, and tells us whether or not the logical state has
+7July26,2019
+been subject to an error. Thesyndromes for all bit-flip error types in the two-qubit code are shown
+in table 1.
+Up to this point, we have assumed that the error introduced by the circuit element labelled
+‘E’ is deterministic. We now demonstrate how the two qubit code works under a more general
+probabilistic error of the type discussed in section 2.2. For the purposes of this example, we will
+assume that each qubit in the two-qubit code is subject to a coherent error of the form
+= α 11+α X, (20)
+I X
+E
+where α 2+ α 2 = 1. Here we see that α 2 = p is the probability of an X-error occurring on
+I X X X
+| | | | | |
+the qubit. The probability of no-error occurring is therefore equal to α 2 = 1 p . The combined
+I X
+| | −
+action of the error operator acting on both qubits is given by
+E
+E = = α211 11 +α α (X +X )+α2 X X . (21)
+E 1 ⊗E 2 I 1 2 I X 1 2 X 1 2
+With the above error operator E, the syndrome extraction stage in figure 2 stage transforms the
+quantum state as follows
+E ψ 0 syndromeextraction (α211 11 +α2 X X ) ψ 0 +α α (X +X ) ψ 1 . (22)
+| iL| iA −−−−−−−−−−−−→ I 1 2 X 1 2 | iL| iA I X 1 2 | iL| iA
+If the syndrome is measured as ‘0’, the state collapses to a subset of its terms
+(α211 11 +α2 X X )
+I 1 2 X 1 2 ψ 0 , (23)
+α2 2+ α2 2 | iL| iA
+q| I| | X|
+wherethe the denominator ensures normalisation. By calculating the square-norm in the firstterm
+in the above, we can calculate the probability p that the logical state is subject to an error
+L
+2
+α2 p2
+p = (cid:12) X (cid:12) = x p2 (24)
+L (cid:12) (cid:12) (cid:12)q| α2 I| 2+ | α2 X| 2 (cid:12) (cid:12) (cid:12) (1 − p x )2+p2 x ≈ x
+(cid:12) (cid:12)
+(cid:12) (cid:12)
+wheretheabove approximation is made undertheassumption that p is small. For the single qubit
+x
+ψ , the probability of error is p when it is subject to the error operator . For the logical qubit
+x
+| i E
+ψ subject to the error operator , the logical error rate is p = p2. From this, we see that
+| iL E 1 ⊗E 2 L x
+the two-qubit code suppresses the error rate relative to the un-encoded case.
+3.1. The three-qubit error correction code
+The syndrome produced by the two-qubit code informs us of the presence of an error, but does not
+provide enough information to allow us to infer which qubit the error occurred on. It is therefore
+a detection code. In order to create an error correction code with the ability to both detect and
+localise errors, multiple stabilizer measurements need to be performed.
+We now describe the three-qubit code, the natural extension of the two-qubit code in which
+the encoding operation distributes the quantum information across an entangled three-party state
+to give a logical state of the form ψ = α 000 +β 111 . This logical state occupies an eight-
+| iL | i | i
+dimensional Hilbert space that can be partitioned into four two-dimensional subspaces as follows
+= span 000 , 111 , = span 100 , 110 ,
+1
+C {| i | i} F {| i | i} (25)
+= span 010 , 101 , = span 001 , 110 ,
+2 3
+F {| i | i} F {| i | i}
+8July26,2019
+Encoder Syndrome extraction
+ψ
+| i1
+Z Z
+1 2
+0 ψ E
+| i2 | iL
+Z Z
+2 3
+0
+| i3
+0 H H
+| iA1
+0 H H
+| iA2
+Figure3. Thecircuitdiagramofthethree-qubitcode.Encodestage: Theinformationcontained inasinglequbit ψ is
+| i
+entangledwithtworedundancyqubits | 0 i2 and | 0 i3 tocreatealogicalqubit | ψ iL .ThestabilizersZ1Z2 andZ2Z3 aremea-
+suredonthelogicalqubitviatwooperationscontrolledontheancillaqubitsA1 andA2 respectively.Thesubsequent mea-
+surementoftheancillaqubitsgivesatwo-bitsyndromeS.
+Table2. Thesyndrometableforallbit-fliperroson
+thethreequbitcode.ThesyndromeS isatwo-bit
+stringformedbyconcatenating theresultsofthetwo
+stabilizermeasurements.
+Error Syndrome,S Error Syndrome,S
+I1I2I3 00 X1X2I3 01
+X1I2I3 10 I1X2X3 10
+I1X2I3 11 X1I2X3 11
+I1I2X3 01 X1X2X3 00
+where is the logical code space, and are the logical error spaces. We see that each single-
+1,2,3
+qubit e C rror from the set E = X ,X F ,X{ }will rotate the codespace to a unique error space so
+1 2 3
+{ }
+that X ψ . In order to differentiate between these subspaces, we perform two stabilizer
+i | iL ∈ F i
+measurements Z Z and Z Z via the circuit shown in figure 3. The resultant syndrome table for
+1 2 2 3
+single-qubit errors is given in table 2. From this we see that each single-qubit error produces a
+unique two-bit syndrome S = s s , enabling us to choose a suitable recovery operation.
+1 2
+3.2. Quantum code distance
+As is the case for classical codes, the distance of a quantum code is defined as the minimum size
+error that will go undetected. Alternatively, this minimum size error can be viewed as a logical
+Pauli operator that transforms one codeword state to another. For the three-qubit code described
+in section 3.1, we see that the logical Pauli-X operator is given by X¯ = X X X , so that
+1 2 3
+X¯ 0 = 1 and X¯ 1 = 0 , (26)
+| iL | iL | iL | iL
+where 0 = 000 and 1 = 111 arethelogicalcodewordsforthethree-qubitcode.Ifitwerethe
+| iL | i | iL | i
+case that qubits were only susceptible to X-errors, then the three-qubit code would have distance
+d = 3. However, as qubits are also susceptible to phase-flip errors, it is also necessary to consider
+thelogical Pauli-Z operatorZ¯ whendeterminingthecodedistance.Todothis,itisusefultoswitch
+9July26,2019
+Syndrome extraction
+ψ
+| iD
+Encoder | ψ iL E P 1 P 2 ... P n − k
+0
+| iR
+0 H H
+| iA1
+0 H H
+| iA2
+. .
+. .
+. .
+0 H H
+| iAn−k
+Figure4. Circuitillustratingthestructureofan[[n,k,d]]stabilizercode.Aquantum dataregister
+|
+ψ
+iD
+=
+|
+ψ1ψ2...ψki
+isentangledwithredundancyqubits
+|
+0
+iR
+=
+|
+0102...0n−ki viaanencodingoperationtocreatealogicalqubit
+|
+ψ
+iL
+.After
+encoding, asequence ofn k stabilizerchecks Pi areperformedontheregister,andeachresultcopiedtoanancillaqubit
+−
+Ai.Thesubsequent measurementoftheancillaqubitsprovidesanm-bitsyndrome.
+from the computational basis, 0 , 1 , to the conjugate basis, + , , where we define
+{| i | i} {| i |−i}
+1 1
++ = (0 + 1 ) and = (0 1 ). (27)
+| i √2 | i | i |−i √2 | i−| i
+A Z-error maps the conjugate basis states as follows Z + = and Z = + . Now, encoding
+| i |−i |−i | i
+the conjugate basis states with the three-qubit code gives the logical states
+1 1
++ = (000 + 111 ) and = (000 111 ). (28)
+| iL √2 | i | i |−iL √2 | i−| i
+A weight-one logical Pauli-Z operator Z¯ = Z will transform Z + = , meaning the code
+1 | iL |−iL
+is unable to detect the presence of single-qubit Z-errors. As a result, the three-qubit code has a
+quantum distance d = 1. In the next section, we outline the construction of general stabilizer codes
+capable of detecting both X- and Z-errors.
+4. Stabilizer codes
+The three-qubit code works by de-localising the information in a single-qubit across three qubits.
+The resultant logical state is then encoded in a two-dimensional subspace (the codespace) of the
+expandedHilbertspace.Thethree-qubitcodeisdesignedsuchthatifanX-error occurs,thelogical
+state is rotated to an orthogonal error space, an event that can be detected via a sequence of two
+stabilizer measurements. This section describes how the procedure to can be generalised to create
+[[n,k,d]] stabilizer codes, where n is the total number of qubits, k is the number of logical qubits
+and d is the code distance. Note the use of double brackets to differentiate quantum codes from
+classical codes which are labelled with single brackets.
+Thecircuitinfigure4showsthebasicstructureofan[[n,k,d]]stabilizercode.Aregisterofk data
+qubits, ψ ,isentangled withm = n k redundancyqubits 0 viaan encodingoperation to cre-
+| iD − | iR
+atealogical qubit ψ .Atthis stage, thedatapreviouslystoredsolely in ψ isdistributedacross
+| iL | iD
+the expanded Hilbert space. Errors can then be detected by performingm stabilizer measurements
+P as shown to the right of figure 4.
+i
+10July26,2019
+In the circuit in figure 4, each of the stabilizers is measured using the same syndrome extraction
+method that was used for the two-qubit code in figure 2. For each stabilizer P , the syndrome
+i
+extraction circuit maps the logical state as follows
+E
+|
+ψ
+iL|
+0
+iAi −
+s
+−
+yn
+−
+d
+−
+ro
+−
+m
+−
+e
+−
+e
+−
+x
+−
+tr
+−
+ac
+−
+t
+−
+io
+→
+n 1
+2
+(11
+⊗
+n+P
+i
+)E
+|
+ψ
+iL|
+0
+iAi
++ 1
+2
+(11
+⊗
+n
+−
+P
+i
+)E
+|
+ψ
+iL|
+1
+iAi
+. (29)
+From the above, we see that if the stabilizer P commutes with an error E the measurement of
+i
+ancilla qubit A returns ‘0’. If the stabilizer P anti-commutes with an error E the measurement
+i i
+returns ‘1’. The task of constructing a good code therefore involves finding stabilizers that anti-
+commute with the errors to be detected. In general, two Pauli operators will commute with one
+another if they intersect non-trivially on an even number of qubits, and anti-commute if otherwise.
+For specific examples of Pauli commutation relations, see appendix D.
+The results of the m stabilizer measurements are combined to give an m-bit syndrome. For a
+well designed code, the syndrome allows us to deduce the best recovery operation to restore the
+logical state to the codespace.
+4.1. Properties of the code stabilizers
+The stabilizers P of an [[n,k,d]] code must satisfy the following properties:
+i
+(1) They must be Pauli-group elements, P . Here is the Pauli Group over n-qubits (see
+i n n
+∈ G G
+appendix B for the definition of the Pauli Group).
+(2) They muststabilize all logical states ψ of thecode. Thismeans that each P has theaction
+| iL i
+P ψ = (+1) for all possible values of ψ .
+i | iL | iL
+(3) All the stabilizers of a code must commute with one another, so that [P ,P ] = 0 for all i and
+i j
+j. This property is necessary so that the stabilizers can be measured simultaneously (or in a
+way independent of their ordering) as depicted in figure 4.
+In the language of group theory, the stabilizers P of an [[n,k,d]] code form an Abelian subgroup
+i
+of the Pauli Group. The stabilizer requirements listed above are incorporated into the definition
+S
+of as follows
+S
+= P P ψ = (+1) ψ ψ [P ,P ] =0 (i,j) . (30)
+S { i ∈ G n | i | iL | iL ∀ | iL ∧ i j ∀ }
+An important point to note is that any product of the stabilizers P P will also be a stabilizer as
+i j
+P P ψ = P (+1) ψ = (+1) ψ . Given this, it is import to ensure that the set of m = n k
+i j | iL i | iL | iL −
+stabilizers that are actually measured in the syndrome extraction process form a minimal set of
+the stabilizer group
+= G ,G ,...,G (31)
+1 2 m
+S h i
+In a minimal set it is not possible to obtain one stabilizer G as a product of any of the other
+i
+elements G . As a simple example, consider the following set of stabilizers for the three-qubit code
+j
+= Z Z ,Z Z ,Z Z . Thisis not a minimal set, as it is possibleto obtain thethird stabilizer as
+1 2 2 3 1 3
+S { }
+aproductof thefirsttwo. ApossibleminimalsetisS = Z Z ,Z Z ,which arethetwo stabilizers
+1 2 2 3
+h i
+measured in the example in section 3.1.
+4.2. The logical operators of stabilizer codes
+An[[n,k,d]]stabilizercodehas2k logicalPaulioperatorsthatallowforlogicalstatestobemodified
+withouthavingtodecodethenre-encode.Foreachlogicalqubiti,thereisalogicalPauli-X operator
+11July26,2019
+Encoder Syndrome extraction
+ψ
+| i1 Z X
+1 1
+ψ
+| i2 Z 2 X 2
+| ψ 1 ψ 2 iL E
+0 Z X
+| i3 3 3
+Z X
+0 H 4 4
+| i4
+0 H H
+| iA1
+0 H H
+| iA2
+Figure5. Circuitdiagramforthefour-qubitcode.Encodestage:theinformationcontained intwo-qubitregister | ψ i1| ψ i2 is
+distributedacrosstworedundancyqubits, | 0 i3 and | 0 i4,tocreatealogicalstate | ψ1ψ2 iL thatencodes twoqubits.Syndrome
+extractionstage: thecodestabilizers,Z1Z2Z3Z4 andX1X2X3X4,aremeasuredonthecodequbitsandresultscopiedto
+theancillaqubits.Thesubsequentmeasurementoftheancillaqubitsprovidesatwo-bitsyndromeS thatinformsofthe
+occurrenceofanerror.
+X¯ andalogical Pauli-Z operatorZ¯ .Eachpairoflogical operators,X¯ andZ¯ ,satisfy thefollowing
+i i i i
+properties
+(1) They commute with all the code stabilizers in .
+(2) They anti-commute with one another, so that [ S X¯ ,Z¯ ] = X¯ Z¯ +Z¯ X¯ = 0 for all qubits i.
+i i + i i i i
+Any productof a logical operator L¯ and stabilizer P will also bea logical operator. This is clear
+i j
+from the fact that the stabilizer maps the logical state onto its (+1) eigenspace. Any product L¯P
+i j
+therefore has the following action on the logical state L¯ P ψ = L¯ ψ .
+i j | iL i | iL
+4.3. Example: The [[4,2,2]] detection code
+The [[4,2,2]] detection code is the smallest stabilizer code to offer protection against a quantum
+noisemodelinwhichthequbitsaresusceptibletobothX-andZ-errors[38,39].Assuch,itprovides
+a useful demonstration of the structure and properties of a stabilizer code.
+An encoder for the [[4,2,2]] code is shown in figure 5. A two-qubit register ψ ψ is entangled
+| i1| i2
+across four qubits to give the code state ψ ψ . As there are two encoded logical qubits in the
+| 1 2 iL
+[[4,2,2]] code, its codespace is four-dimensional and is spanned by
+00 = 1 (0000 + 1111 )
+| iL √2 | i | i
+01 = 1 (0110 + 1001 ,
+= span| iL √2 | i | i . (32)
+C [[4,2,2]]    | 10 iL = √ 1 2 ( | 1010 i + | 0101 i )  
+11 = 1 (1100 + 0011 )
+| iL √2 | i | i 
+ 
+ 
+ 
+The stabilizers of the above logical basis states are = X X X X ,Z Z Z Z . It is clear
+[[4,2,2]] 1 2 3 4 1 2 3 4
+S h i
+that these stabilizers commute with one another, as required by the definition in equation (30).
+Thesestabilizerscanbemeasuredusingthesyndromeextraction circuitshowntotherightoffigure
+5. From equation (29), we know that for a syndrome measurement to be non-zero, the error E has
+to anti-commute with the stabilizer being measured. Considering first the single-qubit X-errors
+(E = X ,X ,X ,X ),weseethatthey allanti-commute withtheZ Z Z Z stabilizer. Likewise,
+1 2 3 4 1 2 3 4
+{ }
+the single-qubit Z-errors (E = Z ,Z ,Z ,Z ) anti-commute with the X X X X stabilizer. Any
+1 2 3 4 1 2 3 4
+{ }
+12July26,2019
+Table3. Thesyndrometableforthe[[4,2,2]]codeforallsingle-qubit
+X-,Z-andY-errors.
+Error Syndrome,S Error Syndrome,S Error Syndrome,S
+X1 10 Z1 01 Y1 11
+X2 10 Z2 01 Y2 11
+X3 10 Z3 01 Y3 11
+X4 10 Z4 01 Y4 11
+single-qubit error on the [[4,2,2]] code will therefore trigger a non-zero syndrome. The syndrome
+table for all single-qubit errors in the [[4,2,2]] code is shown in table 3. For completeness, table
+3 also includes the syndromes for single-qubit Y-errors, which are equivalent to the simultaneous
+occurrence of an X- and Z-error.
+The [[4,2,2]] code has Pauli-X and Pauli-Z logical operators for each of its encoded logical
+qubits. A possible choice of these logical operators is given by
+X¯ = X X
+1 1 3
+Z¯ = Z Z 
+= 1 1 4 . (33)
+L [[4,2,2]]    X¯ 2 = X 2 X 3   
+Z¯ = Z Z
+2 2 4
+ 
+ 
+ 
+Each logical operators commutes with the two stabilizers of the code so that [L ,P ] = 0 for all
+i i
+L and P . Furthermore, it can be checked that the requirement X¯ ,Z¯ = 0 is
+i ∈ L [[4,2,2]] i ∈ S i i +
+satisfied for each pair of logical operators. The minimum weight logical operator in(cid:2) (cid:3) is two,
+[[4,2,2]]
+L
+which sets the code distance to d = 2. As the distance of the [[4,2,2]] code is less than three, it is
+a detection code rather than a full correction code. In section 4.6, we introduce the Shor [[9,1,3]]
+code as an example of a code capable of both detecting and correcting errors.
+4.4. A general encoding circuit for stabilizer codes
+The quantum codes presented this review have included bespoke encoding circuits to prepare the
+logical states. Special methods exist for constructing such circuits given a set of stabilizers [40,41].
+In this section we describe a general method for preparingthe logical states of stabilizer code using
+the same circuits that are used for syndrome extraction.
+The 0 codeword of any [[n,k,d]] stabilizer can be obtained via a projection onto the (+1)
+| iL
+eigenspace of all of its stabilizers
+1
+|
+0
+iL
+=
+N
+(11
+⊗
+n+P
+i
+)
+|
+0
+⊗
+n
+i
+, (34)
+Y
+Pi
+∈hSi
+where is the minimal set of the code stabilizers and the 1/N term is a factor that ensures
+hSi
+normalisation. For example, the 00 codeword of the four-qubit code defined in section 4.3 is
+| iL
+given by
+1 1
+|
+00
+iL
+=
+√2
+(11
+⊗
+4+X
+1
+X
+2
+X
+3
+X
+4
+)(11
+⊗
+4+Z
+1
+Z
+2
+Z
+3
+Z
+4
+)
+|
+0000
+i
+=
+√2
+(
+|
+0000
+i
++
+|
+1111
+i
+). (35)
+The remaining codewords of the code can be obtained by applying logical operators to the 0
+| iL
+codeword.
+13July26,2019
+The 0 codeword of any stabilizer code can be prepared via the projection in equation (34)
+| iL
+by applying the general syndrome extraction circuit (shown on the right-hand-side of figure 4) to
+a 0 ⊗ n state. As an example, consider the case where we apply the syndrome extraction circuit
+to | t i he state | 0 i ⊗ 4 to prepare the | 0 iL codeword of the four-qubit code. The intermediary state
+immediately after the extraction of the X X X X stabilizer is given by
+1 2 3 4
+1 1
+2
+(11
+⊗
+4+X
+1
+X
+2
+X
+3
+X
+4
+)
+|
+0000
+i|
+0
+iA
++
+2
+(11
+⊗
+4
+−
+X
+1
+X
+2
+X
+3
+X
+4
+)
+|
+0000
+i|
+1
+iA
+. (36)
+When the ancilla is measured, the above state collapses to either the (+1) or ( 1) projection with
+−
+equal probability. In the case where the ‘1’ syndrome is measured, a correction needs to be applied
+to transform the state back onto the (+1) eigenspace of the stabilizer. Repeating this procedure
+for the remaining stabilizers leads to the preparation of the 0 codeword.
+| iL
+4.5. Quantum error correction with stabilizer codes
+As is the case for classical codes, the distance of a quantum code is related to the number of
+correctable errors t via the relation d = 2t + 1. As a result, stabilizer codes with d 3 are
+≥
+error correction codes for which active recovery operations can be applied. In contrast, detection
+protocols such as the [[4,2,2]] code require a repeat-until-success approach.
+Figure 6 shows the general error correction procedure for a single cycle of an [[n,k,d 3]]
+≥
+stabilizer code. The encoded logical state ψ is subject to an error process described by the
+| iL
+circuit-element E. Next, the code stabilizers are measured (using the syndrome extraction method
+illustrated in figure 4), and the results copied to a register of m = n k ancilla qubits A ⊗ m. The
+− | i
+ancilla qubits are then read out to give an m-bit syndrome S.
+Thenextstepintheerrorcorrection procedureisreferredtoasdecoding,andinvolves processing
+thesyndrometodeterminethebestunitaryoperation toreturnthelogicalstatetothecodespace.
+R
+After this recovery operation has been applied, the output of the code-cycle is given by E ψ
+R | iL ∈
+. The decoding step is a success if the combined action of E on the code state is as follows
+[[n,k,d]]
+C R
+E ψ = (+1) ψ . (37)
+R | iL | iL
+The above condition is trivially satisfied if = E so that E = 11. However, this is not the
+†
+R R
+only solution. Equation (37) is also satisfied for any product E that is an element of the code
+R
+stabilizer such that E = P . In section 4.6, we will see that the fact that the solution for is
+R ∈ S R
+not unique means it is possible to design degenerate quantum codes for which multiple errors can
+map to the same syndrome.
+The decoding step fails if the recovery operation maps the code state as follows
+E ψ = L ψ , (38)
+R | iL | iL
+where L is a logical operator of the code. In this case, the state is returned to the codespace, but
+the recovery operation leads to a change in the encoded information.
+4.6. Example: The Shor [[9,1,3]] code
+The Shor nine-qubit code was the first quantum error correction scheme to be proposed. It is an
+example of a distance-three degenerate code for which it is possible to apply a successful recovery
+operation for any single-qubit error [21]. We now outline how the Shor code can be constructed via
+a method known as code concatenation.
+14July26,2019
+ψ E E ψ
+| iL S R R | iL
+A ⊗ m S Decoder
+| i
+Figure6. Thegeneralprocedureforactiverecoveryinaquantum errorcorrectioncode.Thelogicalqubit ψ ofan
+| iL
+[[n,k,d]]stabilizercodeissubjecttoanerrorprocessE.Agenerating setofstabilizers aremeasuredonthelogicalstateto
+S
+yieldanm-bitsyndromeS.Thissyndromeisprocessedbyadecoder todeterminethebestrecoveryoperation toreturn
+R
+thelogicalstatetothecodespace. Aftertherecoveryhasbeenapplied,theoutputoftheerrorcorrectioncycleis E ψ .
+R | iL
+Doublelinesindicateclassicalinformationflow.
+Code concatenation involves embedding the output of one code into the input of another. In the
+construction of the Shor nine-qubit code, the two codes that are concatenated are the three-qubit
+code for bit-flips and the three-qubit code for phase-flips [32]. The three-qubit code for bit-flips
+3b
+C
+was described in section 3.1 and is defined as follows
+= span 0 = 000 , 1 = 111 , = Z Z ,Z Z , (39)
+C 3b {| i3b | i | i3b | i} S 3b h 1 2 2 3 i
+where are the code stabilizers. Similarly, the three-qubit code for phase-flips is defined
+3b 3p
+S C
+= span 0 = +++ , 1 = , = X X ,X X , (40)
+C 3p {| i3p | i | i3p |−−−i} S 3p h 1 2 2 3 i
+Toconstruct thenine-qubitcode, thebit-flipcodeis embeddedinto thecodewords of thephase-flip
+code. This concatenation maps the 0 codeword of the phase-flip code to a nine-qubit codeword
+| i3p
+0 as follows
+| i9
+concatenation
+0 = +++ 0 = + + + , (41)
+| i3p | i −−−−−−−−→ | i9 | i3b| i3b| i3b
+1
+where + = (000 + 111 ) is a logical state of the bit-flip code. Similarly, the concatenation
+| i3b √2 | i | i
+maps the 1 codeword of the phase-flip code to
+| i3p
+concatenation
+1 = 1 = , (42)
+| i3p |−−−i −−−−−−−−→ | i9 |−i3b|−i3b|−i3b
+1
+where = (000 111 ).Thecodedefinedby thecodewords 0 and 1 is thenine-qubit
+|−i3b √2 | i−| i | i9 | i9
+Shor code with paramaters [[9,1,3]]. Rewriting the right-hand-sides of Equations 41 and 42 in the
+computational basis, we get the following codespace for the Shor code
+1
+0 = (000 + 111 )(000 + 111 )(000 + 111 )
+= span| i9 √8 | i | i | i | i | i | i . (43)
+C [[9,1,3]]  1 = 1 (000 111 )(000 111 )(000 111 )  
+| i9 √8 | i−| i | i−| i | i−| i
+ 
+ 
+The stabilizers of the above code are given by
+= Z Z ,Z Z ,Z Z ,Z Z ,Z Z ,Z Z ,
+[[9,3,3]] 1 2 2 3 4 5 5 6 7 8 8 9
+S h (44)
+X X X X X X ,X X X X X X .
+1 2 3 4 5 6 4 5 6 7 8 9
+i
+15July26,2019
+Table4. Thesyndrometableforsingle-qubit
+X-andZ-errorsonthenine-qubitcode.The
+nine-qubitcodeisadegenerate code,ascertain
+Z-errorssharethesamesyndrome.
+Error Syndrome,S Error Syndrome,S
+X1 10000000 Z1 00000010
+X2 11000000 Z2 00000010
+X3 01000000 Z3 00000010
+X4 00100000 Z4 00000011
+X5 00110000 Z5 00000011
+X6 00010000 Z6 00000011
+X7 00001000 Z7 00000001
+X8 00001100 Z8 00000001
+X9 00000100 Z9 00000001
+The first six terms are the stabilizers of the bit-flip codes in the three-blocks of the code. The final
+two stabilizers derive from the stabilizers of the phase-flip code.
+Table 4 shows the syndromes for all single-qubit errors in the nine-qubit code. Each of the X-
+errors produce unique syndromes. In contrast, Z-errors that occur in the same block of the code
+have the same syndrome. Fortunately, this degeneracy in the code syndromes does not reduce the
+codedistance. To seewhy this is thecase, consider thesingle-qubit errorsZ andZ ,bothof which
+1 2
+maptothesyndrome‘00000010’. Thedecoderthereforehasinsufficientinformation todifferentiate
+between the two errors, and will output the same recovery operation for either. For the purposes
+of this example, we will assume that the recovery operation the decoder outputs is = Z . For
+1
+R
+the case where the error is E = Z , the recovery operation trivially restores the logical state as
+1
+E ψ = Z Z ψ = ψ . In the event where E = Z , the recovery operation still restores the
+R | i9 1 1 | i9 | i9 2
+logical state as E = Z Z is in the stabilizer of , and therefore acts on the logical state as
+1 2 [[9,1,3]]
+R C
+follows Z Z ψ = ψ . The same arguments can be applied to the remaining degenerate errors
+1 2 | i9 | i9
+of the code. As a result, the nine-qubit code has the ability to correct all single-qubit errors and
+has distance d = 3.
+5. The surface code
+The challenge in creating quantum error correction codes lies in finding commuting sets of stabi-
+lizers that enable errors to be detected without disturbing the encoded information. Finding such
+sets is non-trivial, and special code constructions are required to find stabilizers with the desired
+properties.Insection4.6wesawhowacodecanbeconstructedbyconcatenatingtwosmallercodes.
+Otherconstructions includemethodsforrepurposingclassical codestoobtaincommutingstabilizer
+checks [42–45]. In this section, we outline a construction known as the surface code [46,47].
+Therealisation of a surfacecode logical qubitis key goal for many quantumcomputing hardware
+efforts [48–52]. Surface codes belong to a broader family of so-called topological codes [53]. The
+general design principle behindtopological codes is that the code is built up by ‘patching’ together
+repeated elements. We will see that this modular approach ensures that the surface code can
+be straight-forwardly scaled in size whilst ensuring stabilizer commutativity. In terms of actual
+implementation, the specific advantage of surface code for current hardware platforms is that it
+requires only nearest-neighbour interactions. This is advantageous as many quantum computing
+platforms are unable to perform high-fidelity long-range interactions between qubits.
+16July26,2019
+D 1 X Z
+| i
+D1 A1
+D 2 X Z
+| i
+0 H H
+| iA1
+A2 D2
+0 H H
+| iA2
+(a) (b)
+Figure7. Thesurfacecodefour-cycle.(a)Pictorialrepresentation. Thecodequbits,D1 andD2,arerepresentedbythecir-
+cularnodes.Theancillaqubits,A1 andA2,arerepresentedbythesquarenodes.Theredandblueedges depictcontrolled-X
+andcontrolled-Z operationscontrolledontheancillaqubitsandactingonthecodequbits.(b)Anequivalentsurfacecode
+four-cycleincircuitnotation.
+5.1. The surface code four-cycle
+For surface codes it is beneficial to adopt a pictorial representation of the code qubits in place of
+the circuit notation we have used up to this point. Figure 7a shows a surface code four-cycle, the
+fundamental building block around which surface codes are constructed. The circles in figure 7a
+represent the code qubits and the squares the ancilla qubits. The red edges represent controlled-X
+gates, each controlled on an ancilla qubit A and acting on a data qubit D. Likewise, the blue
+edges represent controlled-Z operations, each controlled by an an ancilla qubit and acting on a
+data qubit. These controlled operations are the gates with which the stabilizers of the four-cycle
+are measured. Ancilla qubit A connects to data qubits D and D via red edges, and therefore
+1 1 2
+measures the stabilizer X X . Likewise, ancilla qubit A measures the stabilizer Z Z . For
+D1 D2 2 D1 D2
+comparison, the four-cycle is shown in quantum circuit notation in figure 7b.
+The stabilizers of the four-cycle, X X and Z Z , commute with one another as they
+D1 D2 D1 D2
+intersect non-trivially on an even number of code qubits. This can easily be verified by inspection
+of figure 7b.
+The 0 codewordof thefour-cycle canbepreparedbysetting theinitial stateof thecodequbits
+| iL
+to D D = 00 , and following the general encoding procedure outlined in section 4.4. However,
+1 2
+| i | i
+as the four-cycle has two code qubits n = 2 and two stabilizers m = 2, the number of logical qubits
+it encodes is equal to k = n m = 0. As a result, the four-cycle is not in itself a useful code.
+−
+However, we will see that working detection and correction codes can be formed by tiling together
+multiple four-cycles to form square lattices.
+5.2. The [[5,1,2]] surface code
+Figure 8a shows the five-qubit surface code formed by tiling together four four-cycles in a square
+lattice [54]. By inspecting which data qubits each ancilla qubit connects to, the stabilizers of the
+code in figure 8 can be read off to give
+= X X X , Z Z Z , Z Z Z , X X X . (45)
+S
+[[5,1,2]]
+h
+D1 D2 D3 D1 D3 D4 D2 D3 D5 D3 D4 D5i
+The first term in the above is the stabilizer measured by ancilla qubit A , the second by ancilla
+1
+A etc. The stabilizers in commute with one another, as the X- and Z-type stabilizers all
+2 [[5,1,2]]
+S
+intersect on an even number of code qubits. From figure 8, we see that there are five code qubits
+and four stabilizers meaning the code encodes one logical qubit.
+Figure 7b shows two examples of errors on the surface code and how they are detected. The
+Z -error on qubit D anti-commutes with the X X X stabilizer, and therefore triggers a
+D1 1 D1 D2 D3
+‘1’ syndrome. This is depicted by the red filling in the ancilla qubit A . Likewise, the X -error
+1 D5
+anti-commutes with the Z Z Z stabilizer and triggers a ‘1’ syndrome measurement in ancilla
+D2 D3 D5
+17July26,2019
+D1 A1 D2
+D1
+A1 D2
+Z
+A2 D3 A3 A2 D3 A3
+D4 A4 D5 D4 A4
+D5
+X
+(a) (b)
+Figure8. (a)The[[5,1,2]]surfacecodeformedbytilingtogether fourfour-cyclesinasquarelattice.(b)Examplesoferror
+detection inthe[[5,1,2]]surfacecode.TheZD1 erroronqubitD1 anti-commuteswiththestabilizermeasuredbyancilla
+qubitA1.TheA1 qubitiscolouredredtoindicateitwillmeasuredasa‘1’.Likewise,theXD5 erroronqubitD5 isdetected
+bythestabilizermeasuredbyancillaqubitA3.
+D1
+A1 D2
+D1
+A1
+D2
+X Z Z
+A2 D3 A3 A2 D3 A3
+D4
+A4 D5 D4 A4 D5
+X
+(a) (b)
+Figure9. ThelogicaloperatorsofasurfacecodecanbedefinedaschainsofPaulioperationsthatactalongtheboundaries
+ofthelattice.(a)ThePauli-X logicaloperator X¯ = XD1 XD4 acts alongtheboundaryalongwhichZ-typestabilizersare
+measured.(b)ThePauli-Z logicaloperator Z¯ = ZD1 ZD2 acts alongtheboundaryalongwhichX-typestabilizersaremea-
+sured.Thetwologicaloperatorsanti-commutewithoneanother.
+qubit A .
+4
+Fromfigure7itcanbeseenthatthesurfacecodeisasquarelattice withtwotypesofboundaries.
+Thevertical boundariesare formedof blueedges representingZ-typestabilizer measurements. The
+horizontal boundaries are formed of red-edges representing X-type stabilizer measurements. The
+logical operators of the surface code can be defined as chains of Pauli operators along the edges of
+these boundaries.
+Figure 9a shows a two-qubit Pauli chain X X along the left-hand boundary of the five-qubit
+D1 D4
+surface code. The X X operator commutes with all the stabilizers in , in particular
+D1 D4
+S
+[[5,1,2]]
+the stabilizer Z Z Z with which is shares two qubits. Similarly, figure 9b shows an operator
+D1 D3 D4
+Z Z which acts across the top of the lattice. It can easily be checked that this operator also
+D1 D2
+commutes with all the code stabilizers. Finally, we note that the operators X X and Z Z
+D1 D4 D1 D2
+anti-commute. As outlined in section 4.2, the Pauli-X and Pauli-Z logical operators for each en-
+coded qubit are pairs of operators that commute with all the code stabilizers but anti-commute
+with one another. A suitable choice for the logical operators of the [[5,1,2]] surface code would
+therefore be
+X¯ = X X and Z¯ = Z Z . (46)
+D1 D4 D1 D2
+From the above we see that the minimum weight of the logical operators is 2, meaning the [[5,1,2]]
+code is a detection code with d = 2.
+18July26,2019
+D1 A1 D2 A2 D3
+A3 D4 A4 D5 A5
+D6 A6 D7 A7 D8
+A8 D9 A9 D10 A10
+D11 A11 D12 A12 D13
+Figure10. Adistance-threesurfacecodewithparameters [[13,1,3]].Apossiblechoiceforthelogicaloperators ofthiscode
+wouldbeX¯ =XD1 XD6 XD11 andZ¯=ZD1 ZD2 ZD3 .
+5.3. Scaling the surface code
+The distance of a surface code can be increased simply by scaling the size of lattice. In general, a
+surface code with distance d = λ will encode a single logical qubit and have code parameters given
+by
+[[n = λ2+(λ 1)2,k = 1,d = λ]]. (47)
+−
+For example, the distance-three [[13,1,3]] surface code is depicted in figure 10. ThePauli-X logical
+operator of asurfacecodecan bedefinedas achain of X-Pauli operators alongtheboundaryof the
+code along which the Z-stabilizers are applied (the blue boundary in our pictorial representation).
+Likewise, the Z-Pauli logical operator can be defined as a chain of Z-operators across the adjacent
+boundary along which the X-type stabilizers are applied (the red edges in our pictorial represen-
+tation). For the distance-three code, a choice of logical operators would be X¯ = X X X
+D1 D6 D11
+and Z¯ = Z Z Z . The [[13,1,3]] code is the smallest surface code capable of detecting and
+D1 D2 D3
+correcting errors.
+6. Practical considerations for quantum error correction
+Up to this point, we have described stabilizer codes in an idealised, theoretical setting. In this
+section, we outline some of the practical issues that arise when considering the implementation of
+quantum error correction codes on actual hardware.
+6.1. Efficient decoding algorithms
+Given acodesyndromeS,theroleof thedecoderis tofindthebestrecovery operation to restore
+R
+the encoded quantum information to the codespace. Measuring the stabilizers of an [[n,k,d]] code
+will produce an m-bit syndrome where m = n k. As a result, there are 2m possible syndromes
+−
+for each code. For the small code examples described in this review, it is possible to compute
+lookup-tables that exhaustively list the best recovery operation for each of the 2m syndromes.
+However, such a decoding strategy rapidly becomes impractical as the code size is increased. As
+19July26,2019
+an example, consider the distance-five surface code which has parameters [[41,1,5]]. This code
+produces syndromes of length m = 40, and would therefore need a lookup table of size 240 1012.
+≈
+In place of lookup tables, large-scale quantum error correction codes use approximate inference
+techniques to determine the most likely error to have occurred given a certain syndrome S. Such
+methods allow for recovery operations to be chosen and applied in real-time between successive
+stabilizer code cycles. Unfortunately, there is no known universal decoder that can be efficiently
+applied to all quantum error correction codes. Instead, bespoke decoding algorithms need to be
+developedthataredesignedforspecificcodeconstructions.Forsurfacecodes,atechniqueknownas
+minimum weight perfect matching (MWPM) can be used for decoding, which works by identifying
+error chains between positive syndrome measurements [55,56].
+As outlined in section 4.5, the decode stage of an error correction cycle fails when E = L,
+R
+where is the recovery operation output by the decoder, E is the error and L is a logical operator
+R
+of the code. The frequency with which the decoder fails in this way gives a logical error rate p .
+L
+As decoding algorithms are based on approximate inference techniques, some perform better than
+others.Assuch,thelogical errorrateof aquantumerrorcorrection codewilldependheavily onthe
+decoder used. The logical error rate can be determined by simulating stabilizer code cycles with
+errors sampled from a noise model. The specifics of the noise model are motivated by the physical
+device on which the code is to be run.
+6.2. Code thresholds
+A code construction provides a method for building a set of codes with a shared underlying struc-
+ture. An example are the surface codes, for which the code distance can be increased by expanding
+the size of the qubit lattice. Given the increase in qubit overhead, scaling the code in this way is
+only ‘worthwhile’ if the resultant larger code has a lower logical error rate.
+Thethreshold theorem for stabilizer codes states that increasing the distance of a code will result
+in a corresponding reduction in the logical error rate p , provided the physical error rate p of the
+L
+individual code qubits is below a threshold p < p . The significance of this theorem is that it
+th
+means that quantum error correction codes can in principle be used to arbitrarily suppress the
+logical error rate [22–26]. Conversely, if the physical error rate is above the threshold, the process
+ofquantumencodingbecomes selfdefeating.Thethresholdofacodethereforeprovidesaminimum
+experimental benchmark that quantum computing experiments must reach before quantum error
+correction becomes viable.
+Upper bounds on the threshold p for a code under a given noise model can be obtained using
+th
+methods from statistical mechanics. Alternatively, more realistic thresholds can be numerically
+estimated by simulating code cycles and decoding using efficient inference algorithms as discussed
+insection 6.1.For thesurfacecode, assumingX-andZ-errorsaretreated independently,theupper
+bound on the threshold is 10.9% [57]. In practice, decoders based on the MWPM algorithm can
+≈
+achieve thresholds as high as 10.3% [58].
+≈
+6.3. Fault tolerance
+In the discussion of quantum error correction codes so far, we have assumed that errors only occur
+in certain locations inthe circuit. For example, in thecircuit diagram for thetwo-qubit codeshown
+in figure 2, errors are the restricted to the region labelled ‘E’. In doing this, we assume that all of
+the apparatus associated with encoding and syndromeextraction operates without error. However,
+in practice this is not the case. In fact, for many quantum computing technologies two-qubit gates,
+as well as measurement operations, can be dominant sources of error. As such, it is unrealistic to
+assume that any part of the circuit is error free.
+A quantum error correction code is said to be fault tolerant if it can account for errors (of size
+20July26,2019
+up to the code distance) that occur at any location in the circuit [26,59]. Various techniques exist
+for modifying quantum circuits to make them fault tolerant [60–62]. In the simplest terms, these
+methods ensure that small sub-distance errors do not spread uncontrollably through the circuit.
+Modifying a quantum error correction circuit for fault tolerance can add considerable overhead
+in terms of the total number of additional ancilla qubits required. For example, a fault tolerant
+syndrome extraction procedure proposed by Shor requires λ ancilla qubits to measure each stabi-
+lizer, whereλ is the numberof non-identity elements in thestabilizer [60].Under this scheme, eight
+ancilla qubits would be required to measure the two stabilizers of the four-qubit code depicted in
+figure 5. More efficient schemes exist [63], but a fault tolerant version of a code will always have
+increased overhead relative to the original circuit.
+For a quantum circuit with noisy ancilla measurements, it is not always possible to decode the
+error correction code in a single round of syndrome extraction. To illustrate this, consider the case
+where the S = 10 syndrome is measured in the three-qubit code outlined in section 3.1. From
+table 2, we see that this syndrome is triggered by an X error. However, if the ancillas themselves
+1
+are subject to error, then the same syndrome could equally have resulted from an error on ancilla
+qubit A . To differentiate between these two possibilities, it is necessary to perform two (or more)
+1
+rounds of stabilizer measurements and compare the syndromes over time. It should be noted that
+decoding over time in this way, in addition to any other modifications required for fault tolerance,
+will reduce the threshold for the code. For example, the threshold for the surface code with noisy
+ancilla measurements is 1%, compared to 10% in the ideal case [34,64].
+≈ ≈
+6.4. Encoded computation
+A universal quantum computer is a device that can perform any unitary operation U that evolves
+a qubit register from one state to another U ψ = ψ . It has been shown that any such operation
+′
+| i | i
+U can be efficiently compiled from a finite set of elementary gates [65]. An example of a universal
+gate set is = X,Z,Y,H,CNOT,T , where T = diag(1,eiπ/4).
+In this re h v U ie i w, h we have seen how P i auli logical X¯ and Z¯ operators can be defined for a variety
+of stabilizer codes. These gates allow computation to be performed directly on the encoded logical
+states, removing the need to decode then re-encode every time the state is to be evolved. However,
+the X¯ and Z¯ logical gates do not alone form a universal set, and additional logical operators need
+to be defined to achieve arbitrary computation on encoded states.
+The major challenge in constructing a universal encoded gate set is to find ways in which the
+relevant gates can be performed fault tolerantly. For many codes, it is possible to fault tolerantly
+implement a subset of the gates in without having to introduce additional qubits. This is
+hUi
+achieved by defining the logical operators with a property known as tranversality that guarantees
+errors will not spread uncontrollably through the circuit. However, a no-go theorem exists that
+prohibitstheimplementation ofafulluniversalgatesetinthiswayonaquantumcomputer[66].As
+such, alternative techniques are required to perform universal encoded logic. Various methods have
+been proposed [67–70], but these typically impose a high cost in terms of the number of additional
+qubits required. To put this into context, it has proposed that the surface code could realise a
+universal gate set using a method called magic state injection [67]. However, estimates suggest
+that the fault tolerant implementation of this technique could result in an order-of-magnitude
+increase in the total number of qubits required in the quantum computer [33].
+6.5. Experimental implementations of quantum error correction
+The realisation of the first fault tolerant logical qubit will mark an important milestone in the
+journey to build a quantum computer. To this end, laboratories at places such as Google [49], IBM
+Research [71,72] and TU Delft [73] are currently building superconducting devices with the long-
+21July26,2019
+term goal of realising a surface code logical qubit. Other efforts are currently underway pursuing
+qubit architectures based on ion-trap trap technology [48] and quantum optics [6].
+The threshold for the surface code under a realistic noise assumptions is approximately 1% [64].
+State-of-the-art qubit hardware has already been demonstrated with error rates below this level
+[11,74].However, suppressingthelogical errorratetothepointwherethelogical qubitoutperforms
+an un-encoded qubit will require levels of scaleability that are not yet possible with current exper-
+iments. It is predicted that the first fault tolerant surface code logical qubits will require a lattice
+with over a thousand qubits [34]. To put the scale of the challenge that remains into context, the
+largest quantum computers to date have less than one hundredqubits. Furthermore, achieving this
+goal will only be the first step: a quantum computer with only a single logical qubit will be no
+more powerful than an abacus with one bead. In fact, it is currently estimated that a fault tolerant
+surface code quantum computer with the ability to outperform a classical device for a useful task
+will require over a million qubits in total [33,75].
+The first quantum protocols to achieve fault tolerance will likely be quantum detection codes.
+As the smallest code capable of protecting against a quantum error model, the [[4,2,2]] code is a
+promising candidate. Several proof-of-concept implementations of the [[4,2,2]] code have already
+been demonstrated in [41,76–78]. Repetition codes (from the same family as the two- and three-
+qubit codes outlined in this review) have also been implemented on qubit hardware [79]. Over the
+pastcoupleofyears,severalquantumcomputinghardwareprojectshavedevelopedcloudplatforms
+to allow the public to program their devices. This makes it is possible for interested readers to test
+someoftheearlyproof-of-conceptquantumcodes.Forexample,atutorialshowinghowarepetition
+code can beimplemented on the IBM Q device can be found in the supplementary material of [79].
+7. Outlook & Summary
+A major hurdle in the realisation of a full-scale quantum computer stems from the challenge of
+controlling qubits in an error free way. Quantum error correction protocols offer a solution to this
+problem, in principle allowing for arbitrary suppression of the logical error rate provided certain
+threshold conditions on the physical qubits are met. However, there is a trade-off: quantum error
+correction protocols require large number of qubits to operate effectively. This will significantly
+increase the overheads associated with quantum computing.
+Developing quantum codes is not straightforward. Complications arise due the no-cloning theo-
+rem,theproblemofwavefunction collapseandnecessitytodealwithmultipleerrortypes.Stabilizer
+codesprovideaformalismthatallowquantumerrorcorrectioncodestobeconstructedwithinthese
+constraints. For stabilizer codes, quantum redundancy is achieved by entangling the quantum in-
+formation in the initial register across an expanded space of qubits. Errors can then be detected by
+performing a series of projective stabilizer measurements, and the results interpreted to determine
+the best recovery operation to restore the quantum information to its intended state.
+The surface code is currently the most widely pursued quantum error correction scheme for
+experiment. This is due to its comparatively high threshold combined with the fact it requires only
+nearest-neighbour interactions. However, there are drawbacks to the surface code, most notably its
+poor encoding density. The distance of the surface code can be increased simply by scaling the size
+of the qubit lattice, but this results in a vanishing code rate, where the rate is defined as the ratio
+of encoded qubits to physical qubits R = k/n. Another disadvantage to the surface code is that
+resource intensive methods are required to obtain a universal encoded gate set.
+Alternatives to the surface code have been proposed based on different tilings of the qubit lattice
+[80], as well as extensions to higher dimensions [70,81]. These constructions typically have lower
+thresholds, but offer other advantages such as (potentially) easier access to universal encoded gate
+sets [70]. Efforts are also in progress to develop code constructions with non-vanishing rates based
+on principles from high-performance classical codes [45,59]. However, for these codes, it is often
+22July26,2019
+necessary to perform arbitrary long range interactions between the code qubits.
+Inthequesttobuildacircuitmodelquantumcomputertherearemanychallengestobeovercome.
+At the hardware level, methods for the realisation and control of qubits need to be improved. In
+addition to this, a major theoretical challenge lies in finding better ways to achieve fault tolerant
+errorcorrection. Thesetwo problemswillhave tobeapproachedin parallel, withadvances ineither
+influencing the direction of the other.
+Acknowledgement(s)
+JR acknowledges the support of the QCDA project which has received funding from the Quan-
+tERA ERA-NET Cofund in Quantum Technologies implemented within the European Unions
+Horizon 2020 Programme. Many thanks to Viv Kendon for useful discussions and help preparing
+and checking the manuscript. Special thanks to Benjamin Jones and Armanda Ottaviano Quin-
+tavalle for reading through eary versions of the manuscript and providing valuable suggestions for
+improvement. Thanks also to Earl Campbell and Yingkai Ouyang for useful discussions, as well as
+to Jasminder Sidhu for helping with tikz drawings. The quantum circuit diagrams in this review
+were drawn using the QPIC package [82].
+Notes on contributor(s)
+Joschka Roffe studied MPhys physics at TheUniversity Manchester, graduating in 2015. Following
+this, he studied a PhD in Quantum Computing at Durham University under the supervision of
+Viv Kendon. He now works as a research associate at the The University of Sheffield as part of the
+Quantum Codes Designs and Architectures (QCDA) project.
+References
+[1] Shor PW. Polynomial-time algorithms for prime factorization and discrete logarithms on a quantum
+computer. SIAM Journal on Computing. 1997;26(5):1484–1509.
+[2] Grover LK. A fast quantum mechanical algorithm for database search. In: STOC; 1996.
+[3] Schuld M, Sinayskiy I, Petruccione F. An introduction to quantum machine learning. Contemporary
+Physics. 2014;56(2):172–185.Available from: https://doi.org/10.1080/00107514.2014.964942.
+[4] Aspuru-Guzik A, Dutoi AD, Love PJ, et al. Simulated quantum computa-
+tion of molecular energies. Science. 2005;309(5741):1704–1707. Available from:
+https://science.sciencemag.org/content/309/5741/1704.
+[5] Wang XL, Chen LK, Li W, et al. Experimental ten-photon entanglement. Physical Review Letters.
+2016;117(21).Available from: https://doi.org/10.1103/physrevlett.117.210502.
+[6] Qiang X, Zhou X, Wang J, et al. Large-scale silicon quantum photonics implement-
+ing arbitrary two-qubit processing. Nature Photonics. 2018;12(9):534–539. Available from:
+https://doi.org/10.1038/s41566-018-0236-y.
+[7] RandallJ,Weidt S, Standing ED,et al.Efficient preparationanddetection ofmicrowavedressed-state
+qubits and qutrits with trapped ions. Physical Review A. 2015;91(1).
+[8] Ballance C, Harty T, Linke N, et al. High-fidelity quantum logic gates using trapped-ion hyperfine
+qubits. Physical Review Letters. 2016;117(6).
+[9] Brandl MF, van Mourik MW, Postler L, et al. Cryogenic setup for trapped ion quantum computing.
+Review of Scientific Instruments. 2016;87(11):113103.
+[10] Debnath S, Linke NM, Figgatt C, et al. Demonstration of a small programmable quantum computer
+with atomic qubits. Nature. 2016;536(7614):63.
+[11] Chow JM, Gambetta JM, C´orcoles AD, et al. Universal quantum gate set approaching fault-
+23July26,2019
+tolerantthresholdswithsuperconductingqubits.PhysicalReviewLetters.2012;109(6).Availablefrom:
+https://doi.org/10.1103/physrevlett.109.060501.
+[12] Chen Y, Neill C, Roushan P, et al. Qubit architecture with high coher-
+ence and fast tunable coupling. Phys Rev Lett. 2014;113:220502. Available from:
+https://link.aps.org/doi/10.1103/PhysRevLett.113.220502.
+[13] Wendin G. Quantum information processing with superconducting circuits: a
+review. Reports on Progress in Physics. 2017;80(10):106001. Available from:
+https://doi.org/10.1088/1361-6633/aa7e1a.
+[14] Kane BE. A silicon-based nuclear spin quantum computer. Nature. 1998;393(6681):133–137.Available
+from: https://doi.org/10.1038/30156.
+[15] HillCD, PeretzE,Hile SJ,et al.Asurface code quantumcomputer in silicon.Science Advances.2015;
+1(9):e1500707.Available from: https://doi.org/10.1126/sciadv.1500707.
+[16] van der Heijden J, KobayashiT, House MG, et al. Readout and control of the spin-orbit states of two
+coupled acceptor atoms in a silicon transistor. Science Advances. 2018;4(12):eaat9199.Available from:
+https://doi.org/10.1126/sciadv.aat9199.
+[17] Shannon CE. A mathematical theory of communication. University of Illinois Press; 1949.
+[18] Hamming RW. Error detecting and error correcting codes. Bell System Technical Journal. 1950;
+29(2):147–160.Available from: https://doi.org/10.1002/j.1538-7305.1950.tb00463.x.
+[19] MacKayDJ. Informationtheory,inference andlearningalgorithms.CambridgeUniversityPress;2003.
+[20] Wootters WK, Zurek WH. A single quantum cannot be cloned. Nature. 1982;299(5886):802–803.
+[21] ShorPW.Schemeforreducingdecoherenceinquantumcomputermemory.PhysRevA.1995;52:R2493.
+[22] Preskill J. Reliable quantum computers. Proceedings of the Royal Society of London
+A: Mathematical, Physical and Engineering Sciences. 1998;454(1969):385–410. Available from:
+http://rspa.royalsocietypublishing.org/content/454/1969/385.
+[23] Kitaev AY. Quantum computations: algorithms and error correction. Russian Mathematical Surveys.
+1997;52(6):1191–1249.Available from: https://doi.org/10.1070/rm1997v052n06abeh002155.
+[24] Aharonov D, Ben-Or M. Fault-tolerant quantum computation with constant error. In: Proceedings of
+the Twenty-ninth Annual ACM Symposium on Theory of Computing; New York, NY, USA. ACM;
+1997.p. 176–188;STOC ’97. Available from: http://doi.acm.org/10.1145/258533.258579.
+[25] Knill E. Resilient quantum computation. Science. 1998;279(5349):342–345. Available from:
+https://doi.org/10.1126/science.279.5349.342.
+[26] Gottesman D. Theory of fault-tolerant quantum computation. Physical Review A. 1998;57(1):127.
+[27] Gaitan F. Quantum error correction and fault tolerant quantum computing. CRC Press; 2008.
+[28] Gottesman D. An introduction to quantum error correction and fault-tolerant quantum computation.
+arXiv:09042557.2009;.
+[29] Quantum information processing and quantum error correction: An engineering approach. Elsevier;
+2012.Available from: https://doi.org/10.1016/c2010-0-66917-3.
+[30] Devitt SJ, Munro WJ, Nemoto K. Quantum error correction for beginners. Reports on Progress in
+Physics. 2013;76(7):076001.Available from: https://doi.org/10.1088/0034-4885/76/7/076001.
+[31] Lidar D, Brun T. Quantum error correction. Cambridge University Press; 2013.
+[32] Terhal BM. Quantum error correction for quantum memories. Reviews of Modern Physics. 2015;
+87(2):307–346.Available from: https://doi.org/10.1103/revmodphys.87.307.
+[33] Campbell ET, Terhal BM, Vuillot C. Roads towards fault-tolerant universal quantum computation.
+Nature. 2017;549(7671):172–179.Available from: https://doi.org/10.1038/nature23460.
+[34] Fowler AG, Mariantoni M, Martinis JM, et al. Surface codes: Towards practi-
+cal large-scale quantum computation. Physical Review A. 2012;86(3). Available from:
+https://doi.org/10.1103/physreva.86.032324.
+[35] NielsenM,ChuangI.Quantumcomputationandquantuminformation:10thanniversaryedition.Cam-
+bridge University Press, Cambridge, United Kingdom; 2010.
+[36] Knill E, Laflamme R. Theory of quantum error-correcting codes. Physical Review A. 1997;55(2):900–
+911.
+[37] Gottesman D. The Heisenberg representation of quantum computers. Group22: Proceedings of the
+XXII International Colloquium on Group Theoretical Methods in Physics, pp 32-43, Cambridge, MA,
+International Press. 1999;.
+[38] VaidmanL,GoldenbergL,WiesnerS.Errorpreventionschemewithfourparticles.PhysicalReviewA.
+24July26,2019
+1996;54(3):R1745–R1748.
+[39] Grassl M, Beth T, Pellizzari T. Codes for the quantum erasure channel. Physical Review A. 1997;
+56(1):33–38.
+[40] Gottesman DE. Stabilizer codes and quantum error correction [dissertation]; 1997. Available from:
+http://resolver.caltech.edu/CaltechETD:etd-07162004-113028.
+[41] Roffe J, Headley D, Chancellor N, et al. Protecting quantum memories using coherent parity check
+codes. Quantum Science and Technology. 2018;3(3):035010.
+[42] CalderbankAR,ShorPW.Goodquantumerror-correctingcodesexist.PhysRevA.1996;54:1098–1106.
+[43] Steane A. Error correcting codes in quantum theory. Phys Rev Lett. 1996;77:793–797.
+[44] Kovalev AA, Pryadko LP. Quantum kronecker sum-product low-density parity-
+check codes with finite rate. Physical Review A. 2013;88(1). Available from:
+https://doi.org/10.1103/physreva.88.012311.
+[45] Tillich JP, Zemor G. Quantum LDPC codes with positive rate and minimum distance proportional to
+the square root of the blocklength. IEEE Transactions on Information Theory. 2014;60(2):1193.
+[46] BravyiSB, Kitaev AY. Quantum codes on a lattice with boundary. arXiv:quant-ph/9811052.1998;.
+[47] Freedman MH, Meyer DA. Projective plane and planar quantum codes ; 1998.
+[48] NickersonNH,FitzsimonsJF,BenjaminSC.Freelyscalablequantumtechnologiesusingcellsof5-to-50
+qubits with very lossy and noisy photonic links. Physical Review X. 2014;4(4):041041.
+[49] KellyJ,BarendsR,FowlerAG,etal.Scalableinsituqubitcalibrationduringrepetitive errordetection.
+Physical Review A. 2016;94(3).
+[50] Sete EA, Zeng WJ, Rigetti CT. A functional architecture for scalable quantum computing. In: 2016
+IEEE International Conference on Rebooting Computing (ICRC). IEEE; 2016.
+[51] O’GormanJ, NickersonNH, Ross P, et al. A silicon-basedsurface code quantum computer. npj Quan-
+tum Information. 2016;2(1).Available from: https://doi.org/10.1038/npjqi.2015.19.
+[52] TakitaM,CrossAW,C´orcolesA,etal.Experimentaldemonstrationoffault-tolerantstatepreparation
+with superconducting qubits. Physical Review Letters. 2017;119(18).
+[53] Kitaev A. Fault-tolerantquantum computationby anyons.Annals ofPhysics.2003;303(1):2–30.Avail-
+able from: https://doi.org/10.1016/s0003-4916(02)00018-0.
+[54] HorsmanC,FowlerA,DevittS,etal.Surfacecodequantumcomputingbylatticesurgery.NewJournal
+of Physics. 2012;14(12):123011.
+[55] Edmonds J. Paths, trees, and flowers. Canadian Journal of Mathematics. 1965;17:449–467.
+[56] Kolmogorov V. Blossom v: a new implementation of a minimum cost perfect matching algorithm.
+Mathematical ProgrammingComputation. 2009;1(1):43–67.
+[57] DennisE,KitaevA,LandahlA,etal.Topologicalquantummemory.JournalofMathematicalPhysics.
+2002;43(9):4452–4505.
+[58] Criger B, Ashraf I. Multi-path Summation for Decoding 2D TopologicalCodes. Quantum. 2018;2:102.
+Available from: https://doi.org/10.22331/q-2018-10-19-102.
+[59] Gottesman D. Fault-tolerant quantum computation with constant overhead. Quantum Info Comput.
+2014;14(15-16):1338–1372.Availablefrom: http://dl.acm.org/citation.cfm?id=2685179.2685184.
+[60] Shor P. Fault-tolerant quantum computation. In: Proceedings of 37th Conference on
+Foundations of Computer Science. IEEE Comput. Soc. Press; ???? Available from:
+https://doi.org/10.1109/sfcs.1996.548464.
+[61] SteaneAM.Activestabilization,quantumcomputation,andquantumstatesynthesis.PhysicalReview
+Letters. 1997;78(11):2252.
+[62] DiVincenzo DP, Aliferis P. Effective fault-tolerant quantum computation with
+slow measurements. Physical Review Letters. 2007;98(2). Available from:
+https://doi.org/10.1103/physrevlett.98.020501.
+[63] ChaoR,ReichardtBW.Quantumerrorcorrectionwithonlytwoextraqubits.PhysicalReviewLetters.
+2018;121(5).Available from: https://doi.org/10.1103/physrevlett.121.050502.
+[64] Wang DS, Fowler AG, Stephens AM, et al. Threshold error rates for the toric
+and planar codes. Quantum Info Comput. 2010;10(5):456–469. Available from:
+http://dl.acm.org/citation.cfm?id=2011362.2011368.
+[65] Dawson CM, Nielsen MA. The solovay-kitaev algorithm. 2005;.
+[66] Eastin B, Knill E. Restrictions on transversal encoded quantum gate sets. Physical Review Letters.
+2009;102(11).Available from: https://doi.org/10.1103/physrevlett.102.110502.
+25July26,2019
+[67] BravyiS,KitaevA.Universalquantumcomputationwithidealcliffordgatesandnoisyancillas.Physical
+Review A. 2005;71(2).Available from: https://doi.org/10.1103/physreva.71.022316.
+[68] Landahl AJ, Ryan-Anderson C. Quantum computing by color-code lattice surgery ; 2014.
+[69] YoderTJ.Universalfault-tolerantquantumcomputationwithbacon-shorcodes.arXiv:170501686.2017;
+.
+[70] Vasmer M, Browne DE. Universal quantum computing with 3d surface codes. arXiv:180104255.2018;.
+[71] Gambetta JM, Chow JM, Steffen M. Building logical qubits in a superconduct-
+ing quantum computing system. npj Quantum Information. 2017;3(1). Available from:
+https://doi.org/10.1038/s41534-016-0004-0.
+[72] TakitaM,CrossAW,C´orcolesA,etal.Experimentaldemonstrationoffault-tolerantstatepreparation
+with superconducting qubits. Physical Review Letters. 2017;119(18).
+[73] Rist`eD,PolettoS,HuangMZ,etal.Detectingbit-fliperrorsinalogicalqubitusingstabilizermeasure-
+ments. Nature Communications. 2015;6(1). Available from: https://doi.org/10.1038/ncomms7983.
+[74] Harty T, Allcock D, Ballance C, et al. High-fidelity preparation, gates, memory, and readout of a
+trapped-ion quantum bit. Physical Review Letters. 2014;113(22).
+[75] O’GormanJ,CampbellET.Quantumcomputationwithrealisticmagic-statefactories.PhysicalReview
+A. 2017;95(3).Available from: https://doi.org/10.1103/physreva.95.032338.
+[76] LinkeNM,GutierrezM,LandsmanKA,etal.Fault-tolerantquantumerrordetection.ScienceAdvances.
+2017;3(10):e1701074.Available from: https://doi.org/10.1126/sciadv.1701074.
+[77] Vuillot C. Is error detection helpful on IBM 5q chips? Quantum Information and Computation. 2018;,
+Vol. 18, No. 11-12:0949–0964.
+[78] Harper R, Flammia ST. Fault-tolerant logical gates in the IBM quantum experience. Phys Rev Lett.
+2019;122:080504.Available from: https://link.aps.org/doi/10.1103/PhysRevLett.122.080504.
+[79] Wootton JR, Loss D. Repetition code of 15 qubits. Physical Review A. 2018;97(5). Available from:
+https://doi.org/10.1103/physreva.97.052313.
+[80] Bombin H, Martin-Delgado MA. Optimal resources for topological two-dimensional
+stabilizer codes: Comparative study. Physical Review A. 2007;76(1). Available from:
+https://doi.org/10.1103/physreva.76.012305.
+[81] Breuckmann NP, Terhal BM. Constructions and noise threshold of hyperbolic surface codes. IEEE
+Transactions on Information Theory. 2016;62(6):3731.
+[82] Draper T, Kutin S. QPIC: Quantum circuit diagrams in LaTeX. ????;Available from:
+https://github.com/qpic/qpic.
+Appendix A. Notation for quantum states
+InthisreviewquantumstatesarerepresentedusingDiracbra-ketnotation.Unlessotherwisestated,
+weusethecomputationalbasis,givenby 0 , 1 inthesingle-qubitcase.Forexample,thegeneral
+{| i | i}
+qubit state is written
+ψ = α 0 +β 1 . (A1)
+| i | i | i
+For multi-qubit systems, we adopt a labelling convention whereby qubits are implicitly labelled
+1,..,n from left-to-right, where n is the total number of qubits. For example, the three-qubit basis
+element 010 is equivalent to 0 1 0 in its full tensor product form.
+| i | i1⊗| i2⊗| i3
+Appendix B. Pauli operator notation
+The Pauli group on a single-qubit, , is defined as the set of Pauli operators
+1
+G
+= 11, i11, X, iX, Y, iY, Z, iZ , (B1)
+1
+G {± ± ± ± ± ± ± ± }
+26July26,2019
+where the 1 and i terms are included to ensure is closed under multiplication and thus forms
+1
+± ± G
+a legitimate group. In matrix form, the four Pauli operators are given by
+1 0 0 1 0 i 1 0
+11 = , X = , Y = − , Z = . (B2)
+(cid:18)0 1(cid:19) (cid:18)1 0(cid:19) (cid:18)i 0 (cid:19) (cid:18)0 1(cid:19)
+−
+Thegeneral Pauligroup, ,consistsofthesetofalloperatorsthatareformedfromtensorproducts
+G
+of the matrices in . For example, the operator
+1
+G
+11 X 11 Y (B3)
+⊗ ⊗ ⊗ ∈ G
+is an element of the four-qubit Pauli group. The support of a Pauli operator is given by the list of
+its non-identity elements. For example, the support of the Pauli operator in equation (B3) is X Y
+2 4
+where the indices point to the qubit each element acts on. In this review, Pauli errors are always
+written in terms of their support. As an example, we would say that the bit-flip error X acts on
+2
+the two-qubit basis element 00 as follows X 00 = 01 .
+2
+| i | i | i
+Appendix C. Quantum circuit notation
+Quantumcircuitnotationprovidesausefulwayofrepresentingquantumalgorithms.Thisappendix
+introduces the basic elements of quantum circuit notation necessary to understand quantum error
+correction circuits.
+C.1. Single qubit gates
+In quantum circuit representation of quantum algorithms each qubit in the quantum register is
+assigned a wire. These wires are labelled with quantum gates from left-to-right in the order in
+which they are applied during the quantum computation. As an example, consider the quantum
+computation described by the application of the unitary operation U = X Z to a general qubit
+1 1
+state,
+ψ = α 0 +β 1
+U=X1Z1
+X Z ψ = α 1 β 0 . (C1)
+1 1
+| i | i | i −−−−−→ | i | i− | i
+The quantum circuit for the above computation on a single-qubit is shown below
+ψ Z X XZ ψ ,
+| i | i
+where the input state is on the left and the output on the right. Note that the Z-gate is placed
+before the X-gate as it is applied first.
+Animportantsingle-qubitgateforquantumerrorcorrection(andquantumalgorithmsingeneral)
+is the Hadamard gate which is defined in matrix-form as
+1 1
+H = . (C2)
+(cid:18)1 1(cid:19)
+−
+27July26,2019
+The Hadamard gate has the following effect on the computational basis states
+1
+H 0 = (0 + 1 ),
+| i √2 | i | i
+(C3)
+1
+H 1 = (0 1 ).
+| i √2 | i−| i
+C.2. Multi-qubit gates
+Agate spanningtwo wires in a quantum circuit represents a multi-qubit operation. As an example,
+the quantum circuit for the operation U = X X applied the state ψ = 00 is given by
+1 2
+| i | i
+0 1
+| i | i
+X X .
+1 2
+0 1
+| i | i
+C.3. Controlled-gates
+A controlled gate is a gate whose action is conditional on the value of a ‘control’ qubit. In general,
+controlled gates are represented as follows in quantum circuit notation
+C
+| i
+.
+T G
+| i
+In the above circuit, the top qubit C is the control and the lower qubit T is the target. The single-
+qubit G-gate is applied to the target if the control qubit is set to C = 1 . If the control qubit is
+| i | i
+set to C = 0, the G-gate is not applied to the target.
+| i
+A commonly occurring gate in quantum error correction is the controlled-NOT (CNOT) gate. In
+this review, we use the two equivalent symbols for the CNOTgate
+= .
+X
+C.4. Measurement in the computation basis
+In all the circuits in this review measurement is performed in the computation basis. As an exam-
+ple, consider the following quantum circuit for generating random numbers (the ‘Hello World’ of
+quantum computing)
+0 H .
+| i
+where the computational basis measurement is depicted by the gate to the right. The above circuit
+outputs ‘0’ or ‘1’ with equal probability. The double lines at the end of the circuit indicate that
+the output is classical information.
+28July26,2019
+Appendix D. Commutation properties for Pauli operators
+TheelementsofthePauligrouphaveeigenvalues 1, i .Asaresult,Paulierrorseithercommute
+{± ± }
+or anti-commute with one another. In this appendix, we outline how to determine whether Pauli
+operators commute with one another.
+First, recall that two operators, F and F , commute if F F = F F , and anti-commute if F F =
+i j i j j i i j
+( 1)F F . For single-qubit Pauli-operators, wesee thatall pairs of distinctoperators anti-commute
+j i
+−
+X Z = Z X , X Y = Y X , Z Y = Y Z . (D1)
+1 1 1 1 1 1 1 1 1 1 1 1
+− − −
+Now consider the operators Z Z and X X . These multi-qubit operators commute as
+1 2 1 2
+Z Z X X = Z X Z X = ( 1)X Z ( 1)X Z = X X Z Z . (D2)
+1 2 1 2 1 1 2 2 1 1 2 2 1 2 1 2
+− −
+In general, two Pauli operators will commute with one another if they intersect non-trivially on
+an even number of qubits as above. Conversely, if the number of non-trivial intersections is odd,
+then the two operators anti-commute. As an example, consider the two operators X Z Z Z X
+1 2 3 5 7
+and X X X Z . These operators intersect on the qubits 1, 2, 5 and 7. However, the intersection on
+1 2 5 7
+qubit1 is trivial as both operators apply the same X-gate to that qubit. Thenumberof non-trivial
+intersections that remain is therefore three. As the two operators intersect non-trivially an odd
+number of times, the two operators anti-commute.
+29

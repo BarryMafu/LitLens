@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from utils import *
 from model import LanguageModel, ModelConfig
 import prompts as pr
+import gradio as gr
 
 @dataclass
 class LitLensConfig:
@@ -22,8 +23,8 @@ class LitLensConfig:
 
 class LitLens:
     def __init__(self,
+        config: LitLensConfig,
         model: LanguageModel = LanguageModel(),
-        config: LitLensConfig = LitLensConfig(),
     ):
         self.model = model 
         self.config = config
@@ -52,8 +53,6 @@ class LitLens:
         if self.config.verbose:
             print(f"Fetching reference papers ...")
         reference = get_reference(arxiv_id)
-        print("$ Cit count: ", len(cited))
-        print("$ Ref count: ", len(reference))
         if self.config.limit_cited > 0:
             cited = cited[:self.config.limit_cited] # TODO: Maybe another way
         if self.config.limit_reference > 0:
@@ -61,9 +60,10 @@ class LitLens:
 
         keywords = self.extract_keywords_model(paper_content)
         if self.config.verbose:
-            print(f"Fetching relative papers with keywords: {keywords}")
-        search = [paper['title'] for paper in search_arxiv(keywords, self.config.limit_search)]
-        print("$ Src count: ", len(search))
+            print(f"Fetching relative papers with keywords: {keywords}, limit: {self.config.limit_search}")
+        searched_papers = search_arxiv(keywords, self.config.limit_search)
+        print(searched_papers)
+        search = [paper['title'] for paper in searched_papers]
         return {
             "cited": cited,
             "reference": reference,
@@ -73,55 +73,77 @@ class LitLens:
     def first_round(self, papers, paper_content):
         """Select relevant papers from the first round."""
         if self.config.verbose:
-            print(f"Selecting papers... (Round 1 / 3)")
+            print(f"Selecting papers... (Round 1 / 2)")
         fr_prompts = pr.first_round(papers, self.config.count_first_round, paper_content)
         response = self.model.get_response(fr_prompts)
-        return response.splitlines() if response else []
+        # print("R1> ", response)
+        return [line for line in response.splitlines() if line.strip()] if response else []
     
     def second_round(self, paper_titles, paper_content):
         if self.config.verbose:
-            print(f"Selecting papers... (Round 2 / 3)")
+            print(f"Selecting papers... (Round 2 / 2)")
         paper_abstracts = []
         for title in paper_titles:
-            arxiv_id = get_arxiv_id_by_title(title)
-            print("#DBG 2 ", arxiv_id)
-            print("#DBG 2 ", get_basic_info(arxiv_id))
-            paper_abstracts.append(get_basic_info(arxiv_id)['summary'])
+            try:
+                arxiv_id = get_arxiv_id_by_title(title)
+                paper_abstracts.append(get_basic_info(arxiv_id)['summary'])
+            except:
+                paper_abstracts.append("")
         sr_prompt = pr.second_round(paper_titles, paper_abstracts, self.config.count_second_round, paper_content)
-        print(sr_prompt)
+        # print(sr_prompt)
         # return
         response = self.model.get_response(sr_prompt)
-        return response.splitlines() if response else []
+        # print("R2> ", response)
+        return [line for line in response.splitlines() if line.strip()] if response else []
     
+    # def third_round(self, paper_titles, paper_content):
+    #     if self.config.verbose:
+    #         print("Selecting papers... (Round 3 / 3)")
+    #     paper_contents = []
+    #     for title in paper_titles:
+    #         try:
+    #             arxiv_id = get_arxiv_id_by_title(title)
+    #             paper_contents.append(self.get_paper_content(arxiv_id))
+    #         except:
+    #             paper_contents.append("")
+    #     tr_prompt = pr.second_round(paper_titles, paper_contents, self.config.count_second_round, paper_content)
+    #     print(tr_prompt)
+    #     # return
+    #     response = self.model.get_response(tr_prompt)
+    #     return response.splitlines() if response else []
+    
+    def get_recommendations(self, arxiv_id: str, progress: gr.Progress)-> str:
+        print(f"arXiv:{arxiv_id}: ", get_basic_info(arxiv_id)['title'])
+        paper_content = self.get_paper_content(arxiv_id)
+        titles_r0 = self.get_all_papers(arxiv_id, paper_content)
+        print("$ Cited Count: ", len(titles_r0['cited']))
+        print("$ Reference Count: ", len(titles_r0['reference']))
+        print("$ Search Count: ", len(titles_r0['search']))
+        # print(titles_r0)
+        titles_r1 = self.first_round(titles_r0, paper_content)
+        print("First Round Papers: ", len(titles_r1))
+        titles_r2 = self.second_round(titles_r1, paper_content)
+        print("Second Round Papers: ", len(titles_r2))
+        return titles_r2
+        
 if __name__ == "__main__":
-    paper_name = "Routing-Aware Placement for Zoned Neutral Atom-based Quantum Computing"
-    arxiv_id = get_arxiv_id_by_title(paper_name)
+    arxiv_id = "2002.09783"
     print(f"arXiv:{arxiv_id}: ", get_basic_info(arxiv_id)['title'])
     litlens = LitLens()
     paper_content = litlens.get_paper_content(arxiv_id)
     paper_titles = litlens.get_all_papers(arxiv_id, paper_content)
     # print(paper_titles)
-    # first_round_papers = litlens.first_round(paper_titles, paper_content)
-    first_round_papers = paper_titles['cited'] + paper_titles['reference'] + paper_titles['search']
+    first_round_papers = litlens.first_round(paper_titles, paper_content)
+    # first_round_papers = paper_titles['cited'] + paper_titles['reference'] + paper_titles['search']
     print("First Round Papers: ", len(first_round_papers))
+    for paper in first_round_papers:
+        print("  R1] ", paper)
     second_round_papers = litlens.second_round(first_round_papers, paper_content)
     print("Second Round Papers: ", len(second_round_papers))
     for paper in second_round_papers:
-        print("  - ", paper)
+        print("  R2] ", paper)
+    # third_round_papers = litlens.third_round(second_round_papers, paper_content)
+    # print("Third Round Papers: ", len(third_round_papers))
+    # for paper in third_round_papers:
+    #     print("  R3] ", paper)
     
-def get_recommendations(paper_name: str)-> str:
-    arxiv_id = get_arxiv_id_by_title(paper_name)
-    print(f"arXiv:{arxiv_id}: ", get_basic_info(arxiv_id)['title'])
-    litlens = LitLens()
-    paper_content = litlens.get_paper_content(arxiv_id)
-    paper_titles = litlens.get_all_papers(arxiv_id, paper_content)
-    # print(paper_titles)
-    # first_round_papers = litlens.first_round(paper_titles, paper_content)
-    first_round_papers = paper_titles['cited'] + paper_titles['reference'] + paper_titles['search']
-    print("First Round Papers: ", len(first_round_papers))
-    second_round_papers = litlens.second_round(first_round_papers, paper_content)
-    print("Second Round Papers: ", len(second_round_papers))
-    ans = ""
-    for paper in second_round_papers:
-        ans = ans + "  - " + paper
-    return ans

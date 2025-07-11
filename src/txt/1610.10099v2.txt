@@ -1,0 +1,626 @@
+Neural Machine Translation in Linear Time
+NalKalchbrenner LasseEspeholt KarenSimonyan Aa¨ronvandenOord AlexGraves KorayKavukcuoglu
+GoogleDeepmind,LondonUK
+nalk@google.com
+Abstract
+t1 t2 t3 t4 t5 t6 t7 t8 t9 t10 t11 t12 t13 t14 t15 t16 t17
+We present a novel neural network for process-
+ingsequences.TheByteNetisaone-dimensional
+convolutionalneuralnetworkthatiscomposedof
+twoparts,onetoencodethesourcesequenceand
+theothertodecodethetargetsequence. Thetwo
+network parts are connected by stacking the de-
+coder on top of the encoder and preserving the t0 t1 t2 t3 t4 t5 t6 t7 t8 t9 t10 t11 t12 t13 t14 t15 t16
+temporal resolution of the sequences. To ad-
+dress the differing lengths of the source and the
+target, we introduce an efficient mechanism by
+whichthedecoderisdynamicallyunfoldedover
+the representation of the encoder. The ByteNet
+uses dilation in the convolutional layers to in-
+crease its receptive field. The resulting network
+has two core properties: it runs in time that
+s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16
+is linear in the length of the sequences and it
+sidesteps the need for excessive memorization. Figure1.The architecture of the ByteNet. The target decoder
+TheByteNetdecoderattainsstate-of-the-artper- (blue)isstackedontopofthesourceencoder(red). Thedecoder
+generatesthevariable-lengthtargetsequenceusingdynamicun-
+formanceoncharacter-levellanguagemodelling
+folding.
+and outperforms the previous best results ob-
+tained with recurrent networks. The ByteNet
+also achieves state-of-the-art performance on
+representationofthesourceencodertogeneratethetarget
+character-to-charactermachinetranslationonthe
+sequence(Kalchbrenner&Blunsom,2013).
+English-to-German WMT translation task, sur-
+passing comparable neural translation models Recurrent neural networks (RNN) are powerful sequence
+that are based on recurrent networks with atten- models(Hochreiter&Schmidhuber,1997)andarewidely
+tional pooling and run in quadratic time. We usedinlanguagemodelling(Mikolovetal.,2010),yetthey
+findthatthelatentalignmentstructurecontained have a potential drawback. RNNs have an inherently se-
+intherepresentationsreflectstheexpectedalign- rialstructurethatpreventsthemfrombeingruninparallel
+mentbetweenthetokens. along the sequence length during training and evaluation.
+Forward and backward signals in a RNN also need to tra-
+versethefulldistanceoftheserialpathtoreachfromone
+1.Introduction
+token in the sequence to another. The larger the distance,
+theharderitistolearnthedependenciesbetweenthetokens
+In neural language modelling, a neural network estimates
+(Hochreiteretal.,2001).
+a distribution over sequences of words or characters that
+belong to a given language (Bengio et al., 2003). In neu- A number of neural architectures have been proposed
+ral machine translation, the network estimates a distribu- for modelling translation, such as encoder-decoder net-
+tion over sequences in the target language conditioned on works (Kalchbrenner & Blunsom, 2013; Sutskever et al.,
+agivensequenceinthesourcelanguage. Thenetworkcan 2014;Choetal.,2014;Kaiser&Bengio,2016),networks
+bethoughtofascomposedoftwoparts: asourcenetwork with attentional pooling (Bahdanau et al., 2014) and two-
+(theencoder)thatencodesthesourcesequenceintoarep- dimensional networks (Kalchbrenner et al., 2016a). De-
+resentationandatargetnetwork(thedecoder)thatusesthe spitethegenerallygoodperformance,theproposedmodels
+7102
+raM
+51
+]LC.sc[
+2v99001.0161:viXraNeuralMachineTranslationinLinearTime
+EOS EOS EOS
+t
+| |
+ˆt
+| |
+s
+| |
+Figure2.DynamicunfoldingintheByteNetarchitecture.Ateachstepthedecoderisconditionedonthesourcerepresentationproduced
+bytheencoderforthatstep,orsimplyonnorepresentationforstepsbeyondtheextendedlength|ˆt|.Thedecodingendswhenthetarget
+networkproducesanend-of-sequence(EOS)symbol.
+eitherhaverunningtimethatissuper-linearinthelengthof tance between the tokens. Dependencies over large dis-
+thesourceandtargetsequences,ortheyprocessthesource tancesareconnectedbyshortpathsandcanbelearntmore
+sequenceintoaconstantsizerepresentation,burdeningthe easily.
+modelwithamemorizationstep. Bothofthesedrawbacks
+We apply the ByteNet model to strings of characters
+growmoresevereasthelengthofthesequencesincreases.
+for character-level language modelling and character-to-
+We present a family of encoder-decoder neural networks character machine translation. We evaluate the decoder
+that are characterized by two architectural mechanisms network on the Hutter Prize Wikipedia task (Hutter,
+aimed to address the drawbacks of the conventional ap- 2012) where it achieves the state-of-the-art performance
+proaches mentioned above. The first mechanism involves of 1.31 bits/character. We further evaluate the encoder-
+thestackingofthedecoderontopoftherepresentationof decoder network on character-to-character machine trans-
+the encoder in a manner that preserves the temporal res- lation on the English-to-German WMT benchmark where
+olution of the sequences; this is in contrast with architec- it achieves a state-of-the-art BLEU score of 22.85 (0.380
+turesthatencodethesourceintoafixed-sizerepresentation bits/character)and25.53(0.389bits/character)onthe2014
+(Kalchbrenner & Blunsom, 2013; Sutskever et al., 2014). and2015testsets,respectively. Onthecharacter-levelma-
+The second mechanism is the dynamic unfolding mecha- chine translation task, ByteNet betters a comparable ver-
+nismthatallowsthenetworktoprocessinasimpleandef- sion of GNMT (Wu et al., 2016a) that is a state-of-the-art
+ficientwaysourceandtargetsequencesofdifferentlengths system. These results show that deep CNNs are simple,
+(Sect.3.2). scalableandeffectivearchitecturesforchallenginglinguis-
+ticprocessingtasks.
+The ByteNet is the instance within this family of models
+that uses one-dimensional convolutional neural networks The paper is organized as follows. Section 2 lays out the
+(CNN)offixeddepthforboththeencoderandthedecoder background and some desiderata for neural architectures
+(Fig.1).ThetwoCNNsuseincreasingfactorsofdilationto underlying translation models. Section 3 defines the pro-
+rapidlygrowthereceptivefields;asimilartechniqueisalso posedfamilyofarchitecturesandthespecificconvolutional
+used in (van den Oord et al., 2016a). The convolutions in instance(ByteNet)usedintheexperiments.Section4anal-
+thedecoderCNNaremaskedtopreventthenetworkfrom ysesByteNetaswellasexistingneuraltranslationmodels
+seeing future tokens in the target sequence (van den Oord basedonthedesideratasetoutinSection2. Section5re-
+etal.,2016b). portstheexperimentsonlanguagemodellingandSection6
+reportstheexperimentsoncharacter-to-charactermachine
+The network has beneficial computational and learning
+translation.
+properties. Fromacomputationalperspective,thenetwork
+hasarunningtimethatislinearinthelengthofthesource
+and target sequences (up to a constant c logd where 2.NeuralTranslationModel
+≈
+d is the size of the desired dependency field). The com-
+Given a string s from a source language, a neural transla-
+putation in the encoder during training and decoding and
+tionmodelestimatesadistributionp(ts)overstringstof
+in the decoder during training can also be run efficiently |
+atargetlanguage.Thedistributionindicatestheprobability
+in parallel along the sequences (Sect. 2). From a learn-
+of a string t being a translation of s. A product of condi-
+ing perspective, the representation of the source sequence
+tionalsoverthetokensinthetargett = t ,...,t leadsto
+intheByteNetisresolutionpreserving; therepresentation 0 N
+atractableformulationofthedistribution:
+sidesteps the need for memorization and allows for maxi-
+malbandwidthbetweenencoderanddecoder. Inaddition,
+thedistancetraversedbyforwardandbackwardsignalsbe-
+N
+tweenanyinputandoutputtokenscorrespondstothefixed (cid:89)
+p(ts)= p(t t ,s) (1)
+i <i
+depthofthenetworksandislargelyindependentofthedis- | |
+i=0NeuralMachineTranslationinLinearTime
+Eachconditionalfactorexpressescomplexandlong-range
+dependencies among the source and target tokens. The
++
+strings are usually sentences of the respective languages; 2d
+the tokens are words or, as in the our case, characters. 1 ⇥ 1 2d +
+Thenetworkthatmodelsp(t | s)iscomposedoftwoparts: ReLU 1 ⇥ 1 d ⇥ +
+a source network (the encoder) that processes the source Layer-Norm 1⇥1MU tanh
+string into a representation and a target network (the de- +
+coder) that uses the source representation to generate the
+Masked1
+⇥
+k Masked1⇥kMU
+⇥ ⇥
+target string (Kalchbrenner & Blunsom, 2013). The de- ReLU ReLU
+    tanh  
+coder functions as a language model for the target lan- Layer-Norm Layer-Norm d d d d
+guage. d d
+1 1 1 1
+⇥ ⇥ Layer-Norm
+Aneuraltranslationmodelhassomebasicproperties. The
+ReLU ReLU
+decoderisautoregressiveinthetargettokensandthemodel
+issensitivetotheorderingofthetokensinthesourceand Layer-Norm 2d Layer-Norm 2d Masked1 ⇥ k d
+target strings. It is also useful for the model to be able
+to assign a non-zero probability to any string in the target
+languageandretainanopenvocabulary. Figure3.Left: Residual block with ReLUs (He et al., 2016)
+adapted for decoders. Right: Residual Multiplicative Block
+adapted for decoders and corresponding expansion of the MU
+2.1.Desiderata
+(Kalchbrenneretal.,2016b).
+Beyond these basic properties the definition of a neural
+(Sect.3.2). Thedecoderisalanguagemodelthatisformed
+translation model does not determine a unique neural ar-
+of one-dimensional convolutional layers that are masked
+chitecture,soweaimatidentifyingsomedesiderata.
+(Sect. 3.4) and use dilation (Sect. 3.5). The encoder pro-
+First, the running time of the network should be linear in cessesthesourcestringintoarepresentationandisformed
+the length of the source and target strings. This ensures of one-dimensional convolutional layers that use dilation
+that the model is scalable to longer strings, which is the butarenotmasked. Figure1depictsthetwonetworksand
+casewhenusingcharactersastokens. theircombination.
+The use of operations that run in parallel along the se-
+3.1.Encoder-DecoderStacking
+quence length can also be beneficial for reducing compu-
+tationtime. A notable feature of the proposed family of architectures
+isthewaytheencoderandthedecoderareconnected. To
+Second,thesizeofthesourcerepresentationshouldbelin-
+maximize the representational bandwidth between the en-
+earinthelengthofthesourcestring, i.e. itshouldberes-
+coder and the decoder, we place the decoder on top of
+olution preserving, and not have constant size. This is to
+the representation computed by the encoder. This is in
+avoid burdening the model with an additional memoriza-
+contrasttomodelsthatcompressthesourcerepresentation
+tionstepbeforetranslation. Inmoregeneralterms,thesize
+into a fixed-size vector (Kalchbrenner & Blunsom, 2013;
+ofarepresentationshouldbeproportionaltotheamountof
+Sutskever et al., 2014) or that pool over the source rep-
+informationitrepresentsorpredicts.
+resentation with a mechanism such as attentional pooling
+Third,thepathtraversedbyforwardandbackwardsignals (Bahdanauetal.,2014).
+inthenetwork(betweeninputandouputtokens)shouldbe
+short.Shorterpathswhoselengthislargelydecoupledfrom 3.2.DynamicUnfolding
+thesequencedistancebetweenthetwotokenshavethepo-
+Anencoderandadecodernetworkthatprocesssequences
+tential to better propagate the signals (Hochreiter et al.,
+ofdifferentlengthscannotbedirectlyconnectedduetothe
+2001)andtoletthenetworklearnlong-rangedependencies
+different sizes of the computed representations. We cir-
+moreeasily.
+cumventthisissueviaamechanismwhichwecalldynamic
+unfolding,whichworksasfollows.
+3.ByteNet
+Givensourceandtargetsequencessandtwithrespective
+We aim at building neural language and translation mod- lengths s and t,onefirstchoosesasufficientlytightup-
+els that capture the desiderata set out in Sect. 2.1. The perboun | d | ˆ t on | t | hetargetlength t asalinearfunctionof
+proposed ByteNet architecture is composed of a de- | | | |
+thesourcelength s:
+coder that is stacked on an encoder (Sect. 3.1) and | |
+generates variable-length outputs via dynamic unfolding ˆ t =as +b (2)
+| | | |NeuralMachineTranslationinLinearTime
+t t t t t t t t t t t t
+1 2 3 4 5 6 1 2 3 4 5 6 500
+400
+300
+t 0 t 1 t 2 t 3 t 4 t 5 t 0 t 1 t 2 t 3 t 4 t 5 200
+100
+0
+0 100 200 300 400 500
+German
+s 0 s 1 s 2 s 3 s 4 s 5 s 0 s 1 s 2 s 3 s 4 s 5
+Figure4.RecurrentByteNetvariantsoftheByteNetarchitecture.
+Left: RecurrentByteNetwithconvolutionalsourcenetworkand
+recurrenttargetnetwork. Right: RecurrentByteNetwithbidirec-
+tionalrecurrentsourcenetworkandrecurrenttargetnetwork.The
+latterarchitectureisastrictgeneralizationoftheRNNEnc-Dec
+network.
+Thetightupperbound ˆ t ischoseninsuchawaythat,on
+| |
+theonehand,itisgreaterthantheactuallength t inalmost
+| | allcasesand,ontheotherhand,itdoesnotincreaseexces-
+sively the amount of computation that is required. Once
+a linear relationship is chosen, one designs the source en-
+coder so that, given a source sequence of length s, the
+| | encoder outputs a representation of the established length
+ˆ t.Inourcase,weleta=1.20andb=0whentranslating
+| | fromEnglishintoGerman,asGermansentencestendtobe
+somewhat longer than their English counterparts (Fig. 5).
+Inthismannertherepresentationproducedbytheencoder
+canbeefficientlycomputed,whilemaintaininghighband-
+width and being resolution-preserving. Once the encoder
+representationiscomputed,weletthedecoderunfoldstep-
+by-stepovertheencoderrepresentationuntilthedecoderit-
+selfoutputsanend-of-sequencesymbol;theunfoldingpro-
+cessmayfreelyproceedbeyondtheestimatedlength ˆ t of
+| |
+the encoder representation. Figure 2 gives an example of
+dynamicunfolding.
+3.3.InputEmbeddingTensor
+Given the target sequence t = t ,...,t the ByteNet de-
+0 n
+coder embeds each of the first n tokens t ,...,t via a
+0 n−1
+look-uptable(thentokenst ,...,t serveastargetsforthe
+1 n
+predictions). The resulting embeddings are concatenated
+intoatensorofsizen 2dwheredisthenumberofinner
+×
+channelsinthenetwork.
+3.4.MaskedOne-dimensionalConvolutions
+Thedecoderappliesmaskedone-dimensionalconvolutions
+(van den Oord et al., 2016b) to the input embedding ten-
+sor that have a masked kernel of size k. The masking en-
+sures that information from future tokens does not affect
+the prediction of the current token. The operation can be
+implementedeitherbyzeroingoutsomeoftheweightsof
+awiderkernelofsize2k 1orbypaddingtheinputmap.
+−
+hsilgnE
+ρ=.968
+Figure5.Lengthsofsentencesincharactersandtheircorrelation
+coefficientfortheEnglish-to-GermanWMTNewsTest-2013val-
+idation data. The correlation coefficient is similarly high (ρ >
+0.96)forallotherlanguagepairsthatweinspected.
+3.5.Dilation
+The masked convolutions use dilation to increase the re-
+ceptive field of the target network (Chen et al., 2014; Yu
+& Koltun, 2015). Dilation makes the receptive field grow
+exponentiallyintermsofthedepthofthenetworks,asop-
+posedtolinearly.Weuseadilationschemewherebythedi-
+lationratesaredoubledeverylayeruptoamaximumrater
+(forourexperimentsr =16). Theschemeisrepeatedmul-
+tiple times in the network always starting from a dilation
+rate of 1 (van den Oord et al., 2016a; Kalchbrenner et al.,
+2016b).
+3.6.ResidualBlocks
+Each layer is wrapped in a residual block that contains
+additional convolutional layers with filters of size 1 1
+×
+(He et al., 2016). We adopt two variants of the residual
+blocks: one with ReLUs, which is used in the machine
+translationexperiments,andonewithMultiplicativeUnits
+(Kalchbrenneretal.,2016b),whichisusedinthelanguage
+modelling experiments. Figure 3 diagrams the two vari-
+ants of the blocks. In both cases, we use layer normal-
+ization (Ba et al., 2016) before the activation function, as
+it is well suited to sequence processing where computing
+theactivationstatisticsoverthefollowingfuturetokens(as
+would be done by batch normalization) must be avoided.
+After a series of residual blocks of increased dilation, the
+networkappliesonemoreconvolutionandReLUfollowed
+byaconvolutionandafinalsoftmaxlayer.
+4.ModelComparison
+In this section we analyze the properties of various previ-
+ously introduced neural translation models as well as the
+ByteNet family of models. For the sake of a more com-
+plete analysis, we include two recurrent ByteNet variants
+(whichwedonotevaluateintheexperiments).NeuralMachineTranslationinLinearTime
+Model Net Net Time RP Path Path
+S T S T
+RCTM1 CNN RNN |S||S|+|T| no |S| |T|
+RCTM2 CNN RNN |S||S|+|T| yes |S| |T|
+RNNEnc-Dec RNN RNN |S|+|T| no |S|+|T| |T|
+RNNEnc-DecAtt RNN RNN |S||T| yes 1 |T|
+GridLSTM RNN RNN |S||T| yes |S|+|T| |S|+|T|
+ExtendedNeuralGPU cRNN cRNN |S||S|+|S||T| yes |S| |T|
+RecurrentByteNet RNN RNN |S|+|T| yes max(|S|,|T|) |T|
+RecurrentByteNet CNN RNN c|S|+|T| yes c |T|
+ByteNet CNN CNN c|S|+c|T| yes c c
+Table1. Propertiesofvariousneuraltranslationmodels.
+4.1.RecurrentByteNets atum into three columns. The first column indicates the
+timecomplexityofthenetworkasafunctionofthelength
+TheByteNetiscomposedoftwostackedencoderandde-
+of the sequences and is denoted by Time. The other two
+coder networks where the decoder network dynamically
+columnsNet andNet indicate,respectively,whetherthe
+S T
+adapts to the output length. This way of combining the
+source and the target network use a convolutional struc-
+networksisnottiedtothenetworksbeingstrictlyconvolu-
+ture (CNN) or a recurrent one (RNN); a CNN structure
+tional. We may consider two variants of the ByteNet that
+has the advantage that it can be run in parallel along the
+userecurrentnetworksforoneorbothofthenetworks(see
+length of the sequence. The second (resolution preserva-
+Figure 4). The first variant replaces the convolutional de-
+tion) desideratum corresponds to the RP column, which
+coderwitharecurrentonethatissimilarlystackedanddy-
+indicateswhetherthesourcerepresentationinthenetwork
+namically unfolded. The second variant also replaces the
+is resolution preserving. Finally, the third desideratum
+convolutionalencoderwitharecurrentencoder,e.g.abidi-
+(shortforwardandbackwardflowpaths)isreflectedbytwo
+rectionalRNN.ThetargetRNNisthenplacedontopofthe
+columns. The Path column corresponds to the length in
+S
+sourceRNN.ConsideringthelatterRecurrentByteNet,we
+layerstepsoftheshortestpathbetweenasourcetokenand
+can see that the RNN Enc-Dec network (Sutskever et al.,
+anyoutputtargettoken. Similarly,thePath columncor-
+T
+2014; Cho et al., 2014) is a Recurrent ByteNet where all
+respondstothelengthoftheshortestpathbetweenaninput
+connectionsbetweensourceandtarget–exceptforthefirst
+targettokenandanyoutputtargettoken. Shorterpathslead
+onethatconnectss andt –havebeensevered. TheRe-
+0 0 tobetterforwardandbackwardsignalpropagation.
+current ByteNet is a generalization of the RNN Enc-Dec
+and, modulo the type of weight-sharing scheme, so is the Table 1 summarizes the properties of the models. The
+convolutionalByteNet. ByteNet, the Recurrent ByteNets and the RNN Enc-Dec
+are the only networks that have linear running time (up
+4.2.ComparisonofProperties to the constant c). The RNN Enc-Dec, however, does not
+preservethesourcesequenceresolution, afeaturethatag-
+In our comparison we consider the following neural
+gravateslearningforlongsequencessuchasthosethatap-
+translation models: the Recurrent Continuous Translation
+pear in character-to-character machine translation (Luong
+Model(RCTM)1and2(Kalchbrenner&Blunsom,2013);
+&Manning,2016). TheRCTM2,theRNNEnc-DecAtt,
+theRNNEnc-Dec(Sutskeveretal.,2014;Choetal.,2014);
+theGridLSTMandtheExtendedNeuralGPUdopreserve
+theRNNEnc-DecAttwiththeattentionalpoolingmecha-
+theresolution,butatacostofaquadraticrunningtime.The
+nism(Bahdanauetal.,2014)ofwhichthereareafewvari-
+ByteNetstandsoutalsoforitsPathproperties. Thedilated
+ations (Luong et al., 2015; Chung et al., 2016a); the Grid
+structure of the convolutions connects any two source or
+LSTMtranslationmodel(Kalchbrenneretal.,2016a)that
+target tokens in the sequences by way of a small number
+usesamulti-dimensionalarchitecture;theExtendedNeural
+ofnetworklayerscorrespondingtothedepthofthesource
+GPU model (Kaiser & Bengio, 2016) that has a convolu-
+ortargetnetworks. Forcharactersequenceswherelearning
+tional RNN architecture; the ByteNet and the two Recur-
+long-range dependencies is important, paths that are sub-
+rentByteNetvariants.
+linearinthedistanceareadvantageous.
+Our comparison criteria reflect the desiderata set out in
+Sect.2.1. Weseparatethefirst(computationtime)desider-NeuralMachineTranslationinLinearTime
+Model Inputs Outputs WMTTest’14 WMTTest’15
+PhraseBasedMT(Freitagetal.,2014;Williamsetal.,2015) phrases phrases 20.7 24.0
+RNNEnc-Dec(Luongetal.,2015) words words 11.3
+ReverseRNNEnc-Dec(Luongetal.,2015) words words 14.0
+RNNEnc-DecAtt(Zhouetal.,2016) words words 20.6
+RNNEnc-DecAtt(Luongetal.,2015) words words 20.9
+GNMT(RNNEnc-DecAtt)(Wuetal.,2016a) word-pieces word-pieces 24.61
+RNNEnc-DecAtt(Chungetal.,2016b) BPE BPE 19.98 21.72
+RNNEnc-DecAtt(Chungetal.,2016b) BPE char 21.33 23.45
+GNMT(RNNEnc-DecAtt)(Wuetal.,2016a) char char 22.62
+ByteNet char char 23.75 26.26
+Table2. BLEUscoresonEn-DeWMTNewsTest2014and2015testsets.
+Model Test WMTTest’14 WMTTest’15
+StackedLSTM(Graves,2013) 1.67 Bits/character 0.521 0.532
+GF-LSTM(Chungetal.,2015) 1.58
+BLEU 23.75 26.26
+Grid-LSTM(Kalchbrenneretal.,2016a) 1.47
+Layer-normalizedLSTM(Chungetal.,2016a) 1.46
+MI-LSTM(Wuetal.,2016b) 1.44 Table4.Bits/character with respective BLEU score achieved by
+RecurrentMemoryArrayStructures(Rocki,2016) 1.40
+the ByteNet translation model on the English-to-German WMT
+HM-LSTM(Chungetal.,2016a) 1.40
+translationtask.
+LayerNormHyperLSTM(Haetal.,2016) 1.38
+LargeLayerNormHyperLSTM(Haetal.,2016) 1.34
+RecurrentHighwayNetworks(Srivastavaetal.,2015) 1.32
+ByteNetDecoder 1.31 Table 3 lists recent results of various neural sequence
+models on the Wikipedia dataset. All the results ex-
+Table3.Negativelog-likelihoodresultsinbits/byteontheHutter cept for the ByteNet result are obtained using some vari-
+PrizeWikipediabenchmark. ant of the LSTM recurrent neural network (Hochreiter &
+Schmidhuber, 1997). The ByteNet decoder achieves 1.31
+bits/characteronthetestset.
+5.CharacterPrediction
+6.Character-LevelMachineTranslation
+We first evaluate the ByteNet Decoder separately on a
+character-levellanguagemodellingbenchmark.Weusethe
+WeevaluatethefullByteNetontheWMTEnglishtoGer-
+HutterPrizeversionoftheWikipediadatasetandfollowthe
+mantranslationtask. WeuseNewsTest2013forvalidation
+standardsplitwherethefirst90millionbytesareusedfor
+andNewsTest2014and2015fortesting. TheEnglishand
+training,thenext5millionbytesareusedforvalidationand
+Germanstringsareencodedassequencesofcharacters;no
+the last 5 million bytes are used for testing (Chung et al.,
+explicitsegmentationintowordsormorphemesisapplied
+2015). Thetotalnumberofcharactersinthevocabularyis
+to the strings. The outputs of the network are strings of
+205.
+characters inthe target language. We keep323 characters
+The ByteNet Decoder that we use for the result has 30 intheGermanvocabularyand296intheEnglishvocabu-
+residual blocks split into six sets of five blocks each; for lary.
+the five blocks in each set the dilation rates are, respec-
+TheByteNetusedintheexperimentshas30residualblocks
+tively,1,2,4,8and16. Themaskedkernelhassize3. This
+in the encoder and 30 residual blocks in the decoder. As
+gives a receptive field of 315 characters. The number of
+in the ByteNet Decoder, the residual blocks are arranged
+hiddenunitsdis512. Forthistaskweuseresidualmulti-
+insetsoffivewithcorrespondingdilationratesof1,2,4,8
+plicativeblocks(Fig.3Right).Fortheoptimizationweuse
+and16.ForthistaskweusetheresidualblockswithReLUs
+Adam(Kingma&Ba,2014)withalearningrateof0.0003
+(Fig. 3 Left). The number of hidden units d is 800. The
+and a weight decay term of 0.0001. We apply dropout to
+size of the kernel in the source network is 3, whereas the
+thelastReLUlayerbeforethesoftmaxdroppingunitswith
+sizeofthemaskedkernelinthetargetnetworkis3. Forthe
+aprobabilityof0.1.Wedonotreducethelearningratedur-
+optimizationweuseAdamwithalearningrateof0.0003.
+ingtraining. Ateachstepwesampleabatchofsequences
+of 500 characters each, use the first 100 characters as the Eachsentenceispaddedwithspecialcharacterstothenear-
+minimumcontextandpredictthelatter400characters. est greater multiple of 50; 20% of further padding is ap-NeuralMachineTranslationinLinearTime
+DirectorJonFavreau,whoiscurrentlyworkingonDisney’sforthcomingJungleBookfilm,
+toldthewebsiteHollywoodReporter:“Ithinktimesarechanging.”
+RegisseurJonFavreau,derderzeitanDisneysbalderscheinendenDschungelbuch-Filmarbeitet,
+sagtegegenberderWebseiteHollywoodReporter:“Ichglaube,dieZeitena¨ndernsich.”
+RegisseurJonFavreau,derzurZeitanDisneyskommendemJungleBookFilmarbeitet,
+hatderWebsiteHollywoodReportergesagt:“Ichdenke,dieZeitena¨ndernsich”.
+MattCasaday,25,asenioratBrighamYoungUniversity,sayshehadpaid42centsonAmazon.com
+forausedcopyof“StrategicMediaDecisions:UnderstandingTheBusinessEndOfTheAdvertisingBusiness.”
+MattCasaday,25,AbschlussstudentanderBrighamYoungUniversity,sagt,dasseraufAmazon.com42Centsausgegebenhat
+fu¨reinegebrauchteAusgabevon“StrategicMediaDecisions:UnderstandingTheBusinessEndOfTheAdvertisingBusiness.”
+MattCasaday,25,einSenioranderBrighamYoungUniversity,sagte,erhabe42CentaufAmazon.com
+fu¨reinegebrauchteKopievon“StrategicMediaDecisions:UnderstandingTheBusinessEndOfTheAdvertisingBusiness”.
+Table5.RawoutputtranslationsgeneratedfromtheByteNetthathighlightinterestingreorderingandtransliterationphenomena. For
+each group, the first row is the English source, the second row is the ground truth German target, and the third row is the ByteNet
+translation.
+pliedtoeachsourcesentenceasapartofdynamicunfold- 7.Conclusion
+ing (eq. 2). Each pair of sentences is mapped to a bucket
+WehaveintroducedtheByteNet,aneuraltranslationmodel
+based on the pair of padded lengths for efficient batching
+that has linear running time, decouples translation from
+during training. We use vanilla beam search according to
+memorization and has short signal propagation paths for
+the total likelihood of the generated candidate and accept
+tokensinsequences. WehaveshownthattheByteNetde-
+onlycandidateswhichendinaend-of-sentencetoken. We
+coder is a state-of-the-art character-level language model
+useabeamofsize12. Wedonotuselengthnormalization,
+based on a convolutional neural network that outperforms
+nordowekeepscoreofwhichpartsofthesourcesentence
+recurrentneurallanguagemodels.Wehavealsoshownthat
+havebeentranslated(Wuetal.,2016a).
+theByteNetgeneralizestheRNNEnc-Decarchitectureand
+Table2andTable4containtheresultsoftheexperiments. achieves state-of-the-art results for character-to-character
+OnNewsTest2014theByteNetachievesthehighestperfor- machinetranslationandexcellentresultsingeneral,while
+manceincharacter-levelandsubword-levelneuralmachine maintaining linear running time complexity. We have re-
+translation, and compared to the word-level systems it is vealedthelatentstructurelearntbytheByteNetandfound
+secondonlytotheversionofGNMTthatusesword-pieces. it to mirror the expected alignment between the tokens in
+On NewsTest 2015, to our knowledge, ByteNet achieves thesentences.
+thebestpublishedresultstodate.
+Table 5 contains some of the unaltered generated transla- References
+tionsfromtheByteNetthathighlightreorderingandother
+Ba,LeiJimmy,Kiros,Ryan,andHinton,GeoffreyE.Layer
+phenomena such as transliteration. The character-level
+normalization. CoRR,abs/1607.06450,2016.
+aspect of the model makes post-processing unnecessary
+in principle. We further visualize the sensitivity of the Bahdanau, Dzmitry, Cho, Kyunghyun, and Bengio,
+ByteNet’s predictions to specific source and target inputs Yoshua. Neural machine translation by jointly learning
+usinggradient-basedvisualization(Simonyanetal.,2013). toalignandtranslate. CoRR,abs/1409.0473,2014.
+Figure6representsaheatmapofthemagnitudeofthegra-
+dients of the generated outputs with respect to the source Bengio, Yoshua, Ducharme, Re´jean, Vincent, Pascal, and
+andtargetinputs. Forvisualclarity, wesumthegradients Jauvin, Christian. A neural probabilistic language
+forallthecharactersthatmakeupeachwordandnormal- model. JournalofMachineLearningResearch,3:1137–
+ize the values along each column. In contrast with the at- 1155,2003.
+tentionalpoolingmechanism(Bahdanauetal.,2014), this
+Chen, Liang-Chieh, Papandreou, George, Kokkinos, Ia-
+general technique allows us to inspect not just dependen-
+sonas,Murphy,Kevin,andYuille,AlanL. Semanticim-
+ciesoftheoutputsonthesourceinputs,butalsodependen-
+agesegmentationwithdeepconvolutionalnetsandfully
+ciesoftheoutputsonprevioustargetinputs,oronanyother
+connectedcrfs. CoRR,abs/1412.7062,2014.
+neuralnetworklayers.
+Cho,Kyunghyun,vanMerrienboer,Bart,Gu¨lc¸ehre,C¸aglar,
+Bougares,Fethi,Schwenk,Holger,andBengio,Yoshua.NeuralMachineTranslationinLinearTime
+Learning phrase representations using RNN encoder-
+decoder for statistical machine translation. CoRR,
+abs/1406.1078,2014.
+Chung,Junyoung,Gu¨lc¸ehre,Caglar,Cho,Kyunghyun,and
+Bengio, Yoshua. Gated feedback recurrent neural net-
+works. CoRR,abs/1502.02367,2015.
+Chung,Junyoung,Ahn,Sungjin,andBengio,Yoshua. Hi-
+erarchical multiscale recurrent neural networks. CoRR,
+abs/1609.01704,2016a.
+Chung, Junyoung, Cho, Kyunghyun, andBengio, Yoshua.
+Acharacter-leveldecoderwithoutexplicitsegmentation
+for neural machine translation. In Proceedings of the
+54th Annual Meeting of the Association for Computa-
+tionalLinguistics,ACL2016,2016b.
+Freitag,Markus,Peitz,Stephan,Wuebker,Joern,Ney,Her-
+mann, Huck, Matthias, Sennrich, Rico, Durrani, Nadir,
+Nadejde, Maria, Williams, Philip, Koehn, Philipp, Her-
+rmann,Teresa,Cho,Eunah,andWaibel,Alex.Eu-bridge
+mt: Combinedmachinetranslation. InACL2014Ninth
+WorkshoponStatisticalMachineTranslation,2014.
+Graves,Alex. Generatingsequenceswithrecurrentneural
+networks. CoRR,abs/1308.0850,2013.
+Ha, D., Dai, A., and Le, Q. V. HyperNetworks. ArXiv
+e-prints,September2016.
+He, Kaiming, Zhang, Xiangyu, Ren, Shaoqing, and Sun,
+Jian. Identity mappings in deep residual networks.
+CoRR,abs/1603.05027,2016.
+Hochreiter, Sepp and Schmidhuber, Ju¨rgen. Long short-
+termmemory. Neuralcomputation,1997.
+Hochreiter, Sepp, Bengio, Yoshua, and Frasconi, Paolo.
+Gradient flow in recurrent nets: the difficulty of learn-
+inglong-termdependencies. InKolen,J.andKremer,S.
+(eds.), Field Guide to Dynamical Recurrent Networks.
+IEEEPress,2001.
+Hutter, Marcus. Thehumanknowledgecompressioncon-
+test. http://prize.hutter1.net/,2012.
+Kaiser,ŁukaszandBengio,Samy. Canactivememoryre-
+Figure6.Magnitudeofgradientsofthepredictedoutputswithre- place attention? Advances in Neural Information Pro-
+specttothesourceandtargetinputs. Thegradientsaresummed cessingSystems,2016.
+forallthecharactersinagivenword. Inthebottomheatmapthe
+Kalchbrenner,NalandBlunsom,Phil. Recurrentcontinu-
+magnitudesarenonzeroonthediagonal,sincethepredictionofa
+targetcharacterdependshighlyontheprecedingtargetcharacter oustranslationmodels. InProceedingsofthe2013Con-
+inthesameword. ferenceonEmpiricalMethodsinNaturalLanguagePro-
+cessing,2013.
+Kalchbrenner,Nal,Danihelka,Ivo,andGraves,Alex. Grid
+long short-term memory. International Conference on
+LearningRepresentations,2016a.NeuralMachineTranslationinLinearTime
+Kalchbrenner, Nal, van den Oord, Aaron, Simonyan, Kudo, Taku, Kazawa, Hideto, Stevens, Keith, Kurian,
+Karen, Danihelka, Ivo, Vinyals, Oriol, Graves, Alex, George,Patil,Nishant,Wang,Wei,Young,Cliff,Smith,
+andKavukcuoglu,Koray. Videopixelnetworks. CoRR, Jason, Riesa, Jason, Rudnick, Alex, Vinyals, Oriol,
+abs/1610.00527,2016b. Corrado, Greg, Hughes, Macduff, and Dean, Jeffrey.
+Googles neural machine translation system: Bridging
+Kingma,DiederikP.andBa,Jimmy. Adam: Amethodfor
+thegapbetweenhumanandmachinetranslation. CoRR,
+stochasticoptimization. CoRR,abs/1412.6980,2014.
+abs/1609.08144,2016a.
+Luong,Minh-ThangandManning,ChristopherD.Achiev-
+Wu, Yuhuai, Zhang, Saizheng, Zhang, Ying, Bengio,
+ingopenvocabularyneuralmachinetranslationwithhy-
+Yoshua, and Salakhutdinov, Ruslan. On multiplica-
+bridword-charactermodels. InACL,2016.
+tive integration with recurrent neural networks. CoRR,
+abs/1606.06630,2016b.
+Luong, Minh-Thang, Pham, Hieu, and Manning, Christo-
+pher D. Effective approaches to attention-based neural Yu,FisherandKoltun,Vladlen. Multi-scalecontextaggre-
+machinetranslation. InEMNLP,September2015. gationbydilatedconvolutions. CoRR,abs/1511.07122,
+2015.
+Mikolov, Tomas, Karafia´t, Martin, Burget, Luka´s, Cer-
+nocky´, Jan, and Khudanpur, Sanjeev. Recurrent neu- Zhou, Jie, Cao, Ying, Wang, Xuguang, Li, Peng, and
+ral network based language model. In INTERSPEECH Xu, Wei. Deep recurrent models with fast-forward
+2010,pp.1045–1048,2010. connections for neural machine translation. CoRR,
+abs/1606.04199,2016.
+Rocki,Kamil. Recurrentmemoryarraystructures. CoRR,
+abs/1607.03085,2016.
+Simonyan, Karen, Vedaldi, Andrea, and Zisserman, An-
+drew. Deep inside convolutional networks: Visualising
+image classification models and saliency maps. CoRR,
+abs/1312.6034,2013.
+Srivastava, Rupesh Kumar, Greff, Klaus, and Schmidhu-
+ber,Ju¨rgen. Highwaynetworks. CoRR,abs/1505.00387,
+2015.
+Sutskever,Ilya,Vinyals,Oriol,andLe,QuocV. Sequence
+tosequencelearningwithneuralnetworks. InAdvances
+in Neural Information Processing Systems, pp. 3104–
+3112,2014.
+van den Oord, Aaron, Dieleman, Sander, Zen, Heiga, Si-
+monyan, Karen, Vinyals, Oriol, Graves, Alex, Kalch-
+brenner, Nal, Senior, Andrew, and Kavukcuoglu, Ko-
+ray. Wavenet: Agenerativemodelforrawaudio. CoRR,
+abs/1609.03499,2016a.
+van den Oord, Aa¨ron, Kalchbrenner, Nal, and
+Kavukcuoglu, Koray. Pixel recurrent neural networks.
+InICML,volume48,pp.1747–1756,2016b.
+Williams, Philip, Sennrich, Rico, Nadejde, Maria, Huck,
+Matthias,andKoehn,Philipp.Edinburgh’ssyntax-based
+systems at WMT 2015. In Proceedings of the Tenth
+WorkshoponStatisticalMachineTranslation,2015.
+Wu,Yonghui,Schuster,Mike,Chen,Zhifeng,Le,QuocV.,
+Norouzi, Mohammad, Macherey, Wolfgang, Krikun,
+Maxim, Cao, Yuan, Gao, Qin, Macherey, Klaus,
+Klingner,Jeff,Shah,Apurva,Johnson,Melvin,Liu,Xi-
+aobing,ukaszKaiser,Gouws,Stephan,Kato,Yoshikiyo,

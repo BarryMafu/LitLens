@@ -1,0 +1,483 @@
+4102
+ceD
+41
+]LC.sc[
+3v5123.9041:viXra
+Sequence to Sequence Learning
+with Neural Networks
+IlyaSutskever OriolVinyals QuocV.Le
+Google Google Google
+ilyasu@google.com vinyals@google.com qvl@google.com
+Abstract
+Deep Neural Networks (DNNs) are powerful models that have achieved excel-
+lentperformanceondifficultlearningtasks. AlthoughDNNsworkwellwhenever
+largelabeledtrainingsetsareavailable,theycannotbeusedtomapsequencesto
+sequences. In this paper, we presenta generalend-to-endapproachto sequence
+learningthatmakesminimalassumptionsonthesequencestructure. Ourmethod
+usesamultilayeredLongShort-TermMemory(LSTM)tomaptheinputsequence
+toavectorofafixeddimensionality,andthenanotherdeepLSTMtodecodethe
+targetsequencefromthevector. OurmainresultisthatonanEnglishto French
+translationtaskfromtheWMT’14dataset,thetranslationsproducedbytheLSTM
+achieve a BLEU score of 34.8 on the entire test set, where the LSTM’s BLEU
+scorewaspenalizedonout-of-vocabularywords. Additionally,theLSTMdidnot
+have difficulty on long sentences. For comparison, a phrase-basedSMT system
+achieves a BLEU score of 33.3 on the same dataset. When we used the LSTM
+torerankthe 1000hypothesesproducedbytheaforementionedSMTsystem, its
+BLEU score increases to 36.5, which is close to the previousbest result on this
+task. The LSTM also learned sensible phrase and sentence representations that
+are sensitive to wordorderand are relatively invariantto the active andthe pas-
+sive voice. Finally, we foundthat reversingthe order of the words in all source
+sentences(butnottargetsentences)improvedtheLSTM’sperformancemarkedly,
+because doing so introduced many short term dependenciesbetween the source
+andthetargetsentencewhichmadetheoptimizationproblemeasier.
+1 Introduction
+Deep NeuralNetworks(DNNs) are extremelypowerfulmachinelearningmodelsthatachieveex-
+cellentperformanceondifficultproblemssuchasspeechrecognition[13,7]andvisualobjectrecog-
+nition[19,6,21,20]. DNNsarepowerfulbecausetheycanperformarbitraryparallelcomputation
+for a modestnumberof steps. A surprisingexampleof the powerof DNNs is their ability to sort
+N N-bitnumbersusingonly2hiddenlayersofquadraticsize[27]. So,whileneuralnetworksare
+related to conventionalstatistical models, they learn an intricate computation. Furthermore, large
+DNNscanbetrainedwithsupervisedbackpropagationwheneverthelabeledtrainingsethasenough
+informationtospecifythenetwork’sparameters. Thus,ifthereexistsaparametersettingofalarge
+DNN that achieves good results (for example, because humans can solve the task very rapidly),
+supervisedbackpropagationwillfindtheseparametersandsolvetheproblem.
+Despitetheirflexibilityandpower,DNNscanonlybeappliedtoproblemswhoseinputsandtargets
+can be sensibly encoded with vectors of fixed dimensionality. It is a significant limitation, since
+manyimportantproblemsarebestexpressedwithsequenceswhoselengthsarenotknowna-priori.
+Forexample,speechrecognitionandmachinetranslationaresequentialproblems. Likewise,ques-
+tion answering can also be seen as mapping a sequence of words representing the question to a
+1sequenceofwordsrepresentingtheanswer. Itisthereforeclearthatadomain-independentmethod
+thatlearnstomapsequencestosequenceswouldbeuseful.
+SequencesposeachallengeforDNNsbecausetheyrequirethatthedimensionalityoftheinputsand
+outputsis knownandfixed. Inthis paper,we showthata straightforwardapplicationof the Long
+Short-TermMemory(LSTM) architecture[16] can solve generalsequence to sequenceproblems.
+TheideaistouseoneLSTMtoreadtheinputsequence,onetimestepatatime,toobtainlargefixed-
+dimensional vector representation, and then to use another LSTM to extract the output sequence
+fromthatvector(fig.1).ThesecondLSTMisessentiallyarecurrentneuralnetworklanguagemodel
+[28,23,30]exceptthatitisconditionedontheinputsequence. TheLSTM’sabilitytosuccessfully
+learnondatawithlongrangetemporaldependenciesmakesitanaturalchoiceforthisapplication
+duetotheconsiderabletimelagbetweentheinputsandtheircorrespondingoutputs(fig.1).
+Therehavebeenanumberofrelatedattemptstoaddressthegeneralsequencetosequencelearning
+problemwithneuralnetworks. OurapproachiscloselyrelatedtoKalchbrennerandBlunsom[18]
+whowerethefirsttomaptheentireinputsentencetovector,andisrelatedtoChoetal.[5]although
+thelatterwasusedonlyforrescoringhypothesesproducedbyaphrase-basedsystem. Graves[10]
+introducedanoveldifferentiableattentionmechanismthatallowsneuralnetworkstofocusondif-
+ferentparts of their input, andan elegantvariantof this idea was successfully appliedto machine
+translation by Bahdanau et al. [2]. The Connectionist Sequence Classification is another popular
+technique for mappingsequences to sequenceswith neuralnetworks, but it assumes a monotonic
+alignmentbetweentheinputsandtheoutputs[11].
+Figure 1: Our model reads an input sentence “ABC” and produces “WXYZ” as the output sentence. The
+model stops making predictions after outputting the end-of-sentence token. Note that the LSTM reads the
+inputsentenceinreverse,becausedoingsointroducesmanyshorttermdependenciesinthedatathatmakethe
+optimizationproblemmucheasier.
+Themainresultofthisworkisthefollowing. OntheWMT’14EnglishtoFrenchtranslationtask,
+weobtainedaBLEUscoreof34.81bydirectlyextractingtranslationsfromanensembleof5deep
+LSTMs(with384Mparametersand8,000dimensionalstateeach)usingasimpleleft-to-rightbeam-
+search decoder. This is by far the best result achieved by direct translation with large neural net-
+works.Forcomparison,theBLEUscoreofanSMTbaselineonthisdatasetis33.30[29].The34.81
+BLEUscorewasachievedbyanLSTMwithavocabularyof80kwords,sothescorewaspenalized
+wheneverthe referencetranslation containeda word not coveredby these 80k. This result shows
+that a relatively unoptimizedsmall-vocabulary neuralnetwork architecture which has much room
+forimprovementoutperformsaphrase-basedSMTsystem.
+Finally,weusedtheLSTMtorescorethepubliclyavailable1000-bestlistsoftheSMTbaselineon
+thesametask[29]. Bydoingso,weobtainedaBLEUscoreof36.5,whichimprovesthebaselineby
+3.2BLEUpointsandisclosetothepreviousbestpublishedresultonthistask(whichis37.0[9]).
+Surprisingly,theLSTMdidnotsufferonverylongsentences,despitetherecentexperienceofother
+researcherswithrelatedarchitectures[26]. Wewereabletodowellonlongsentencesbecausewe
+reversedtheorderofwordsinthesourcesentencebutnotthetargetsentencesinthetrainingandtest
+set. Bydoingso,weintroducedmanyshorttermdependenciesthatmadetheoptimizationproblem
+muchsimpler (see sec. 2 and3.3). As a result, SGD couldlearn LSTMsthathad no troublewith
+long sentences. The simple trick of reversing the words in the source sentence is one of the key
+technicalcontributionsofthiswork.
+A useful property of the LSTM is that it learns to map an input sentence of variable length into
+a fixed-dimensional vector representation. Given that translations tend to be paraphrases of the
+source sentences, the translation objective encourages the LSTM to find sentence representations
+thatcapturetheirmeaning,assentenceswithsimilarmeaningsareclosetoeachotherwhiledifferent
+2sentencesmeaningswillbefar. Aqualitativeevaluationsupportsthisclaim,showingthatourmodel
+isawareofwordorderandisfairlyinvarianttotheactiveandpassivevoice.
+2 The model
+The Recurrent Neural Network (RNN) [31, 28] is a natural generalization of feedforward neural
+networks to sequences. Given a sequence of inputs (x ,...,x ), a standard RNN computes a
+1 T
+sequenceofoutputs(y ,...,y )byiteratingthefollowingequation:
+1 T
+h t = sigm (cid:0) Whxx t +Whhh t−1(cid:1)
+y = Wyhh
+t t
+The RNN can easily map sequencesto sequenceswheneverthe alignmentbetween the inputs the
+outputsisknownaheadoftime. However,itisnotclearhowtoapplyanRNNtoproblemswhose
+inputandtheoutputsequenceshavedifferentlengthswithcomplicatedandnon-monotonicrelation-
+ships.
+The simplest strategy for general sequence learning is to map the input sequence to a fixed-sized
+vectorusing one RNN, and then to map the vectorto the targetsequencewith anotherRNN (this
+approachhasalsobeentakenbyChoetal.[5]). WhileitcouldworkinprinciplesincetheRNNis
+providedwithalltherelevantinformation,itwouldbedifficulttotraintheRNNsduetotheresulting
+longtermdependencies(figure1)[14,4,16,15]. However,theLongShort-TermMemory(LSTM)
+[16]isknowntolearnproblemswithlongrangetemporaldependencies,soanLSTMmaysucceed
+inthissetting.
+The goal of the LSTM is to estimate the conditionalprobabilityp(y
+1
+,...,y T′|x
+1
+,...,x
+T
+) where
+(x
+1
+,...,x
+T
+)isaninputsequenceandy
+1
+,...,y T′isitscorrespondingoutputsequencewhoselength
+T′maydifferfromT.TheLSTMcomputesthisconditionalprobabilitybyfirstobtainingthefixed-
+dimensionalrepresentationvoftheinputsequence(x ,...,x )givenbythelasthiddenstateofthe
+1 T
+LSTM,andthencomputingtheprobabilityofy 1 ,...,y T′ witha standardLSTM-LMformulation
+whoseinitialhiddenstateissettotherepresentationvofx ,...,x :
+1 T
+T′
+p(y 1 ,...,y T′|x 1 ,...,x T )=Yp(y t |v,y 1 ,...,y t−1 ) (1)
+t=1
+In this equation, each p(y t |v,y 1 ,...,y t−1 ) distribution is represented with a softmax over all the
+wordsinthevocabulary.WeusetheLSTMformulationfromGraves[10]. Notethatwerequirethat
+eachsentenceendswithaspecialend-of-sentencesymbol“<EOS>”,whichenablesthemodelto
+defineadistributionoversequencesofallpossiblelengths. Theoverallschemeisoutlinedinfigure
+1,wheretheshownLSTMcomputestherepresentationof“A”,“B”,“C”,“<EOS>”andthenuses
+thisrepresentationtocomputetheprobabilityof“W”,“X”,“Y”,“Z”,“<EOS>”.
+Our actual models differ from the above description in three importantways. First, we used two
+differentLSTMs: one for the inputsequence and another for the output sequence, because doing
+soincreasesthenumbermodelparametersatnegligiblecomputationalcostandmakesitnaturalto
+traintheLSTMonmultiplelanguagepairssimultaneously[18].Second,wefoundthatdeepLSTMs
+significantlyoutperformedshallowLSTMs,sowechoseanLSTMwithfourlayers.Third,wefound
+itextremelyvaluabletoreversetheorderofthewordsoftheinputsentence.Soforexample,instead
+ofmappingthesentencea,b,ctothesentenceα,β,γ,theLSTMisaskedtomapc,b,atoα,β,γ,
+whereα,β,γisthetranslationofa,b,c.Thisway,aisincloseproximitytoα,bisfairlyclosetoβ,
+andsoon,afactthatmakesiteasyforSGDto“establishcommunication”betweentheinputandthe
+output.WefoundthissimpledatatransformationtogreatlyimprovetheperformanceoftheLSTM.
+3 Experiments
+We applied our method to the WMT’14 English to French MT task in two ways. We used it to
+directlytranslatetheinputsentencewithoutusingareferenceSMTsystemandweittorescorethe
+n-bestlistsofanSMTbaseline.Wereporttheaccuracyofthesetranslationmethods,presentsample
+translations,andvisualizetheresultingsentencerepresentation.
+33.1 Datasetdetails
+We usedthe WMT’14EnglishtoFrenchdataset. We trainedourmodelsona subsetof 12Msen-
+tences consisting of 348M French words and 304M English words, which is a clean “selected”
+subsetfrom[29]. Wechosethistranslationtaskandthisspecifictrainingsetsubsetbecauseofthe
+publicavailabilityofatokenizedtrainingandtestsettogetherwith1000-bestlistsfromthebaseline
+SMT[29].
+As typicalneurallanguagemodelsrely on a vectorrepresentationfor each word, we used a fixed
+vocabularyforbothlanguages.Weused160,000ofthemostfrequentwordsforthesourcelanguage
+and80,000ofthemostfrequentwordsforthetargetlanguage. Everyout-of-vocabularywordwas
+replacedwithaspecial“UNK”token.
+3.2 DecodingandRescoring
+The core of our experiments involved training a large deep LSTM on many sentence pairs. We
+traineditbymaximizingthelogprobabilityofacorrecttranslationT giventhesourcesentenceS,
+sothetrainingobjectiveis
+1/|S| X logp(T|S)
+(T,S)∈S
+whereS isthetrainingset. Oncetrainingiscomplete,weproducetranslationsbyfindingthemost
+likelytranslationaccordingtotheLSTM:
+Tˆ =argmaxp(T|S) (2)
+T
+We search for the most likely translation using a simple left-to-right beam search decoder which
+maintains a small number B of partial hypotheses, where a partial hypothesisis a prefix of some
+translation. At each timestep we extend each partial hypothesis in the beam with every possible
+wordinthevocabulary. Thisgreatlyincreasesthenumberofthehypothesesso wediscardallbut
+the B mostlikelyhypothesesaccordingto the model’slogprobability. Assoonas the“<EOS>”
+symbolisappendedtoahypothesis,itisremovedfromthebeamandisaddedtothesetofcomplete
+hypotheses. Whilethisdecoderisapproximate,itissimpletoimplement. Interestingly,oursystem
+performswellevenwithabeamsizeof1,andabeamofsize2providesmostofthebenefitsofbeam
+search(Table1).
+We also used the LSTM to rescore the 1000-best lists produced by the baseline system [29]. To
+rescoreann-bestlist,wecomputedthelogprobabilityofeveryhypothesiswithourLSTMandtook
+anevenaveragewiththeirscoreandtheLSTM’sscore.
+3.3 ReversingtheSourceSentences
+While theLSTMiscapableofsolvingproblemswith longtermdependencies,wediscoveredthat
+theLSTMlearnsmuchbetterwhenthesourcesentencesarereversed(thetargetsentencesarenot
+reversed). By doing so, the LSTM’s test perplexity dropped from 5.8 to 4.7, and the test BLEU
+scoresofitsdecodedtranslationsincreasedfrom25.9to30.6.
+While we donothavea completeexplanationtothisphenomenon,we believethatit iscausedby
+theintroductionofmanyshorttermdependenciestothedataset. Normally,whenweconcatenatea
+sourcesentencewithatargetsentence,eachwordinthesourcesentenceisfarfromitscorresponding
+word in the target sentence. As a result, the problem has a large “minimal time lag” [17]. By
+reversing the words in the source sentence, the average distance between correspondingwords in
+thesourceandtargetlanguageisunchanged. However,thefirstfew wordsin thesourcelanguage
+arenowveryclosetothefirstfewwordsinthetargetlanguage,sotheproblem’sminimaltimelagis
+greatlyreduced. Thus,backpropagationhasaneasiertime“establishingcommunication”between
+thesourcesentenceandthetargetsentence,whichinturnresultsinsubstantiallyimprovedoverall
+performance.
+Initially, we believedthatreversingtheinputsentenceswouldonlylead to moreconfidentpredic-
+tionsintheearlypartsofthetargetsentenceandtolessconfidentpredictionsinthelaterparts.How-
+ever,LSTMstrainedonreversedsourcesentencesdidmuchbetteronlongsentencesthanLSTMs
+4trainedontherawsourcesentences(seesec.3.7),whichsuggeststhatreversingtheinputsentences
+resultsinLSTMswithbettermemoryutilization.
+3.4 Trainingdetails
+We found that the LSTM models are fairly easy to train. We used deep LSTMs with 4 layers,
+with 1000 cells at each layer and 1000 dimensional word embeddings, with an input vocabulary
+of 160,000and an outputvocabularyof 80,000. Thusthe deep LSTM uses 8000real numbersto
+represent a sentence. We found deep LSTMs to significantly outperform shallow LSTMs, where
+each additionallayer reducedperplexityby nearly 10%, possibly due to their much larger hidden
+state. We usedanaivesoftmaxover80,000wordsateachoutput. TheresultingLSTMhas384M
+parametersofwhich64Marepurerecurrentconnections(32Mforthe“encoder”LSTMand32M
+forthe“decoder”LSTM).Thecompletetrainingdetailsaregivenbelow:
+• We initialized all of the LSTM’s parameterswith the uniformdistribution between -0.08
+and0.08
+• Weusedstochasticgradientdescentwithoutmomentum,withafixedlearningrateof0.7.
+After5epochs,webegunhalvingthelearningrateeveryhalfepoch.Wetrainedourmodels
+foratotalof7.5epochs.
+• We used batches of 128 sequences for the gradient and divided it the size of the batch
+(namely,128).
+• Although LSTMs tend to not suffer from the vanishing gradient problem, they can have
+explodinggradients. Thusweenforcedahardconstraintonthenormofthegradient[10,
+25]byscalingitwhenitsnormexceededathreshold.Foreachtrainingbatch,wecompute
+s=kgk ,wheregisthegradientdividedby128.Ifs>5,wesetg = 5g.
+2 s
+• Different sentences have different lengths. Most sentences are short (e.g., length 20-30)
+butsomesentencesarelong(e.g.,length>100),soaminibatchof128randomlychosen
+trainingsentenceswillhavemanyshortsentencesandfewlongsentences,andasaresult,
+muchofthecomputationintheminibatchiswasted.Toaddressthisproblem,wemadesure
+thatallsentencesinaminibatchareroughlyofthesamelength,yieldinga2xspeedup.
+3.5 Parallelization
+A C++ implementationof deep LSTM with the configurationfrom the previoussection on a sin-
+gle GPU processes a speed of approximately1,700 words per second. This was too slow for our
+purposes, so we parallelized our model using an 8-GPU machine. Each layer of the LSTM was
+executedon a differentGPU andcommunicatedits activationsto the nextGPU / layeras soon as
+they were computed. Our models have 4 layers of LSTMs, each of which resides on a separate
+GPU. The remaining4 GPUs were used to parallelize the softmax, so each GPU was responsible
+formultiplyingbya1000×20000matrix.Theresultingimplementationachievedaspeedof6,300
+(bothEnglishandFrench)wordspersecondwithaminibatchsizeof128.Trainingtookaboutaten
+dayswiththisimplementation.
+3.6 ExperimentalResults
+We used the cased BLEU score [24] to evaluatethe qualityof ourtranslations. We computedour
+BLEU scoresusing multi-bleu.pl1 on the tokenized predictionsand groundtruth. This way
+ofevaluatingtheBELUscoreisconsistentwith[5]and[2],andreproducesthe33.3scoreof[29].
+However,ifweevaluatethebestWMT’14system[9](whosepredictionscanbedownloadedfrom
+statmt.org\matrix)in this manner, we get37.0, which is greater than the 35.8 reportedby
+statmt.org\matrix.
+Theresultsarepresentedintables1and2.OurbestresultsareobtainedwithanensembleofLSTMs
+thatdifferintheirrandominitializationsandintherandomorderofminibatches.Whilethedecoded
+translationsoftheLSTMensembledonotoutperformthebestWMT’14system,itisthefirsttime
+thatapureneuraltranslationsystemoutperformsaphrase-basedSMTbaselineonalargescaleMT
+1ThereseveralvariantsoftheBLEUscore,andeachvariantisdefinedwithaperlscript.
+5Method testBLEUscore(ntst14)
+Bahdanauetal.[2] 28.45
+BaselineSystem[29] 33.30
+SingleforwardLSTM,beamsize12 26.17
+SinglereversedLSTM,beamsize12 30.59
+Ensembleof5reversedLSTMs,beamsize1 33.00
+Ensembleof2reversedLSTMs,beamsize12 33.27
+Ensembleof5reversedLSTMs,beamsize2 34.50
+Ensembleof5reversedLSTMs,beamsize12 34.81
+Table1: TheperformanceoftheLSTMonWMT’14EnglishtoFrenchtestset(ntst14). Notethat
+anensembleof5LSTMswith abeamofsize 2 ischeaperthanofa singleLSTM witha beamof
+size12.
+Method testBLEUscore(ntst14)
+BaselineSystem[29] 33.30
+Choetal.[5] 34.54
+BestWMT’14result[9] 37.0
+Rescoringthebaseline1000-bestwithasingleforwardLSTM 35.61
+Rescoringthebaseline1000-bestwithasinglereversedLSTM 35.85
+Rescoringthebaseline1000-bestwithanensembleof5reversedLSTMs 36.5
+OracleRescoringoftheBaseline1000-bestlists ∼45
+Table2: MethodsthatuseneuralnetworkstogetherwithanSMTsystemontheWMT’14English
+toFrenchtestset(ntst14).
+task by a sizeable margin, despite its inability to handle out-of-vocabularywords. The LSTM is
+within0.5BLEUpointsofthebestWMT’14resultifitisusedtorescorethe1000-bestlistofthe
+baselinesystem.
+3.7 Performanceonlongsentences
+WeweresurprisedtodiscoverthattheLSTMdidwellonlongsentences,whichisshownquantita-
+tivelyinfigure3. Table3presentsseveralexamplesoflongsentencesandtheirtranslations.
+3.8 ModelAnalysis
+4 15 I was given a card by her in the garden
+3 Mary admires John 10 In the garden , she gave me a card
+She gave me a card in the garden
+2 Mary is in love with John
+5
+1
+0 Mary respects John 0
+John admires Mary
+−1
+−5 She was given a card by me in the garden
+−2 John is in love with Mary
+In the garden , I gave her a card
+−3 −10
+−4
+−5 John respects Mary −15 I gave her a card in the garden
+−6 −20
+−8 −6 −4 −2 0 2 4 6 8 10 −15 −10 −5 0 5 10 15 20
+Figure 2: The figure shows a 2-dimensional PCA projection of the LSTM hidden states that are obtained
+afterprocessingthephrasesinthefigures. Thephrasesareclusteredbymeaning,whichintheseexamplesis
+primarilyafunctionofwordorder,whichwouldbedifficulttocapturewithabag-of-wordsmodel.Noticethat
+bothclustershavesimilarinternalstructure.
+One of the attractive features of our modelis its ability to turn a sequence of wordsinto a vector
+offixeddimensionality. Figure2visualizessomeofthelearnedrepresentations. Thefigureclearly
+showsthattherepresentationsaresensitivetotheorderofwords,whilebeingfairlyinsensitivetothe
+6Type Sentence
+Ourmodel UlrichUNK,membreduconseild’administrationduconstructeurautomobileAudi,
+affirmequ’ils’agitd’unepratiquecourantedepuisdesanne´espourqueleste´le´phones
+portablespuissenteˆtrecollecte´savantlesre´unionsduconseild’administrationafinqu’ils
+nesoientpasutilise´scommeappareilsd’e´coutea`distance.
+Truth UlrichHackenberg,membreduconseild’administrationduconstructeurautomobileAudi,
+de´clarequelacollectedeste´le´phonesportablesavantlesre´unionsduconseil,afinqu’ils
+nepuissentpaseˆtreutilise´scommeappareilsd’e´coutea`distance,estunepratiquecourante
+depuisdesanne´es.
+Ourmodel “Leste´le´phonescellulaires,quisontvraimentunequestion,nonseulementparcequ’ils
+pourraientpotentiellementcauserdesinterfe´rencesaveclesappareilsdenavigation,mais
+noussavons,selonlaFCC,qu’ilspourraientinterfe´reraveclestoursdete´le´phonecellulaire
+lorsqu’ilssontdansl’air”,ditUNK.
+Truth “Leste´le´phonesportablessontve´ritablementunproble`me,nonseulementparcequ’ils
+pourraiente´ventuellementcre´erdesinterfe´rencesaveclesinstrumentsdenavigation,mais
+parcequenoussavons,d’apre`slaFCC,qu’ilspourraientperturberlesantennes-relaisde
+te´le´phoniemobiles’ilssontutilise´sa`bord”,ade´clare´Rosenker.
+Ourmodel Aveclacre´mation,ilyaun“sentimentdeviolencecontrelecorpsd’uneˆtrecher”,
+quisera“re´duita`unepiledecendres”entre`speudetempsaulieud’unprocessusde
+de´composition“quiaccompagneralese´tapesdudeuil”.
+Truth Ilya,aveclacre´mation,“uneviolencefaiteaucorpsaime´”,
+quivaeˆtre“re´duita`untasdecendres”entre`speudetemps,etnonapre`sunprocessusde
+de´composition,qui“accompagneraitlesphasesdudeuil”.
+Table 3: A few examples of long translations produced by the LSTM alongside the ground truth
+translations.ThereadercanverifythatthetranslationsaresensibleusingGoogletranslate.
+40
+35
+30
+25
+20
+478 12 17 22 28 35 79
+test sentences sorted by their length
+erocs
+UELB
+LSTM (34.8)
+baseline (33.3) 40
+35
+30
+25
+20
+0 500 1000 1500 2000 2500 3000 3500
+test sentences sorted by average word frequency rank
+erocs
+UELB
+LSTM (34.8)
+baseline (33.3)
+Figure 3: The left plot shows the performance of our system as a function of sentence length, where the
+x-axiscorresponds tothetestsentencessortedbytheirlengthandismarkedbytheactualsequencelengths.
+Thereisnodegradationonsentenceswithlessthan35words,thereisonlyaminordegradationonthelongest
+sentences. Theright plotshowstheLSTM’sperformance onsentenceswithprogressivelymorerarewords,
+wherethex-axiscorrespondstothetestsentencessortedbytheir“averagewordfrequencyrank”.
+replacementofanactivevoicewithapassivevoice. Thetwo-dimensionalprojectionsareobtained
+usingPCA.
+4 Related work
+There is a large body of work on applications of neural networks to machine translation. So far,
+the simplest and most effective way of applying an RNN-Language Model (RNNLM) [23] or a
+7FeedforwardNeural Network LanguageModel (NNLM) [3] to an MT task is by rescoring the n-
+bestlistsofastrongMTbaseline[22],whichreliablyimprovestranslationquality.
+Morerecently,researchershavebeguntolookintowaysofincludinginformationaboutthesource
+languageinto the NNLM. Examplesof this workinclude Auliet al. [1], whocombinean NNLM
+withatopicmodeloftheinputsentence,whichimprovesrescoringperformance. Devlinetal.[8]
+followedasimilarapproach,buttheyincorporatedtheirNNLMintothedecoderofanMTsystem
+andusedthedecoder’salignmentinformationtoprovidetheNNLMwiththemostusefulwordsin
+theinputsentence. Theirapproachwashighlysuccessfulanditachievedlargeimprovementsover
+theirbaseline.
+OurworkiscloselyrelatedtoKalchbrennerandBlunsom[18],whowerethefirsttomaptheinput
+sentence into a vector and then back to a sentence, although they map sentences to vectors using
+convolutionalneuralnetworks,whichlosetheorderingofthewords. Similarlytothiswork,Choet
+al.[5]usedanLSTM-likeRNNarchitecturetomapsentencesintovectorsandback,althoughtheir
+primaryfocuswasonintegratingtheirneuralnetworkintoanSMTsystem. Bahdanauetal.[2]also
+attempteddirecttranslationswith aneuralnetworkthatusedanattentionmechanismtoovercome
+the poor performance on long sentences experienced by Cho et al. [5] and achieved encouraging
+results. Likewise, Pouget-Abadieet al. [26] attempted to address the memory problem of Cho et
+al.[5]bytranslatingpiecesofthesourcesentenceinwaythatproducessmoothtranslations,which
+issimilartoaphrase-basedapproach. Wesuspectthattheycouldachievesimilarimprovementsby
+simplytrainingtheirnetworksonreversedsourcesentences.
+End-to-endtrainingisalsothefocusofHermannetal.[12],whosemodelrepresentstheinputsand
+outputsbyfeedforwardnetworks,andmapthemtosimilarpointsinspace. However,theirapproach
+cannotgeneratetranslationsdirectly:togetatranslation,theyneedtodoalookupforclosestvector
+inthepre-computeddatabaseofsentences,ortorescoreasentence.
+5 Conclusion
+In this work, we showed that a large deep LSTM, that has a limited vocabulary and that makes
+almostnoassumptionaboutproblemstructurecanoutperformastandardSMT-basedsystemwhose
+vocabularyisunlimitedonalarge-scaleMTtask. ThesuccessofoursimpleLSTM-basedapproach
+on MT suggests that it should do well on many other sequence learning problems, providedthey
+haveenoughtrainingdata.
+Weweresurprisedbytheextentoftheimprovementobtainedbyreversingthewordsinthesource
+sentences. Weconcludethatitisimportanttofindaproblemencodingthathasthegreatestnumber
+ofshorttermdependencies,as theymakethe learningproblemmuchsimpler. Inparticular,while
+wewereunabletotrainastandardRNNonthenon-reversedtranslationproblem(showninfig.1),
+webelievethatastandardRNN shouldbeeasilytrainablewhenthesourcesentencesarereversed
+(althoughwedidnotverifyitexperimentally).
+We were also surprisedbythe ability ofthe LSTM to correctlytranslate verylongsentences. We
+were initially convinced that the LSTM would fail on long sentences due to its limited memory,
+and other researchers reported poor performance on long sentences with a model similar to ours
+[5, 2, 26]. And yet, LSTMs trained on the reversed dataset had little difficulty translating long
+sentences.
+Mostimportantly,wedemonstratedthatasimple,straightforwardandarelativelyunoptimizedap-
+proachcanoutperformanSMTsystem,sofurtherworkwilllikelyleadtoevengreatertranslation
+accuracies.Theseresultssuggestthatourapproachwilllikelydowellonotherchallengingsequence
+tosequenceproblems.
+6 Acknowledgments
+WethankSamyBengio,JeffDean,MatthieuDevin,GeoffreyHinton,NalKalchbrenner,ThangLuong,Wolf-
+gangMacherey, RajatMonga, VincentVanhoucke, PengXu,WojciechZaremba,andtheGoogleBrainteam
+forusefulcommentsanddiscussions.
+8References
+[1] M. Auli, M. Galley, C. Quirk, and G. Zweig. Joint language and translation modeling with recurrent
+neuralnetworks. InEMNLP,2013.
+[2] D.Bahdanau,K.Cho,andY.Bengio.Neuralmachinetranslationbyjointlylearningtoalignandtranslate.
+arXivpreprintarXiv:1409.0473,2014.
+[3] Y.Bengio,R.Ducharme,P.Vincent,andC.Jauvin. Aneuralprobabilisticlanguagemodel. InJournalof
+MachineLearningResearch,pages1137–1155,2003.
+[4] Y.Bengio,P.Simard,andP.Frasconi.Learninglong-termdependencieswithgradientdescentisdifficult.
+IEEETransactionsonNeuralNetworks,5(2):157–166,1994.
+[5] K.Cho,B.Merrienboer,C.Gulcehre,F.Bougares,H.Schwenk,andY.Bengio.Learningphraserepresen-
+tationsusingRNNencoder-decoderforstatisticalmachinetranslation.InArxivpreprintarXiv:1406.1078,
+2014.
+[6] D.Ciresan,U.Meier,andJ.Schmidhuber. Multi-columndeepneuralnetworksforimageclassification.
+InCVPR,2012.
+[7] G.E.Dahl,D.Yu,L.Deng,andA.Acero. Context-dependentpre-traineddeepneuralnetworksforlarge
+vocabularyspeechrecognition.IEEETransactionsonAudio,Speech,andLanguageProcessing-Special
+IssueonDeepLearningforSpeechandLanguageProcessing,2012.
+[8] J.Devlin, R.Zbib, Z.Huang, T.Lamar,R.Schwartz, andJ.Makhoul. Fastandrobustneural network
+jointmodelsforstatisticalmachinetranslation. InACL,2014.
+[9] NadirDurrani,BarryHaddow,PhilippKoehn,andKennethHeafield. Edinburgh’sphrase-basedmachine
+translationsystemsforwmt-14. InWMT,2014.
+[10] A. Graves. Generating sequences with recurrent neural networks. InArxivpreprint arXiv:1308.0850,
+2013.
+[11] A.Graves,S.Ferna´ndez,F.Gomez,andJ.Schmidhuber. Connectionisttemporalclassification:labelling
+unsegmentedsequencedatawithrecurrentneuralnetworks. InICML,2006.
+[12] K. M. Hermann and P.Blunsom. Multilingual distributedrepresentations without word alignment. In
+ICLR,2014.
+[13] G. Hinton, L. Deng, D. Yu, G. Dahl, A. Mohamed, N. Jaitly, A. Senior, V. Vanhoucke, P. Nguyen,
+T.Sainath,andB.Kingsbury. Deepneuralnetworksforacousticmodelinginspeechrecognition. IEEE
+SignalProcessingMagazine,2012.
+[14] S.Hochreiter. Untersuchungen zudynamischen neuronalen netzen. Master’s thesis, InstitutfurInfor-
+matik,TechnischeUniversitat,Munchen,1991.
+[15] S.Hochreiter,Y.Bengio,P.Frasconi,andJ.Schmidhuber. Gradientflowinrecurrentnets: thedifficulty
+oflearninglong-termdependencies,2001.
+[16] S.HochreiterandJ.Schmidhuber. Longshort-termmemory. NeuralComputation,1997.
+[17] S.HochreiterandJ.Schmidhuber. LSTMcansolvehardlongtimelagproblems. 1997.
+[18] N.KalchbrennerandP.Blunsom. Recurrentcontinuoustranslationmodels. InEMNLP,2013.
+[19] A.Krizhevsky, I.Sutskever, andG.E.Hinton. ImageNetclassificationwithdeepconvolutional neural
+networks. InNIPS,2012.
+[20] Q.V.Le,M.A.Ranzato, R.Monga, M.Devin,K.Chen, G.S.Corrado, J.Dean,andA.Y.Ng. Building
+high-levelfeaturesusinglargescaleunsupervisedlearning. InICML,2012.
+[21] Y.LeCun,L.Bottou,Y.Bengio,andP.Haffner.Gradient-basedlearningappliedtodocumentrecognition.
+ProceedingsoftheIEEE,1998.
+[22] T. Mikolov. Statistical Language Models based on Neural Networks. PhD thesis, Brno University of
+Technology,2012.
+[23] T. Mikolov, M. Karafia´t, L. Burget, J. Cernocky`, and S. Khudanpur. Recurrent neural network based
+languagemodel. InINTERSPEECH,pages1045–1048,2010.
+[24] K.Papineni,S.Roukos,T.Ward,andW.J.Zhu. BLEU:amethodforautomaticevaluationofmachine
+translation. InACL,2002.
+[25] R.Pascanu, T.Mikolov, and Y.Bengio. Onthedifficultyoftrainingrecurrent neural networks. arXiv
+preprintarXiv:1211.5063,2012.
+[26] J. Pouget-Abadie, D. Bahdanau, B. van Merrienboer, K. Cho, and Y. Bengio. Overcoming the
+curse of sentence length for neural machine translation using automatic segmentation. arXiv preprint
+arXiv:1409.1257,2014.
+[27] A. Razborov. On small depth threshold circuits. In Proc. 3rd Scandinavian Workshop on Algorithm
+Theory,1992.
+[28] D.Rumelhart, G.E.Hinton, andR.J.Williams. Learningrepresentationsbyback-propagating errors.
+Nature,323(6088):533–536,1986.
+[29] H. Schwenk. University le mans. http://www-lium.univ-lemans.fr/˜schwenk/cslm_
+joint_paper/,2014. [Online;accessed03-September-2014].
+[30] M.Sundermeyer, R.Schluter, andH.Ney. LSTMneuralnetworksforlanguage modeling. InINTER-
+SPEECH,2010.
+[31] P.Werbos. Backpropagationthroughtime:whatitdoesandhowtodoit. ProceedingsofIEEE,1990.
+9

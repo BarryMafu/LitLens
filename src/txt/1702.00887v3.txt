@@ -1,0 +1,1262 @@
+PublishedasaconferencepaperatICLR2017
+STRUCTURED ATTENTION NETWORKS
+YoonKim∗ CarlDenton∗ LuongHoang AlexanderM.Rush
+{yoonkim@seas,carldenton@college,lhoang@g,srush@seas}.harvard.edu
+SchoolofEngineeringandAppliedSciences
+HarvardUniversity
+Cambridge,MA02138,USA
+ABSTRACT
+Attention networks have proven to be an effective approach for embedding cat-
+egorical inference within a deep neural network. However, for many tasks we
+maywanttomodelricherstructuraldependencieswithoutabandoningend-to-end
+training. In this work, we experiment with incorporating richer structural distri-
+butions, encoded using graphical models, within deep networks. We show that
+these structured attention networks are simple extensions of the basic attention
+procedure, and that they allow for extending attention beyond the standard soft-
+selectionapproach,suchasattendingtopartialsegmentationsortosubtrees. We
+experiment with two different classes of structured attention networks: a linear-
+chain conditional random field and a graph-based parsing model, and describe
+howthesemodelscanbepracticallyimplementedasneuralnetworklayers. Ex-
+perimentsshowthatthisapproachiseffectiveforincorporatingstructuralbiases,
+and structured attention networks outperform baseline attention models on a va-
+riety of synthetic and real tasks: tree transduction, neural machine translation,
+question answering, and natural language inference. We further find that mod-
+elstrainedinthiswaylearninterestingunsupervisedhiddenrepresentationsthat
+generalizesimpleattention.
+1 INTRODUCTION
+Attentionnetworksarenowastandardpartofthedeeplearningtoolkit,contributingtoimpressive
+resultsinneuralmachinetranslation(Bahdanauetal.,2015;Luongetal.,2015),imagecaptioning
+(Xuetal.,2015),speechrecognition(Chorowskietal.,2015;Chanetal.,2015),questionanswering
+(Hermannetal.,2015;Sukhbaataretal.,2015),andalgorithm-learning(Gravesetal.,2014;Vinyals
+et al., 2015), among many other applications (see Cho et al. (2015) for a comprehensive review).
+Thisapproachalleviatesthebottleneckofcompressingasourceintoafixed-dimensionalvectorby
+equipping a model with variable-length memory (Weston et al., 2014; Graves et al., 2014; 2016),
+therebyprovidingrandomaccessintothesourceasneeded. Attentionisimplementedasahidden
+layerwhichcomputesacategoricaldistribution(orhierarchyofcategoricaldistributions)tomakea
+soft-selectionoversourceelements.
+Notingtheempiricaleffectivenessofattentionnetworks,wealsoobservethatthestandardattention-
+based architecture does not directly model any structural dependencies that may exist among the
+sourceelements,andinsteadreliescompletelyonthehiddenlayersofthenetwork.Whileonemight
+arguethatthesestructuraldependenciescanbelearnedimplicitlybyadeepmodelwithenoughdata,
+in practice, it may be useful to provide a structural bias. Modeling structural dependencies at the
+final,outputlayerhasbeenshowntobeimportantinmanydeeplearningapplications,mostnotably
+in seminal work on graph transformers (LeCun et al., 1998), key work on NLP (Collobert et al.,
+2011),andinmanyotherareas(Pengetal.,2009;Do&Artie´res,2010;Jaderbergetal.,2014;Chen
+etal.,2015;Durrett&Klein,2015;Lampleetal.,2016,interalia).
+In this work, we consider applications which may require structural dependencies at the attention
+layer,anddevelopinternalstructuredlayersformodelingthesedirectly. Thisapproachgeneralizes
+categorical soft-selection attention layers by specifying possible structural dependencies in a soft
+∗Equalcontribution.
+1
+7102
+beF
+61
+]LC.sc[
+3v78800.2071:viXraPublishedasaconferencepaperatICLR2017
+manner. Keyapplicationswillbethedevelopmentofanattentionfunctionthatsegmentsthesource
+inputintosubsequencesandonethattakesintoaccountthelatentrecursivestructure(i.e. parsetree)
+ofasourcesentence.
+Ourapproachviewstheattentionmechanismasagraphicalmodeloverasetoflatentvariables. The
+standardattentionnetworkcanbeseenasanexpectationofanannotationfunctionwithrespecttoa
+singlelatentvariablewhosecategoricaldistributionisparameterizedtobeafunctionofthesource.
+In the general case we can specify a graphical model over multiple latent variables whose edges
+encodethedesiredstructure. Computingforwardattentionrequiresperforminginferencetoobtain
+theexpectationoftheannotationfunction,i.e.thecontextvector.Thisexpectationiscomputedover
+anexponentially-sizedsetofstructures(throughthemachineryofgraphicalmodels/structuredpre-
+diction),hencethenamestructuredattentionnetwork. Notablyeachstepofthisprocess(including
+inference)isdifferentiable,sothemodelcanbetrainedend-to-endwithouthavingtoresorttodeep
+policygradientmethods(Schulmanetal.,2015).
+The differentiability of inference algorithms over graphical models has previously been noted by
+various researchers (Li & Eisner, 2009; Domke, 2011; Stoyanov et al., 2011; Stoyanov & Eisner,
+2012; Gormley et al., 2015), primarily outside the area of deep learning. For example, Gormley
+etal.(2015)treatanentiregraphicalmodelasadifferentiablecircuitandbackpropagateriskthrough
+variationalinference(loopybeliefpropagation)forminimiumrisktrainingofdependencyparsers.
+Our contribution is to combine these ideas to produce structured internal attention layers within
+deep networks, noting that these approaches allow us to use the resulting marginals to create new
+features,aslongaswedosoadifferentiableway.
+Wefocusontwoclassesofstructuredattention:linear-chainconditionalrandomfields(CRFs)(Laf-
+fertyetal.,2001)andfirst-ordergraph-baseddependencyparsers(Eisner,1996). Theinitialwork
+ofBahdanauetal.(2015)wasparticularlyinterestinginthecontextofmachinetranslation, asthe
+model was able to implicitly learn an alignment model as a hidden layer, effectively embedding
+inference into a neural network. In similar vein, under our framework the model has the capacity
+tolearna segmenterasa hiddenlayer ora parserasa hiddenlayer, withouteverhaving toseea
+segmentedsentenceoraparsetree. Ourexperimentsapplythisapproachtoadifficultsyntheticre-
+orderingtask,aswellastomachinetranslation,questionanswering,andnaturallanguageinference.
+Wefindthatmodelstrainedwithstructuredattentionoutperformstandardattentionmodels. Analy-
+sisoflearnedrepresentationsfurtherrevealthatinterestingstructuresemergeasaninternallayerof
+themodel. Allcodeisavailableathttp://github.com/harvardnlp/struct-attn.
+2 BACKGROUND: ATTENTION NETWORKS
+Astandardneuralnetworkconsistofaseriesofnon-lineartransformationlayers,whereeachlayer
+producesafixed-dimensionalhiddenrepresentation.Fortaskswithlargeinputspaces,thisparadigm
+makesithardtocontroltheinteractionbetweencomponents. Forexampleinmachinetranslation,
+thesourceconsistsofanentiresentence,andtheoutputisapredictionforeachwordinthetranslated
+sentence. Utilizingastandardnetworkleadstoaninformationbottleneck,whereonehiddenlayer
+mustencodetheentiresourcesentence. Attentionprovidesanalternativeapproach.1 Anattention
+networkmaintainsasetofhiddenrepresentationsthatscalewiththesizeofthesource. Themodel
+usesaninternalinferencesteptoperformasoft-selectionovertheserepresentations. Thismethod
+allowsthemodeltomaintainavariable-lengthmemoryandhasshowntobecruciallyimportantfor
+scalingsystemsformanytasks.
+Formally, let x = [x ,...,x ] represent a sequence of inputs, let q be a query, and let z be a
+1 n
+categorical latent variable with sample space {1,...,n} that encodes the desired selection among
+theseinputs. Ouraimistoproduceacontextcbasedonthesequenceandthequery. Todoso,we
+assumeaccesstoanattentiondistributionz ∼p(z|x,q),whereweconditionpontheinputsxand
+aqueryq. Thecontext overasequenceisdefinedasexpectation, c = E [f(x,z)]where
+z∼p(z|x,q)
+f(x,z) is an annotation function. Attention of this form can be applied over any type of input,
+however,wewillprimarilybeconcernedwith“deep”networks,whereboththeannotationfunction
+1Anotherlineofworkinvolvesmarginalizingoverlatentvariables(e.g.latentalignments)forsequence-to-
+sequencetransduction(Kongetal.,2016;Luetal.,2016;Yuetal.,2016;2017).
+2PublishedasaconferencepaperatICLR2017
+and attention distribution are parameterized with neural networks, and the context produced is a
+vectorfedtoadownstreamnetwork.
+Forexample,considerthecaseofattention-basedneuralmachinetranslation(Bahdanauetal.,2015).
+Herethesequenceofinputs[x ,...,x ]arethehiddenstatesofarecurrentneuralnetwork(RNN),
+1 n
+running over the words in the source sentence, q is the RNN hidden state of the target decoder
+(i.e. vector representation of the query q), and z represents the source position to be attended to
+fortranslation. Theattentiondistributionpissimplyp(z = i|x,q) = softmax(θ )whereθ ∈ Rn
+i
+is a parameterized potential typically based on a neural network, e.g. θ = MLP([x ;q]). The
+i i
+annotationfunctionisdefinedtosimplyreturntheselectedhiddenstate,f(x,z)=x . Thecontext
+z
+vectorcanthenbecomputedusingasimplesum,
+n
+(cid:88)
+c=E [f(x,z)]= p(z =i|x,q)x (1)
+z∼p(z|x,q) i
+i=1
+Othertaskssuchasquestionansweringuseattentioninasimilarmanner,forinstancebyreplacing
+source[x ,...,x ]withasetofpotentialfactsandqwitharepresentationofthequestion.
+1 n
+Insummaryweinterprettheattentionmechanismastakingtheexpectationofanannotationfunction
+f(x,z)withrespecttoalatentvariablez ∼p,wherepisparameterizedtobefunctionofxandq.
+3 STRUCTURED ATTENTION
+Attentionnetworkssimulateselectionfromasetusingasoftmodel.Inthisworkweconsidergener-
+alizingselectiontotypesofattention,suchasselectingchunks,segmentinginputs,orevenattending
+tolatentsubtrees.Oneinterpretationofthisattentionisasusingsoft-selectionthatconsidersallpos-
+siblestructuresovertheinput,ofwhichtheremaybeexponentiallymanypossibilities. Ofcourse,
+this expectation can no longer be computed using a simple sum, and we need to incorporate the
+machineryofinferencedirectlyintoourneuralnetwork.
+Defineastructuredattentionmodelasbeinganattentionmodelwherez isnowavectorofdiscrete
+latent variables [z ,...,z ] and the attention distribution is p(z|x,q) is defined as a conditional
+1 m
+randomfield(CRF),specifyingtheindependencestructureofthezvariables. Formally,weassume
+anundirectedgraphstructurewithmvertices.TheCRFisparameterizedwithclique(log-)potentials
+θ (z ) ∈ R, wherethez indicatesthesubsetofz givenbycliqueC. Underthisdefinition, the
+C C C
+(cid:80)
+attentionprobabilityisdefinedas, p(z|x,q;θ) = softmax( θ (z )),whereforsymmetrywe
+C C C
+usesoftmaxinageneralsense,i.e. softmax(g(z)) = 1 exp(g(z))whereZ = (cid:80) exp(g(z(cid:48)))is
+Z z(cid:48)
+theimpliedpartitionfunction. InpracticeweuseaneuralCRF,whereθcomesfromadeepmodel
+overx,q.
+In structured attention, we also assume that the annotation function f factors (at least) into clique
+(cid:80)
+annotationfunctionsf(x,z) = f (x,z ). Understandardconditionsontheconditionalinde-
+C C C
+pendencestructure,inferencetechniquesfromgraphicalmodelscanbeusedtocomputetheforward-
+passexpectationsandthecontext:
+(cid:88)
+c=E [f(x,z)]= E [f (x,z )]
+z∼p(z|x,q) z∼p(zC|x,q) C C
+C
+3.1 EXAMPLE1: SUBSEQUENCESELECTION
+Supposeinsteadofsoft-selectingasingleinput,wewantedtoexplicitlymodeltheselectionofcon-
+tiguoussubsequences. Wecouldnaivelyapplycategoricalattentionoverallsubsequences,orhope
+the model learns a multi-modal distribution to combine neighboring words. Structured attention
+providesanalternateapproach.
+Concretely,letm=n,defineztobearandomvectorz =[z ,...,z ]withz ∈{0,1},anddefine
+1 n i
+our annotation function to be, f(x,z) = (cid:80)n f (x,z ) where f (x,z ) = 1{z = 1}x . The
+i=1 i i i i i i
+explicitexpectationisthen,
+n
+(cid:88)
+E [f(x,z)]= p(z =1|x,q)x (2)
+z1,...,zn i i
+i=1
+3PublishedasaconferencepaperatICLR2017
+q q q
+z z z z z z z z z
+1 1 2 3 4 1 2 3 4
+x x x x x x x x x x x x
+1 2 3 4 1 2 3 4 1 2 3 4
+(a) (b) (c)
+Figure1: Threeversionsofalatentvariableattentionmodel:(a)Astandardsoft-selectionattentionnetwork,
+(b)ABernoulli(sigmoid)attentionnetwork, (c)Alinear-chainstructuredattentionmodelforsegmentation.
+Theinputandqueryaredenotedwithxandqrespectively.
+Equation (2) is similar to equation (1)—both are a linear combination of the input representations
+where the scalar is between [0,1] and represents how much attention should be focused on each
+input. However,(2)isfundamentallydifferentintwoways: (i)itallowsformultipleinputs(orno
+inputs)tobeselectedforagivenquery; (ii)wecanincorporatestructuraldependenciesacrossthe
+z ’s.Forinstance,wecanmodelthedistributionoverzwithalinear-chainCRFwithpairwiseedges,
+i
+(cid:32)n−1 (cid:33)
+(cid:88)
+p(z ,...,z |x,q)=softmax θ (z ,z ) (3)
+1 n i,i+1 i i+1
+i=1
+where θ is the pairwise potential for z = k and z = l. This model is shown in Figure 1c.
+k,l i i+1
+ComparethismodeltothestandardattentioninFigure1a,ortoasimpleBernoulli(sigmoid)selec-
+tion method, p(z = 1|x,q) = sigmoid(θ ), shown in Figure 1b. All three of these methods can
+i i
+usepotentialsfromthesameneuralnetworkorRNNthattakesxandqasinputs.
+Inthecaseofthelinear-chainCRFin(3),themarginaldistributionp(z = 1|x)canbecalculated
+i
+efficientlyinlinear-timeforalliusingmessage-passing,i.e.theforward-backwardalgorithm.These
+marginalsallowustocalculate(2),andindoingsoweimplicitlysumoveranexponentially-sized
+setofstructures(i.e. allbinarysequencesoflengthn)throughdynamicprogramming. Wereferto
+thistypeofattentionlayerasasegmentationattentionlayer.
+Note that the forward-backward algorithm is being used as parameterized pooling (as opposed to
+outputcomputation),andcanbethoughtofasgeneralizingthestandardattentionsoftmax.Crucially
+thisgeneralizationfromvectorsoftmaxtoforward-backwardisjustaseriesofdifferentiablesteps,2
+and we can compute gradients of its output (marginals) with respect to its input (potentials). This
+willallowthestructuredattentionmodeltobetrainedend-to-endaspartofadeepmodel.
+3.2 EXAMPLE2: SYNTACTICTREESELECTION
+Thissameapproachcanbeusedformoreinvolvedstructuraldependencies. Onepopularstructure
+for natural language tasks is a dependency tree, which enforces a structural bias on the recursive
+dependenciescommoninmanylanguages. Inparticularadependencytreeenforcesthateachword
+inasourcesentenceisassignedexactlyoneparentword(headword),andthattheseassignmentsdo
+notcross(projectivestructure). Employingthisbiasencouragesthesystemtomakeasoft-selection
+based on learned syntactic dependencies, without requiring linguistic annotations or a pipelined
+decision.
+A dependency parser can be partially formalized as a graphical model with the following cliques
+(Smith & Eisner, 2008): latent variables z ∈ {0,1} for all i (cid:54)= j, which indicates that the i-th
+ij
+word is the parent of the j-th word (i.e. x → x ); and a special global constraint that rules out
+i j
+configurationsofz ’sthatviolateparsingconstraints(e.g. onehead,projectivity).
+ij
+The parameters to the graph-based CRF dependency parser are the potentials θ , which reflect
+ij
+the score of selecting x as the parent of x . The probability of a parse tree z given the sentence
+i j
+2Asareotherdynamicprogrammingalgorithmsforinferenceingraphicalmodels,suchas(loopyandnon-
+loopy)beliefpropagation.
+4PublishedasaconferencepaperatICLR2017
+procedureFORWARDBACKWARD(θ) procedureBACKPROPFORWARDBACKWARD(θ,p,∇L
+p
+)
+α[0,(cid:104)t(cid:105)]←0 ∇L ←logp⊗log∇L⊗β⊗−A
+α p
+β[n+1,(cid:104)t(cid:105)]←0 ∇L ←logp⊗log∇L⊗α⊗−A
+fori=1,...,n;c∈Cdo β p
+αˆ[0,(cid:104)t(cid:105)]←0
+(cid:76)
+α[i,c]← y α[i−1,y]⊗θ i−1,i (y,c) βˆ[n+1,(cid:104)t(cid:105)]←0
+fori=n,...,1;c∈Cdo fori=n,...1;c∈Cdo
+β[i,c]← (cid:76) y β[i+1,y]⊗θ i,i+1 (c,y) βˆ[i,c]←∇L α [i,c]⊕ (cid:76) y θ i,i+1 (c,y)⊗βˆ[i+1,y]
+A←α[n+1,(cid:104)t(cid:105)] fori=1,...,n;c∈Cdo
+fori=1,...,n;c∈Cdo αˆ[i,c]←∇L[i,c]⊕ (cid:76) θ (y,c)⊗αˆ[i−1,y]
+p(z =c|x)←exp(α[i,c]⊗β[i,c] β y i−1,i
+i
+fori=1,...,n;y,c∈Cdo
+⊗−A)
+∇L ←signexp(αˆ[i,y]⊗β[i+1,c]
+returnp θi−1,i(y,c)
+⊕α[i,y]⊗βˆ[i+1,c]
+⊕α[i,y]⊗β[i+1,c]⊗−A)
+return∇L
+θ
+Figure2: Algorithmsforlinear-chainCRF:(left)computationofforward-backwardtablesα,β,andmarginal
+probabilitiespfrompotentialsθ(forward-backwardalgorithm);(right)backpropagationoflossgradientswith
+respecttothemarginals∇L. Cdenotesthestatespaceand(cid:104)t(cid:105)isthespecialstart/stopstate. Backpropagation
+p
+usestheidentity∇L =p(cid:12)∇Ltocalculate∇L =∇L ∇logp,where(cid:12)istheelement-wisemultiplication.
+logp p θ logp θ
+Typicallytheforward-backwardwithmarginalsisperformedinthelog-spacesemifieldR∪{±∞}withbinary
+operations⊕=logaddand⊗=+fornumericalprecision.However,backpropagationrequiresworkingwith
+thelogofnegativevalues(since∇L couldbenegative),soweextendtoafield[R∪{±∞}]×{+,−}with
+p
+special+/−log-spaceoperations. Binaryoperationsappliedtovectorsareimpliedtobeelement-wise. The
+signexpfunctionisdefinedassignexp(l )=s exp(l ).SeeSection3.3andTable1formoredetails.
+a a a
+x=[x ,...,x ]is,
+1 n
+ 
+(cid:88)
+p(z|x,q)=softmax 1{zisvalid} 1{z ij =1}θ ij (4)
+i(cid:54)=j
+where z is represented as a vector of z ’s for all i (cid:54)= j. It is possible to calculate the marginal
+ij
+probabilityofeachedgep(z =1|x,q)foralli,jinO(n3)timeusingtheinside-outsidealgorithm
+ij
+(Baker,1979)onthedatastructuresofEisner(1996).
+Theparsingcontraintsensurethateachwordhasexactlyonehead(i.e.
+(cid:80)n
+z =1). Thereforeif
+i=1 ij
+wewanttoutilizethesoft-headselectionofapositionj,thecontextvectorisdefinedas:
+n n
+(cid:88) (cid:88)
+f (x,z)= 1{z =1}x c =E [f (x,z)]= p(z =1|x,q)x
+j ij i j z j ij i
+i=1 i=1
+Note that in this case the annotation function has the subscript j to produce a context vector for
+each word in the sentence. Similar types of attention can be applied for other tree properties (e.g.
+soft-children). Werefertothistypeofattentionlayerasasyntacticattentionlayer.
+3.3 END-TO-ENDTRAINING
+Graphicalmodelsofthisformhavebeenwidelyusedasthefinallayerofdeepmodels. Ourcontri-
+butionistoarguethatthesenetworkscanbeaddedwithindeepnetworksinplaceofsimpleattention
+layers. Thewholemodelcanthenbetrainedend-to-end.
+Themaincomplicationinutilizingthisapproachwithinthenetworkitselfistheneedtobackprop-
+agatethegradientsthroughaninferencealgorithmaspartofthestructuredattentionnetwork. Past
+workhasdemonstratedthetechniquesnecessaryforthisapproach(seeStoyanovetal.(2011)),but
+toourknowledgeitisveryrarelyemployed.
+Considerthecaseofthesimplelinear-chainCRFlayerfromequation(3). Figure2(left)showsthe
+standardforward-backwardalgorithmforcomputingthemarginalsp(z =1|x,q;θ).Ifwetreatthe
+i
+forward-backwardalgorithmasaneuralnetworklayer,itsinputarethepotentialsθ,anditsoutput
+5PublishedasaconferencepaperatICLR2017
+aftertheforwardpassarethesemarginals.3 Tobackpropagatealossthroughthislayerweneedto
+computethegradientofthelossLwithrespecttoθ,∇L,asafunctionofthegradientofthelosswith
+θ
+respecttothemarginals,∇L.4 Astheforward-backwardalgorithmconsistsofdifferentiablesteps,
+p
+thisfunctioncanbederivedusingreverse-modeautomaticdifferentiationoftheforward-backward
+algorithmitself. Notethatthisreverse-modealgorithmconvenientlyhasaparallelstructuretothe
+forwardversion,andcanalsobeimplementedusingdynamicprogramming.
+However, in practice, one cannot simply
+usecurrentoff-the-shelftoolsforthistask.
+⊕ ⊗
+For one, efficiency is quite important for
+s s l s l s
+these models and so the benefits of hand- a b a+b a+b a·b a·b
+optimizing the reverse-mode implementa- + + l a +log(1+d) + l a +l b +
++ − l +log(1−d) + l +l −
+tionstilloutweighssimplicityofautomatic a a b
+− + l +log(1−d) − l +l −
+differentiation. Secondly, numerical pre- a a b
+− − l +log(1+d) − l +l +
+cision becomes a major issue for struc- a a b
+tured attention networks. For computing
+Table 1: Signed log-space semifield (from Li & Eis-
+theforward-passandthemarginals,itisim-
+ner (2009)). Each real number a is represented as a pair
+portanttousethestandardlog-spacesemi-
+(l ,s )wherel = log|a|ands = sign(a). Therefore
+field over R ∪ {±∞} with binary opera- a a a a
+a=s exp(l ).Fortheaboveweletd=exp(l −l )and
+a a b a
+tions (⊕ = logadd,⊗ = +) to avoid un- assume|a|>|b|.
+derflowofprobabilities. Forcomputingthe
+backward-pass, we need to remain in log-
+space,butalsohandlelogofnegativevalues(since∇L couldbenegative). Thisrequiresextending
+p
+to the signed log-space semifield over [R∪{±∞}] × {+,−} with special +/− operations. Ta-
+ble 1, based on Li & Eisner (2009), demonstrates how to handle this issue, and Figure 2 (right)
+describes backpropagation through the forward-backward algorithm. For dependency parsing, the
+forwardpasscanbecomputedusingtheinside-outsideimplementationofEisner’salgorithm(Eis-
+ner,1996). Similarly,thebackpropagationparallelstheinside-outsidestructure. Forward/backward
+passthroughtheinside-outsidealgorithmisdescribedinAppendixB.
+4 EXPERIMENTS
+Weexperimentwiththreeinstantiationsofstructuredattentionnetworksonfourdifferenttasks: (a)
+asimple,synthetictreemanipulationtaskusingthesyntacticattentionlayer,(b)machinetranslation
+with segmentation attention (i.e. two-state linear-chain CRF), (c) question answering using an n-
+statelinear-chainCRFformulti-stepinferenceovernfacts,and(d)naturallanguageinferencewith
+syntactic tree attention. These experiments are not intended to boost the state-of-the-art for these
+tasksbuttotestwhetherthesemethodscanbetrainedeffectivelyinanend-to-endfashion,canyield
+improvementsoverstandardselection-basedattention,andcanlearnplausiblelatentstructures. All
+modelarchitectures,hyperparameters,andtrainingdetailsarefurtherdescribedinAppendixA.
+4.1 TREETRANSDUCTION
+Thefirstsetofexperimentslookatatree-transductiontask. Theseexperimentsusesyntheticdata
+toexploreafailurecaseofsoft-selectionattentionmodels. Thetaskistolearntoconvertarandom
+formulagiveninprefixnotationtooneininfixnotation,e.g.,
+( ∗ ( + ( + 15 7 ) 1 8 ) ( + 19 0 11 ) ) ⇒( ( 15 + 7 ) + 1 + 8 ) ∗ ( 19 + 0 + 11 )
+Thealphabetconsistsofsymbols{(,),+,∗},numbersbetween0and20,andaspecialrootsymbol
+$.Thistaskisusedasapreliminarytasktoseeifthemodelisabletolearntheimplicittreestructure
+on the source side. The model itself is an encoder-decoder model, where the encoder is defined
+belowandthedecoderisanLSTM.SeeAppendixA.2forthefullmodel.
+3Confusingly,“forward”inthiscaseisdifferentthanintheforward-backwardalgorithm,asthemarginals
+themselvesaretheoutput. Howeverthetwousesofthetermareactuallyquiterelated. Theforward-backward
+algorithmcanbeinterpretedasaforwardandbackpropagationpassonthelogpartitionfunction. SeeEisner
+(2016) for further details (appropriately titled “Inside-Outside and Forward-Backward Algorithms Are Just
+Backprop”).Assuchourfullapproachcanbeseenascomputingsecond-orderinformation.Thisinterpretation
+iscentraltoLi&Eisner(2009).
+4Ingeneralweuse∇atodenotetheJacobianofawithrespecttob.
+b
+6PublishedasaconferencepaperatICLR2017
+Figure 3: Visualization of the source self-attention distribution for the simple (left) and structured (right)
+attentionmodelsonthetreetransductiontask.$isthespecialrootsymbol.Eachrowdelineatesthedistribution
+overtheparents(i.e.eachrowsumstoone).Theattentiondistributionobtainedfromtheparsingmarginalsare
+moreabletocapturethetreestructure—e.g. theattentionweightsofclosingparenthesesaregenerallyplaced
+ontheopeningparentheses(thoughnotnecessarilyonasingleparenthesis).
+Traininguses15Kprefix-infixpairswherethemaximumnestingdepthissettobebetween2-4(the
+aboveexamplehasdepth3),with5Kpairsineachdepthbucket. Thenumberofexpressionsineach
+parenthesisislimitedtobeatmost4. Testuses1Kunseensequenceswithdepthbetween2-6(note
+specifically deeper than train), with 200 sequences for each depth. The performance is measured
+astheaverageproportionofcorrecttargettokensproduceduntilthefirstfailure(asinGrefenstette
+etal.(2015)).
+Forexperimentswetryusingdifferentformsofself-attentionoverembedding-onlyencoders. Let
+x beanembeddingforeachsourcesymbol;ourthreevariantsofthesourcerepresentationxˆ are:
+j j
+(a) no atten, just symbol embeddings by themselves, i.e. xˆ = x ; (b) simple attention, symbol
+j j
+embeddingsandsoft-pairingforeachsymbol,i.e. xˆ =[x ;c ]wherec =
+(cid:80)n
+softmax(θ )x
+j j j j i=1 ij i
+iscalculatedusingsoft-selection; (c)structured attention,symbolembeddingsandsoft-parent,i.e.
+xˆ = [x ;c ] where c =
+(cid:80)n
+p(z = 1|x)x is calculated using parsing marginals, obtained
+j j j j i=1 ij i
+fromthesyntacticattentionlayer. Noneofthesemodelsuseanexplicitqueryvalue—thepotentials
+come from running a bidirectional LSTM over the source, producing hidden vectors h , and then
+i
+computing
+θ =tanh(s(cid:62)tanh(W h +W h +b))
+ij 1 i 2 j
+wheres,b,W ,W areparameters(seeAppendixA.1).
+1 2
+The source representation [xˆ ,...,xˆ ] are attended
+1 n
+over using the standard attention mechanism at each
+Depth NoAtten Simple Structured
+decoding step by an LSTM decoder.5 Additionally,
+2 7.6 87.4 99.2 symbolembeddingparametersaresharedbetweenthe
+3 4.1 49.6 87.0 parsingLSTMandthesourceencoder.
+4 2.8 23.3 64.5
+5 2.1 15.0 30.8
+Results Table 2 has the results for the task. Note
+6 1.5 8.5 18.2
+that this task is fairly difficult as the encoder is quite
+simple. Thebaselinemodel(unsurprisingly)performs
+Table2: Performance(averagelengthtofail-
+poorlyasithasnoinformationaboutthesourceorder-
+ure%)ofmodelsonthetree-transductiontask.
+ing. The simple attention model performs better, but
+is significantly outperformed by the structured model
+with a tree structure bias. We hypothesize that the
+modelispartiallyreconstructingthearithmetictree.Figure3showstheattentiondistributionforthe
+simple/structuredmodelsonthesamesourcesequence,whichindicatesthatthestructuredmodelis
+abletolearnboundaries(i.e. parentheses).
+5Thus there are two attention mechanisms at work under this setup. First, structured attention over the
+sourceonlytoobtainsoft-parentsforeachsymbol(i.e. self-attention). Second, standardsoftmaxalignment
+attentionoverthesourcerepresentationsduringdecoding.
+7PublishedasaconferencepaperatICLR2017
+4.2 NEURALMACHINETRANSLATION
+Our second set of experiments use a full neural machine translation model utilizing attention over
+subsequences. Hereboththeencoder/decoderareLSTMs,andwereplacestandardsimpleattention
+with a segmentation attention layer. We experiment with two settings: translating directly from
+unsegmentedJapanesecharacterstoEnglishwords(effectivelyusingstructuredattentiontoperform
+softwordsegmentation),andtranslatingfromsegmentedJapanesewordstoEnglishwords(which
+canbeinterpretedasdoingphrase-basedneuralmachinetranslation). Japanesewordsegmentation
+isdoneusingtheKyTeatoolkit(Neubigetal.,2011).
+The data comes from the Workshop on Asian Translation (WAT) (Nakazawa et al., 2016). We
+randomlypick500Ksentencesfromtheoriginaltrainingset(of3Msentences)wheretheJapanese
+sentencewasatmost50charactersandtheEnglishsentencewasatmost50words. Weapplythe
+samelengthfilterontheprovidedvalidation/testsetsforevaluation. Thevocabularyconsistsofall
+tokensthatoccurredatleast10timesinthetrainingcorpus.
+Thesegmentationattentionlayerisatwo-stateCRFwheretheunarypotentialsatthej-thdecoder
+stepareparameterizedas
+(cid:26)
+h Wh , k =1
+θ (k)= i j
+i 0, k =0
+Here [h ,...,h ] are the encoder hidden states and h(cid:48) is the j-th decoder hidden state (i.e. the
+1 n j
+queryvector). Thepairwisepotentialsareparameterizedlinearlywithb,i.e. alltogether
+θ (z ,z )=θ (z )+θ (z )+b
+i,i+1 i i+1 i i i+1 i+1 zi,zi+1
+Therefore the segmentation attention layer requires just 4 additional parameters. Appendix A.3
+describesthefullmodelarchitecture.
+We experiment with three attention configurations: (a) standard simple attention, i.e. c =
+j
+(cid:80)n
+softmax(θ )h ; (b) sigmoid attention: multiple selection with Bernoulli random variables,
+i=1 i i
+i.e. c =
+(cid:80)n
+sigmoid(θ )h ;(c)structuredattention,encodedwithnormalizedCRFmarginals,
+j i=1 i i
+n n
+c = (cid:88)p(z i =1|x,q) h γ = 1 (cid:88) p(z =1|x,q)
+j γ i λ i
+i=1 i=1
+The normalization term γ is not ideal but we found it to be helpful for stable training.6 λ is a
+hyperparameter(weuseλ=2)andwefurtheraddanl penaltyof0.005onthepairwisepotentials
+2
+b. Thesevalueswerefoundviagridsearchonthevalidationset.
+Results Results for the translation task on the test
+set are given in Table 3. Sigmoid attention outper-
+Simple Sigmoid Structured
+forms simple (softmax) attention on the character-to-
+CHAR 12.6 13.1 14.6 wordtask,potentiallybecauseitisabletolearnmany-
+WORD 14.1 13.8 14.3 to-onealignments. Ontheword-to-wordtask,theop-
+positeistrue,withsimpleattentionoutperformingsig-
+Table 3: Translation performance as mea- moidattention. Structuredattentionoutperformsboth
+suredbyBLEU(higherisbetter)oncharacter- models on both tasks, although improvements on the
+to-word and word-to-word Japanese-English
+word-to-word task are modest and unlikely to be sta-
+translationforthethreedifferentmodels.
+tisticallysignificant.
+Forfurtheranalysis,Figure4showsavisualizationof
+the different attention mechanisms on the character-to-word setup. The simple model generally
+focusesattentionheavilyonasinglecharacter. Incontrast, thesigmoidandstructuredmodelsare
+able to spread their attention distribution on contiguous subsequences. The structured attention
+learnsadditionalparameters(i.e. b)tosmoothoutthistypeofattention.
+6With standard expectation (i.e. c = (cid:80)n p(z = 1|x,q)h ) we empirically observed the marginals
+j i=1 i i
+toquicklysaturate. Wetriedvariousstrategiestoovercomethis, suchasputtinganl penaltyontheunary
+2
+potentials and initializing with a pretrained sigmoid attention model, but simply normalizing the marginals
+provedtobethemosteffective.However,thischangestheinterpretationofthecontextvectorastheexpectation
+ofanannotationfunctioninthiscase.
+8PublishedasaconferencepaperatICLR2017
+Figure4: Visualizationofthesourceattentiondistributionforthesimple(topleft),sigmoid(topright),and
+structured(bottomleft)attentionmodelsoverthegroundtruthsentenceonthecharacter-to-wordtranslation
+task. Manually-annotated alignments are shown in bottom right. Each row delineates the attention weights
+overthesourcesentenceateachstepofdecoding. Thesigmoid/structuredattentionmodelsareablelearnan
+implicitsegmentationmodelandfocusonmultiplecharactersateachtimestep.
+4.3 QUESTIONANSWERING
+Our third experiment is on question answering (QA) with the linear-chain CRF attention layer for
+inferenceovermultiplefacts. WeusethebAbIdataset(Westonetal.,2015),wheretheinputisaset
+of sentences/facts paired with a question, and the answer is a single token. For many of the tasks
+themodelhastoattendtomultiplesupportingfactstoarriveatthecorrectanswer(seeFigure5for
+an example), andexisting approaches use multiple ‘hops’to greedily attend todifferent facts. We
+experimentwithemployingstructuredattentiontoperforminferenceinanon-greedyway. Asthe
+ground truth supporting facts are given in the dataset, we are able to assess the model’s inference
+accuracy.
+The baseline (simple) attention model is the End-To-End Memory Network (Sukhbaatar et al.,
+2015) (MemN2N), which we briefly describe here. See Appendix A.4 for full model details. Let
+x ,...,x betheinputembeddingvectorsforthensentences/factsandletqbethequeryembed-
+1 n
+ding. In MemN2N, z is the random variable for the sentence to select at the k-th inference step
+k
+(i.e. k-thhop),andthusz ∈ {1,...,n}. Theprobabilitydistributionoverz isgivenbyp(z =
+k k k
+i|x,q) = softmax((xk)(cid:62)qk), and the context vector is given by ck = (cid:80)n p(z = i|x,q)ok,
+i i=1 k i
+wherexk,ok aretheinputandoutputembeddingforthei-thsentenceatthek-thhop,respectively.
+i i
+Thek-thcontextvectorisusedtomodifythequeryqk+1 = qk +ck,andthisprocessrepeatsfor
+k = 1,...,K (fork = 1wehavexk = x ,qk = q,ck = 0). TheK-thcontextandqueryvectors
+i i
+are used to obtain the final answer. The attention mechanism for a K-hop MemN2N network can
+thereforebeinterpretedasagreedyselectionofalength-K sequenceoffacts(i.e. z ,...,z ).
+1 K
+For structured attention, we use an n-state, K-step linear-chain CRF.7 We experiment with two
+differentsettings: (a)aunaryCRFmodelwithnodepotentials
+θ (i)=(xk)(cid:62)qk
+k i
+7Notethatthisdiffersfromthesegmentationattentionfortheneuralmachinetranslationexperimentsde-
+scribedabove,whichwasaK-state(withK =2),n-steplinear-chainCRF.
+9PublishedasaconferencepaperatICLR2017
+MemN2N BinaryCRF UnaryCRF
+Task K Ans% Fact% Ans% Fact% Ans% Fact%
+TASK02-TWOSUPPORTINGFACTS 2 87.3 46.8 84.7 81.8 43.5 22.3
+TASK03-THREESUPPORTINGFACTS 3 52.6 1.4 40.5 0.1 28.2 0.0
+TASK07-COUNTING 3 83.2 − 83.5 − 79.3 −
+TASK08-LISTSSETS 3 94.1 − 93.3 − 87.1 −
+TASK11-INDEFINITEKNOWLEDGE 2 97.8 38.2 97.7 80.8 88.6 0.0
+TASK13-COMPOUNDCOREFERENCE 2 95.6 14.8 97.0 36.4 94.4 9.3
+TASK14-TIMEREASONING 2 99.9 77.6 99.7 98.2 90.5 30.2
+TASK15-BASICDEDUCTION 2 100.0 59.3 100.0 89.5 100.0 51.4
+TASK16-BASICINDUCTION 3 97.1 91.0 97.9 85.6 98.0 41.4
+TASK17-POSITIONALREASONING 2 61.1 23.9 60.6 49.6 59.7 10.5
+TASK18-SIZEREASONING 2 86.4 3.3 92.2 3.9 92.0 1.4
+TASK19-PATHFINDING 2 21.3 10.2 24.4 11.5 24.3 7.8
+AVERAGE − 81.4 39.6 81.0 53.7 73.8 17.4
+Table4: Answeraccuracy(Ans%)andsupportingfactselectionaccuracy(Fact%)ofthethreeQAmodels
+onthe1KbAbIdataset. Kindicatesthenumberofhops/inferencestepsusedforeachtask. Task7and8both
+containvariablenumberoffactsandhencetheyareexcludedfromthefactaccuracymeasurement.Supporting
+factselectionaccuracyiscalculatedbytakingtheaverageof10bestruns(outof20)foreachtask.
+and(b)abinaryCRFmodelwithpairwisepotentials
+θ (i,j)=(xk)(cid:62)qk+(xk)(cid:62)xk+1+(xk+1)(cid:62)qk+1
+k,k+1 i i j j
+ThebinaryCRFmodelisdesignedtotestthemodel’sabilitytoperformsequentialreasoning. For
+(cid:80)
+both (a) and (b), a single context vector is computed: c = p(z ,...,z |x,q)f(x,z)
+z1,...,zK 1 K
+(unlikeMemN2NwhichcomputesK contextvectors). EvaluatingcrequiressummingoverallnK
+possible sequences of length K, which may not be practical for large values of K. However, if
+f(x,z)factorsoverthecomponentsofz (e.g. f(x,z) =
+(cid:80)K
+f (x,z ))thenonecanrewritethe
+k=1 k k
+abovesumintermsofmarginals: c =
+(cid:80)K (cid:80)n
+p(z = i|x,q)f (x,z ). Inourexperiments,
+k=1 i=1 k k k
+weusef (x,z )=ok . AllthreemodelsaredescribedinfurtherdetailinAppendixA.4.
+k k zk
+Results Weusetheversionofthedatasetwith1Kquestionsforeachtask.Sinceallmodelsreduce
+tothesamenetworkfortaskswith1supportingfact,theyareexcludedfromourexperiments. The
+number of hops (i.e. K) is task-dependent, and the number of memories (i.e. n) is limited to be
+at most 25 (note that many question have less than 25 facts—e.g. the example in Figure 5 has 9
+facts). Duetohighvarianceinmodelperformance,wetrain20modelswithdifferentinitializations
+for each task and report the test accuracy of the model that performed the best on a 10% held-out
+validationset(asistypicallydoneforbAbItasks).
+Results of the three different models are shown in Table 4. For correct answer seletion (Ans %),
+we find that MemN2N and the Binary CRF model perform similarly while the Unary CRF model
+doesworse,indicatingtheimportanceofincludingpairwisepotentials. Wealsoassesseachmodel’s
+abilitytoattendtothecorrectsupportingfactsinTable4(Fact%). Sincegroundtruthsupporting
+factsareprovidedforeachquery,wecancheckthesequenceaccuracyofsupportingfactsforeach
+model(i.e. therateofselectingtheexactcorrectsequenceoffacts)bytakingthehighestprobability
+sequence zˆ = argmaxp(z ,...,z |x,q) from the model and checking against the ground truth.
+1 K
+OveralltheBinaryCRFisabletorecoversupportingfactsbetterthanMemN2N.Thisimprovement
+issignificantandcanbeuptotwo-foldasseenfortask2,11,13&17. Howeverweobservedthat
+on many tasks it is sufficient to select only the last (or first) fact correctly to predict the answer,
+andthushighersequenceselectionaccuracydoesnotnecessarilyimplybetteransweraccuracy(and
+viceversa). Forexample,allthreemodelsget100%answeraccuracyontask15buthavedifferent
+supportingfactaccuracies.
+Finally,inFigure5wevisualizeoftheoutputedgemarginalsproducedbytheBinaryCRFmodel
+forasinglequestionintask16. Inthisinstance,themodelisuncertainbutultimatelyabletoselect
+therightsequenceoffacts5→6→8.
+10PublishedasaconferencepaperatICLR2017
+Figure5: Visualizationoftheattentiondistributionoversupportingfactsequencesforanexamplequestion
+intask16fortheBinaryCRFmodel. Theactualquestionisdisplayedatthebottomalongwiththecorrect
+answerandthegroundtruthsupportingfacts(5 → 6 → 8). Theedgesrepresentthemarginalprobabilities
+p(z ,z |x,q), and the nodes represent the n supporting facts (here we have n = 9). The text for the
+k k+1
+supporting facts are shown on the left. The top three most likely sequences are: p(z = 5,z = 6,z =
+1 2 3
+8|x,q)=0.0564,p(z =5,z =6,z =3|x,q)=0.0364,p(z =5,z =2,z =3|x,q)=0.0356.
+1 2 3 1 2 3
+4.4 NATURALLANGUAGEINFERENCE
+Thefinalexperimentlooksatthetaskofnaturallanguageinference(NLI)withthesyntacticatten-
+tion layer. In NLI, the model is given two sentences (hypothesis/premise) and has to predict their
+relationship: entailment,contradiction,neutral.
+For this task, we use the Stanford NLI dataset (Bowman et al., 2015) and model our approach off
+of the decomposable attention model of Parikh et al. (2016). This model takes in the matrix of
+wordembeddingsastheinputforeachsentenceandperformsinter-sentenceattentiontopredictthe
+answer. AppendixA.5describesthefullmodel.
+Asinthetransductiontask,wefocusonmodifyingtheinputrepresentationtotakeintoaccountsoft
+parentsviaself-attention(i.e. intra-sentenceattention). Inadditiontothethreebaselinesdescribed
+fortreetransduction(NoAttention,Simple,Structured),wealsoexploretwoadditionalsettings:(d)
+hardpipelineparentselection,i.e. xˆ = [x ;x ],wherehead(j)istheindexofx ’sparent8;
+j j head(j) j
+(e)pretrainedstructuredattention: structuredattentionwheretheparsinglayerispretrainedforone
+epochonaparseddataset(whichwasenoughforconvergence).
+Results Results of our models are shown in Table 5. Simple attention improves upon the no
+attention model, and this is consistent with improvements observed by Parikh et al. (2016) with
+theirintra-sentenceattentionmodel. Thepipelinedmodelwithhardparentsalsoslightlyimproves
+upon the baseline. Structured attention outperforms both models, though surprisingly, pretraining
+the syntactic attention layer on the parse trees performs worse than training it from scratch—it is
+possiblethatthepretrainedattentionistoostrictforthistask.
+We also obtain the hard parse for an example sentence by running the Viterbi algorithm on the
+syntacticattentionlayerwiththenon-pretrainedmodel:
+$ The men are fighting outside a deli .
+8TheparentsareobtainedfromrunningthedependencyparserofAndoretal.(2016),availableat
+https://github.com/tensorflow/models/tree/master/syntaxnet
+11PublishedasaconferencepaperatICLR2017
+Model Accuracy%
+Handcraftedfeatures(Bowmanetal.,2015) 78.2
+LSTMencoders(Bowmanetal.,2015) 80.6
+Tree-BasedCNN(Mouetal.,2016) 82.1
+Stack-AugmentedParser-InterpreterNeuralNet(Bowmanetal.,2016) 83.2
+LSTMwithword-by-wordattention(Rockta¨scheletal.,2016) 83.5
+MatchingLSTMs(Wang&Jiang,2016) 86.1
+Decomposableattentionoverwordembeddings(Parikhetal.,2016) 86.3
+Decomposableattention+intra-sentenceattention(Parikhetal.,2016) 86.8
+Attentionoverconstituencytreenodes(Zhaoetal.,2016) 87.2
+NeuralTreeIndexers(Munkhdalai&Yu,2016) 87.3
+EnhancedBiLSTMInferenceModel(Chenetal.,2016) 87.7
+EnhancedBiLSTMInferenceModel+ensemble(Chenetal.,2016) 88.3
+NoAttention 85.8
+NoAttention+Hardparent 86.1
+SimpleAttention 86.2
+StructuredAttention 86.8
+PretrainedStructuredAttention 86.5
+Table5: Resultsofourmodels(bottom)andothers(top)ontheStanfordNLItestset.Ourbaselinemodelhas
+thesamearchitectureasParikhetal.(2016)buttheperformanceisslightlydifferentduetodifferentsettings
+(e.g.wetrainfor100epochswithabatchsizeof32whileParikhetal.(2016)trainfor400epochswithabatch
+sizeof4usingasynchronousSGD.)
+Despite being trained without ever being exposed to an explicit parse tree, the syntactic attention
+layerlearnsanalmostplausibledependencystructure. Intheaboveexampleitisabletocorrectly
+identifythemainverbfighting,butmakesmistakesondeterminers(e.g. headofTheshouldbe
+men). We generally observed this pattern across sentences, possibly because the verb structure is
+moreimportantfortheinferencetask.
+5 CONCLUSION
+Thisworkoutlinesstructuredattentionnetworks,whichincorporategraphicalmodelstogeneralize
+simpleattention,anddescribesthetechnicalmachineryandcomputationaltechniquesforbackprop-
+agating through models of this form. We implement two classes of structured attention layers: a
+linear-chainCRF(forneuralmachinetranslationandquestionanswering)andamorecomplicated
+first-order dependency parser (for tree transduction and natural language inference). Experiments
+showthatthismethodcanlearninterestingstructuralpropertiesandimproveontopofstandardmod-
+els. Structuredattentioncouldalsobeawayoflearninglatentlabelersorparsersthroughattention
+onothertasks.
+It should be noted that the additional complexity in computing the attention distribution increases
+run-time—for example, structured attention was approximately 5× slower to train than simple at-
+tention for the neural machine translation experiments, even though both attention layers have the
+sameasymptoticrun-time(i.e. O(n)).
+Embeddingdifferentiableinference(andmoregenerally,differentiablealgorithms)intodeepmod-
+els is an exciting area of research. While we have focused on models that admit (tractable) exact
+inference,similartechniquecanbeusedtoembedapproximateinferencemethods. Manyoptimiza-
+tion algorithms (e.g. gradient descent, LBFGS) are also differentiable (Domke, 2012; Maclaurin
+etal.,2015),andhavebeenusedasoutputlayersforstructuredpredictioninenergy-basedmodels
+(Belanger & McCallum, 2016; Wang et al., 2016). Incorporating them as internal neural network
+layersisaninterestingavenueforfuturework.
+ACKNOWLEDGMENTS
+We thank Tao Lei, Ankur Parikh, Tim Vieira, Matt Gormley, Andre´ Martins, Jason Eisner, Yoav
+Goldberg, and the anonymous reviewers for helpful comments, discussion, notes, and code. We
+additionallythankYasumasaMiyamotoforverifyingJapanese-Englishtranslations.
+12PublishedasaconferencepaperatICLR2017
+REFERENCES
+DanielAndor,ChrisAlberti,DavidWeiss,AliakseiSeveryn,AlessandroPresta,KuzmanGanchev,
+Slav Petrov, and Michael Collins. Globally Normalized Transition-Based Neural Networks. In
+ProceedingsofACL,2016.
+DzmitryBahdanau, KyunghyunCho, andYoshuaBengio. NeuralMachineTranslationbyJointly
+LearningtoAlignandTranslate. InProceedingsofICLR,2015.
+JamesK.Baker. TrainableGrammarsforSpeechRecognition. SpeechCommunicationPapersfor
+the97thMeetingoftheAcousticalSociety,1979.
+DavidBelangerandAndrewMcCallum. StructuredPredictionEnergyNetworks. InProceedingsof
+ICML,2016.
+SamuelR.Bowman,ChristopherD.Manning,andChristopherPotts. Tree-StructuredComposition
+inNeuralNetworkswithoutTree-StructuredArchitectures. InProceedingsoftheNIPSworkshop
+onCognitiveComputation: IntegratingNeuralandSymbolicApproaches,2015.
+SamuelR.Bowman,JonGauthier,AbhinavRastogi,RaghavGupta,ChristopherD.Manning,and
+ChristopherPotts.AFastUnifiedModelforParsingandSentenceUnderstanding.InProceedings
+ofACL,2016.
+William Chan, Navdeep Jaitly, Quoc Le, and Oriol Vinyals. Listen, Attend and Spell.
+arXiv:1508.01211,2015.
+Liang-Chieh Chen, Alexander G. Schwing, Alan L. Yuille, and Raquel Urtasun. Learning Deep
+StructuredModels. InProceedingsofICML,2015.
+Qian Chen, Xiaodan Zhu, Zhenhua Ling, Si Wei, and Hui Jiang. Enhancing and Combining Se-
+quentialandTreeLSTMforNaturalLanguageInference. arXiv:1609.06038,2016.
+Kyunghyun Cho, Aaron Courville, and Yoshua Bengio. Describing Multimedia Content using
+Attention-basedEncoder-DecoderNetworks. InIEEETransactionsonMultimedia,2015.
+Jan Chorowski, Dzmitry Bahdanau, Dmitriy Serdyuk, Kyunghyun Cho, and Yoshua Bengio.
+Attention-BasedModelsforSpeechRecognition. InProceedingsofNIPS,2015.
+Ronan Collobert, Jason Weston, Leon Bottou, Michael Karlen, Koray Kavukcuoglu, and Pavel
+Kuksa. NaturalLanguageProcessing(almost)fromScratch. JournalofMachineLearningRe-
+search,12:2493–2537,2011.
+Trinh-Minh-Tri Do and Thierry Artie´res. Neural Conditional Random Fields. In Proceedings of
+AISTATS,2010.
+Justin Domke. Parameter Learning with Truncated Message-Passing. In Proceedings of CVPR,
+2011.
+JustinDomke. Genericmethodsforoptimization-basedmodeling. InAISTATS,pp.318–326,2012.
+John Duchi, Elad Hazan, and Yoram Singer. Adaptive Subgradient Methods for Online Learning
+andStochasticOptimization. JournalofMachineLearningResearch,12:2021–2159,2011.
+GregDurrettandDanKlein. NeuralCRFParsing. InProceedingsofACL,2015.
+Jason M. Eisner. Three New Probabilistic Models for Dependency Parsing: An Exploration. In
+ProceedingsofACL,1996.
+JasonM.Eisner. Inside-OutsideandForward-BackwardAlgorithmsarejustBackprop. InProceed-
+ingsofStructuredPredictionWorkshopatEMNLP,2016.
+MatthewR.Gormley,MarkDredze,andJasonEisner. Approximation-AwareDependencyParsing
+byBeliefPropagation. InProceedingsofTACL,2015.
+AlexGraves,GregWayne,andIvoDanihelka. NeuralTuringMachines. arXiv:1410.5401,2014.
+13PublishedasaconferencepaperatICLR2017
+Alex Graves, Greg Wayne, Malcolm Reynolds, Tim Harley, Ivo Danihelka, Agnieszka Grabska-
+Barwinska, Sergio Gomez Colmenarejo, Edward Grefenstette, Tiago Ramalho, John Agapiou,
+Adria Puigdomenech Badia, Karl Moritz Hermann, Yori Zwols, Georg Ostrovski, Adam Cain,
+HelenKing,ChristopherSummerfield,PhilBlunsom,KorayKavukcuoglu,andDemisHassabis.
+Hybrid Computing Using a Neural Network with Dynamic External Memory. Nature, October
+2016.
+Edward Grefenstette, Karl Moritz Hermann, Mustafa Suleyman, and Phil Blunsom. Learning to
+TransducewithUnboundedMemory. InProceedingsofNIPS,2015.
+Karl Moritz Hermann, Tomas Kocisky, Edward Grefenstette, Lasse Espeholt, Will Kay, Mustafa
+Suleyman,andPhilBlunsom. TeachingMachinestoReadandComprehend. InProceedingsof
+NIPS,2015.
+MaxJaderberg,KarenSimonyan,AndreaVedaldi,andAndrewZisserman. DeepStructuredOutput
+LearningforUnconstrainedTextRecognition. InProceedingsofICLR,2014.
+DiederikKingmaandJimmyBa. Adam: AMethodforStochasticOptimization. InProceedingsof
+ICLR,2015.
+Eliyahu Kipperwasser and Yoav Goldberg. Simple and Accurate Dependency Parsing using Bidi-
+rectionalLSTMFeatureRepresentations. InTACL,2016.
+LingpengKong, ChrisDyer, andNoahA.Smith. SegmentalRecurrentNeuralNetworks. InPro-
+ceedingsofICLR,2016.
+JohnLafferty,AndrewMcCallum,andFernandoPereira. ConditionalRandomFields: Probabilistic
+ModelsforSegmentingandLabelingSequenceData. InProceedingsofICML,2001.
+GuillaumeLample,MiguelBallesteros,SandeepSubramanian,KazuyaKawakami,andChrisDyer.
+NeuralArchitecturesforNamedEntityRecognition. InProceedingsofNAACL,2016.
+YannLeCun,LeonBottou,YoshuaBengio,andPatrickHaffner. Gradient-basedLearningApplied
+toDocumentRecognition. InProceedingsofIEEE,1998.
+Zhifei Li and Jason Eisner. First- and Second-Order Expectation Semirings with Applications to
+Minimum-RiskTrainingonTranslationForests. InProceedingsofEMNLP2009,2009.
+Liang Lu, Lingpeng Kong, Chris Dyer, Noah A. Smith, and Steve Renals. Segmental Recurrent
+NeuralNetworksforEnd-to-EndSpeechRecognition. InProceedingsofINTERSPEECH,2016.
+Minh-ThangLuong,HieuPham,andChristopherD.Manning. EffectiveApproachestoAttention-
+basedNeuralMachineTranslation. InProceedingsofEMNLP,2015.
+Dougal Maclaurin, David Duvenaud, and Ryan P. Adams. Gradient-based Hyperparameter Opti-
+mizationthroughReversibleLearning. InProceedingsofICML,2015.
+LiliMou,RuiMen,GeLi,YanXu,LuZhang,RuiYan,andZhiJin. Naturallanguageinferenceby
+tree-basedconvolutionandheuristicmatching. InProceedingsofACL,2016.
+Tsendsuren Munkhdalai and Hong Yu. Neural Tree Indexers for Text Understanding.
+arxiv:1607.04492,2016.
+ToshiakiNakazawa,ManabuYaguchi,KiyotakaUchimoto,MasaoUtiyama,EiichiroSumita,Sadao
+Kurohashi,andHitoshiIsahara.Aspec:Asianscientificpaperexcerptcorpus.InNicolettaCalzo-
+lari(ConferenceChair), KhalidChoukri, ThierryDeclerck, MarkoGrobelnik, BenteMaegaard,
+Joseph Mariani, Asuncion Moreno, Jan Odijk, and Stelios Piperidis (eds.), Proceedings of the
+NinthInternationalConferenceonLanguageResourcesandEvaluation(LREC2016),pp.2204–
+2208, Portoro,Slovenia, may2016.EuropeanLanguageResourcesAssociation(ELRA). ISBN
+978-2-9517408-9-1.
+GrahamNeubig, YosukeNakata, andShinsukeMori. PointwisePredictionforRobust, Adaptable
+JapaneseMorphologicalAnalysis. InProceedingsofACL,2011.
+14PublishedasaconferencepaperatICLR2017
+AnkurP.Parikh,OscarTackstrom,DipanjanDas,andJakobUszkoreit. ADecomposableAttention
+ModelforNaturalLanguageInference. InProceedingsofEMNLP,2016.
+JianPeng,LiefengBo,andJinboXu. ConditionalNeuralFields. InProceedingsofNIPS,2009.
+JeffreyPennington,RichardSocher,andChristopherD.Manning.GloVe:GlobalVectorsforWord
+Representation. InProceedingsofEMNLP,2014.
+TimRockta¨schel,EdwardGrefenstette,KarlMoritzHermann, TomasKocisky,andPhilBlunsom.
+ReasoningaboutEntailmentwithNeuralAttention. InProceedingsofICLR,2016.
+John Schulman, Nicolas Heess, Theophane Weber, and Pieter Abbeel. Gradient estimation using
+stochasticcomputationgraphs.InAdvancesinNeuralInformationProcessingSystems,pp.3528–
+3536,2015.
+David A. Smith and Jason Eisner. Dependency Parsing as Belief Propagation. In Proceedings of
+EMNLP,2008.
+VeselinStoyanovandJasonEisner. Minimum-RiskTrainingofApproximateCRF-basedNLPSys-
+tems. InProceedingsofNAACL,2012.
+VeselinStoyanov,AlexanderRopson,andJasonEisner. EmpiricalRiskMinimizationofGraphical
+ModelParametersGivenApproximateInference,Decoding,andModelStructure.InProceedings
+ofAISTATS,2011.
+Sainbayar Sukhbaatar, Arthur Szlam, Jason Weston, and Rob Fergus. End-To-End Memory Net-
+works. InProceedingsofNIPS,2015.
+Oriol Vinyals, Meire Fortunato, and Navdeep Jaitly. Pointer Networks. In Proceedings of NIPS,
+2015.
+ShenlongWang,SanjaFidler,andRaquelUrtasun. ProximalDeepStructuredModels. InProceed-
+ingsofNIPS,2016.
+ShuohangWangandJingJiang. LearningNaturalLanguageInferencewithLSTM. InProceedings
+ofNAACL,2016.
+JasonWeston,SumitChopra,andAntoineBordes. MemoryNetworks. arXiv:1410.3916,2014.
+JasonWeston,AntoineBordes,SumitChopra,AlexanderMRush,BartvanMerrie¨nboer,Armand
+Joulin, and Tomas Mikolov. Towards Ai-complete Question Answering: A Set of Prerequisite
+ToyTasks. arXivpreprintarXiv:1502.05698,2015.
+Kelvin Xu, Jimma Ba, Ryan Kiros, Kyunghyun Cho, Aaron Courville, Ruslan Salakhutdinov,
+RichardZemel, andYoshuaBengio. Show, AttendandTell: NeuralImageCaptionGeneration
+withVisualAttention. InProceedingsofICML,2015.
+LeiYu,JanBuys,andPhilBlunsom. OnlineSegmenttoSegmentNeuralTransduction. InProceed-
+ingsofEMNLP,2016.
+Lei Yu, Phil Blunsom, Chris Dyer, Edward Grefenstette, and Tomas Kocisky. The Neural Noisy
+Channel. InProceedingsofICLR,2017.
+KaiZhao,LiangHuang,andMinboMa. TextualEntailmentwithStructuredAttentionsandCom-
+position. InProceedingsofCOLING,2016.
+15PublishedasaconferencepaperatICLR2017
+APPENDICES
+A MODEL DETAILS
+A.1 SYNTACTICATTENTION
+Thesyntacticattentionlayer(fortreetransductionandnaturallanguageinference)issimilartothe
+first-ordergraph-baseddependencyparserofKipperwasser&Goldberg(2016). Givenaninputsen-
+tence[x ,...,x ]andthecorrespondingwordvectors[x ,...,x ], weuseabidirectionalLSTM
+1 n 1 n
+togetthehiddenstatesforeachtimestepi∈[1,...,n],
+hfwd =LSTM(x ,hfwd) hbwd =LSTM(x ,hbwd) h =[hfwd;hbwd]
+i i i−1 i i i+1 i i i
+wheretheforwardandbackwardLSTMshavetheirownparameters. Thescoreforx →x (i.e. x
+i j i
+istheparentofx ),isgivenbyanMLP
+j
+θ =tanh(s(cid:62)tanh(W h +W h +b))
+ij 1 i 2 j
+Thesescoresareusedasinputtotheinside-outsidealgorithm(seeAppendixB)toobtaintheprob-
+abilityofeachword’sparentp(z =1|x),whichisusedtoobtainthesoft-parentc foreachword
+ij j
+x . Inthenon-structuredcasewesimplyhavep(z =1|x)=softmax(θ ).
+j ij ij
+A.2 TREETRANSDUCTION
+Let[x ,...,x ],[y ,...,y ]bethesequenceofsource/targetsymbols,withtheassociatedembed-
+1 n 1 m
+dings[x ,...,x ],[y ,...,y ]withx ,y ∈Rl.Inthesimplestbaselinemodelwetakethesource
+1 n 1 m i j
+representationtobethematrixofthesymbolembeddings. Thedecoderisaone-layerLSTMwhich
+producesthehiddenstatesh(cid:48) = LSTM(y ,h(cid:48) ),withh(cid:48) ∈ Rl. Thehiddenstatesarecombined
+j j j−1 j
+withtheinputrepresentationviaabilinearmapW∈Rl×ltoproducetheattentiondistributionused
+toobtainthevectorm ,whichiscombinedwiththedecoderhiddenstateasfollows,
+i
+α i = (cid:80)n exp e x xp i W x h W (cid:48) j h(cid:48) m i = (cid:88) n α i x i hˆ j =tanh(U[m i ;h(cid:48) j ])
+k=1 k j i=1
+HerewehaveW∈Rl×landU∈R2l×l. Finally,hˆ isusedtotoobtainadistributionoverthenext
+j
+symboly ,
+j+1
+p(y |x ,...,x ,y ,...,y )=softmax(Vhˆ +b)
+j+1 1 n 1 j j
+Forstructured/simplemodels,thej-thsourcerepresentationarerespectively
+(cid:34) n (cid:35) (cid:34) n (cid:35)
+(cid:88) (cid:88)
+xˆ = x ; p(z =1|x)x xˆ = x ; softmax(θ )x
+i i ki k i i ki k
+k=1 k=1
+whereθ comesfromthebidirectionalLSTMdescribedinA.1. Thenα andm changedaccord-
+ij i i
+ingly,
+α i = (cid:80)n exp e x x ˆ p i W xˆ h W (cid:48) j h(cid:48) m i = (cid:88) n α i xˆ i
+k=1 k j i=1
+NotethatinthiscasewehaveW ∈ R2l×l andU ∈ R3l×l. Weusel = 50inallourexperiments.
+Theforward/backwardLSTMsfortheparsingLSTMarealso50-dimensional. Symbolembeddings
+aresharedbetweentheencoderandtheparsingLSTMs.
+Additional training details include: batch size of 20; training for 13 epochs with a learning rate
+of 1.0, which starts decaying by half after epoch 9 (or the epoch at which performance does not
+improveonvalidation, whichevercomesfirst); parameterinitializationoverauniformdistribution
+U[−0.1,0.1]; gradient normalization at 1 (i.e. renormalize the gradients to have norm 1 if the l
+2
+normexceeds1). Decodingisdonewithbeamsearch(beamsize=5).
+16PublishedasaconferencepaperatICLR2017
+A.3 NEURALMACHINETRANSLATION
+The baseline NMT system is from Luong et al. (2015). Let [x ,...,x ],[y ,...,y ] be the
+1 n 1 m
+source/target sentence, with the associated word embeddings [x ,...,x ],[y ,...,y ]. The en-
+1 n 1 m
+coderisanLSTMoverthesourcesentence,whichproducesthehiddenstates[h ,...,h ]where
+1 n
+h =LSTM(x ,h )
+i i i−1
+andh ∈Rl.ThedecoderisanotherLSTMwhichproducesthehiddenstatesh(cid:48) ∈Rl.Inthesimple
+i j
+attentioncasewithcategoricalattention,thehiddenstatesarecombinedwiththeinputrepresentation
+via a bilinear map W ∈ Rl×l and this distribution is used to obtain the context vector at the j-th
+timestep,
+n
+(cid:88)
+θ =h Wh(cid:48) c = softmax(θ )h
+i i j j i i
+i=1
+TheBernoulliattentionnetworkhasthesameθ butinsteadusesasigmoidtoobtaintheweightsof
+i
+thelinearcombination,i.e.,
+n
+(cid:88)
+c = sigmoid(θ )h
+j i i
+i=1
+And finally, the structured attention model uses a bilinear map to parameterize one of the unary
+potentials
+(cid:26) h Wh(cid:48), k =1
+θ (k)= i j
+i 0, k =0
+θ (z ,z )=θ (z )+θ (z )+b
+i,i+1 i i+1 i i i+1 i+1 zi,zi+1
+where b are the pairwise potentials. These potentials are used as inputs to the forward-backward
+algorithmtoobtainthemarginalsp(z =1|x,q),whicharefurthernormalizedtoobtainthecontext
+i
+vector
+n n
+c = (cid:88)p(z i =1|x,q) h γ = 1 (cid:88) p(z =1|x,q)
+j γ i λ i
+i=1 i
+Weuseλ = 2andalsoaddanl penaltyof0.005onthepairwisepotentialsb. Thecontextvector
+2
+isthencombinedwiththedecoderhiddenstate
+hˆ =tanh(U[c ;h(cid:48)])
+j j j
+andhˆ isusedtoobtainthedistributionoverthenexttargetwordy
+j j+1
+p(y |x ,...,x ,y ,...y )=softmax(Vhˆ +b)
+j+1 1 n 1 j j
+Theencoder/decoderLSTMshave2layersand500hiddenunits(i.e. l=500).
+Additionaltrainingdetailsinclude: batchsizeof128;trainingfor30epochswithalearningrateof
+1.0, which starts decaying by half after the first epoch at which performance does not improve
+on validation; dropout with probability 0.3; parameter initialization over a uniform distribution
+U[−0.1,0.1];gradientnormalizationat1. Wegeneratetargettranslationswithbeamsearch(beam
+size=5),andevaluatewithmulti-bleu.perlfromMoses.9
+A.4 QUESTIONANSWERING
+Our baseline model (MemN2N) is implemented following the same architecture as described in
+Sukhbaataretal.(2015). Inparticular,letx = [x ,...,x ]representthesequenceofnfactswith
+1 n
+theassociatedembeddings[x ,...,x ]andletqbetheembeddingofthequeryq. Theembeddings
+1 n
+9 https://github.com/moses-smt/mosesdecoder/blob/master/scripts/generic/
+multi-bleu.perl
+17PublishedasaconferencepaperatICLR2017
+areobtainedbysimplyaddingthewordembeddingsineachsentenceorquery. Thefullmodelwith
+K hopsisasfollows:
+p(z =i|x,q)=softmax((xk)(cid:62)qk)
+k i
+n
+(cid:88)
+ck = p(z =i|x,q)ok
+k i
+i=1
+qk+1 =qk+ck
+p(y|x,q)=softmax(W(qK +cK))
+wherep(y|x,q)isthedistributionovertheanswervocabulary. Ateachlayer, {xk}and{ok}are
+i i
+computed using embedding matrices Xk and Ok. We use the adjacent weight tying scheme from
+thepapersothatXk+1 =Ok,WT =OK. X1isalsousedtocomputethequeryembeddingatthe
+firsthop. Fork =1wehavexk =x ,qk =q,ck =0.
+i i
+ForboththeUnaryandtheBinaryCRFmodels,thesameinputfactandqueryrepresentationsare
+computed (i.e. same embedding matrices with weight tying scheme). For the unary model, the
+potentialsareparameterizedas
+θ (i)=(xk)(cid:62)qk
+k i
+andforthebinarymodelwecomputepairwisepotentialsas
+θ (i,j)=(xk)(cid:62)qk+(xk)(cid:62)xk+1+(xk+1)(cid:62)qk+1
+k,k+1 i i j j
+Theqk’sareupdatedsimplywithalinearmapping,i.e.
+qk+1 =Qqk
+In the case of the Binary CRF, to discourage the model from selecting the same fact again we
+additionallysetθ (i,i) = −∞foralli ∈ {1,...,n}. Giventhesepotentials,wecomputethe
+k,k+1
+marginalsp(z = i,z = j|x,q)usingtheforward-backwardalgorithm, whichisthenusedto
+k k+1
+computethecontextvector:
+K
+(cid:88) (cid:88)
+c= p(z ,...,z |x,q)f(x,z) f(x,z)= f (x,z ) f (x,z )=ok
+1 K k k k k zk
+z1,...,zK k=1
+Notethatiff(x,z)factorsoverthecomponentsofz (asisthecaseabove)thencomputingconly
+requiresevaluatingthemarginalsp(z |x,q).
+k
+Finally,giventhecontextvectorthepredictionismadeinasimilarfashiontoMemN2N:
+p(y|x,q)=softmax(W(qK +c))
+OthertrainingsetupissimilartoSukhbaataretal.(2015): weusestochasticgradientdescentwith
+learning rate 0.01, which is divided by 2 every 25 epochs until 100 epochs are reached. Capacity
+ofthememoryislimitedto25sentences. Theembeddingvectorsareofsize20andgradientsare
+renormalizedifthenormexceeds40. Allmodelsimplementpositionencoding,temporalencoding,
+and linear start from the original paper. For linear start, the softmax(·) function in the attention
+layerisremovedatthebeginningandre-insertedafter20epochsforMemN2N,whilefortheCRF
+modelsweapplyalog(softmax(·))layerontheqkafter20epochs.Eachmodelistrainedseparately
+foreachtask.
+A.5 NATURALLANGUAGEINFERENCE
+Our baseline model/setup is essentially the same as that of Parikh et al. (2016). Let
+[x ,...,x ],[y ,...,y ] be the premise/hypothesis, with the corresponding input representations
+1 n 1 m
+[x ,...,x ],[y ,...,y ]. The input representations are obtained by a linear transformation of
+1 n 1 m
+the300-dimensionalpretrainedGloVeembeddings(Penningtonetal.,2014)afternormalizingthe
+GloVeembeddingstohaveunitnorm.10 Thepretrainedembeddingsremainfixedbutthelinearlayer
+10WeusetheGloVeembeddingspretrainedoverthe840billionwordCommonCrawl,publiclyavailableat
+http://nlp.stanford.edu/projects/glove/
+18PublishedasaconferencepaperatICLR2017
+(whichisalso300-dimensional)istrained.Wordsnotinthepretrainedvocabularyarehashedtoone
+of100Gaussianembeddingswithmean0andstandarddeviation1.
+Weconcatenateeachinputrepresentationwithaconvexcombinationoftheothersentence’sinput
+representations(essentiallyperforminginter-sentenceattention),wheretheweightsaredetermined
+throughadotproductfollowedbyasoftmax,
+ m  (cid:34) n (cid:35)
+e ij =f(x i )(cid:62)f(y j ) x¯ i =x i ; (cid:88) (cid:80)m exp
+e
+e
+x
+i
+p
+j
+e
+y j y¯ j = y j ; (cid:88) (cid:80)n exp
+e
+e
+x
+i
+p
+j
+e
+x i
+j=1 k=1 ik i=1 k=1 kj
+Heref(·)isanMLP.ThenewrepresentationsarefedthroughanotherMLPg(·),summed,combined
+withthefinalMLPh(·)andfedthroughasoftmaxlayertoobtainadistributionoverthelabelsl,
+n m
+(cid:88) (cid:88)
+x¯ = g(x¯ ) y¯ = g(y¯ )
+i j
+i=1 j=1
+p(l|x ,...,x ,y ,...,y )=softmax(Vh([x¯;y¯])+b)
+1 n 1 m
+AlltheMLPshave2-layers,300ReLUunits,anddropoutprobabilityof0.2. Forstructured/simple
+models, we first employ the bidirectional parsing LSTM (see A.1) to obtain the scores θ . In the
+ij
+structuredcaseeachwordrepresentationissimplyconcatenatedwithitssoft-parent
+(cid:34) n (cid:35)
+(cid:88)
+xˆ = x ; p(z =1|x)x
+i i ki k
+k=1
+and xˆ (and analogously yˆ ) is used as the input to the above model. In the simple case (which
+i j
+closelycorrespondstotheintra-sentenceattentionmodelofParikhetal.(2016)),wehave
+(cid:34) n (cid:35)
+xˆ i = x i ; (cid:88) (cid:80)n exp
+e
+θ
+x
+k
+p
+i
+θ
+x k
+k=1 l=1 li
+ThewordembeddingsfortheparsingLSTMsarealsoinitializedwithGloVe,andtheparsinglayer
+issharedbetweenthetwosentences. Theforward/backwardLSTMsfortheparsinglayerare100-
+dimensional.
+Additionaltrainingdetailsinclude: batchsizeof32; trainingfor100epochswithAdagrad(Duchi
+et al., 2011) where the global learning rate is 0.05 and sum of gradient squared is initialized to
+0.1; parameterintializationoveraGaussiandistributionwithmean0andstandarddeviation 0.01;
+gradientnormalizationat5. Inthepretrainedscenario,pretrainingisdonewithAdam(Kingma&
+Ba,2015)withlearningrateequalto0.01,andβ =0.9,β =0.999.
+1 2
+B FORWARD/BACKWARD THROUGH THE INSIDE-OUTSIDE ALGORITHM
+Figure 6 shows the procedure for obtaining the parsing marginals from the input potentials. This
+corresponds to running the inside-outside version of Eisner’s algorithm (Eisner, 1996). The inter-
+mediatedatastructuresusedduringthedynamicprogrammingalgorithmarethe(log)insidetables
+α,andthe(log)outsidetablesβ. Bothα,βareofsizen×n×2×2,wherenisthesentencelength.
+First two dimensions encode the start/end index of the span (i.e. subtree). The third dimension
+encodes whether the root of the subtree is the left (L) or right (R) index of the span. The fourth
+dimension indicates if the span is complete (1) or incomplete (0). We can calculate the marginal
+distributionofeachword’sparent(forallwords)inO(n3)usingthisalgorithm.
+Backwardpassthroughtheinside-outsidealgorithmisslightlymoreinvolved,butstilltakesO(n3)
+time. Figure 7 illustrates the backward procedure, which receives the gradient of the loss L with
+respect to the marginals, ∇L, and computes the gradient of the loss with respect to the potentials
+p
+∇L.Thecomputationsmustbeperformedinthesignedlog-spacesemifieldtohandlelogofnegative
+θ
+values. Seesection3.3andTable1formoredetails.
+19PublishedasaconferencepaperatICLR2017
+procedureINSIDEOUTSIDE(θ)
+α,β ←−∞ (cid:46)Initializelogofinside(α),outside(β)tables
+fori=1,...,ndo
+α[i,i,L,1]←0
+α[i,i,R,1]←0
+β[1,n,R,1]←0
+fork=1,...,ndo (cid:46)Insidestep
+fors=1,...,n−kdo
+t←s+k
+(cid:76)
+α[s,t,R,0]← α[s,u,R,1]⊗α[u+1,t,L,1]⊗θ
+u∈[s,t−1] st
+(cid:76)
+α[s,t,L,0]← α[s,u,R,1]⊗α[u+1,t,L,1]⊗θ
+u∈[s,t−1] ts
+(cid:76)
+α[s,t,R,1]← α[s,u,R,0]⊗α[u,t,R,1]
+u∈[s+1,t]
+(cid:76)
+α[s,t,L,1]← α[s,u,L,1]⊗α[u,t,L,0]
+u∈[s,t−1]
+fork=n,...,1do (cid:46)Outsidestep
+fors=1,...,n−kdo
+t←s+k
+foru=s+1,...,tdo
+β[s,u,R,0]← β[s,t,R,1]⊗α[u,t,R,1]
+⊕
+β[u,t,R,1]← β[s,t,R,1]⊗α[s,u,R,0]
+⊕
+ifs>1then
+foru=s,...,t−1do
+β[s,u,L,1]← β[s,t,L,1]⊗α[u,t,L,0]
+⊕
+β[u,t,L,0]← β[s,t,L,1]⊗α[s,u,L,1]
+⊕
+foru=s,...,t−1do
+β[s,u,R,1]← β[s,t,R,0]⊗α[u+1,t,L,1]⊗θ
+⊕ st
+β[u+1,t,L,1]← β[s,t,R,0]⊗α[s,u,R,1]⊗θ
+⊕ st
+ifs>1then
+foru=s,...,t−1do
+β[s,u,R,1]← β[s,t,L,0]⊗α[u+1,t,L,1]⊗θ
+⊕ ts
+β[u+1,t,L,1]← β[s,t,L,0]⊗α[s,u,R,1]⊗θ
+⊕ ts
+A←α[1,n,R,1] (cid:46)Logpartition
+fors=1,...,n−1do (cid:46)Computemarginals.Notethatp[s,t]=p(z =1|x)
+st
+fort=s+1,...,ndo
+p[s,t]←exp(α[s,t,R,0]⊗β[s,t,R,0]⊗−A)
+ifs>1then
+p[t,s]←exp(α[s,t,L,0]⊗β[s,t,L,0]⊗−A)
+returnp
+Figure 6: Forward step of the syntatic attention layer to compute the marginals, using the inside-outside
+algorithm(Baker,1979)onthedatastructuresofEisner(1996).Weassumethespecialrootsymbolisthefirst
+elementofthesequence,andthatthesentencelengthisn. Calculationsareperformedinlog-spacesemifield
+with⊕ = logaddand⊗ = +fornumericalprecision. a,b ← cmeansa ← candb ← c. a ← bmeans
+⊕
+a←a⊕b.
+20PublishedasaconferencepaperatICLR2017
+procedureBACKPROPINSIDEOUTSIDE(θ,p,∇L
+p
+)
+fors,t=1,...,n;s(cid:54)=tdo (cid:46)Backpropagationusestheidentity∇L =(p(cid:12)∇L)∇logp
+θ p θ
+δ[s,t]←logp[s,t]⊗log∇L[s,t] (cid:46)δ=log(p(cid:12)∇L)
+p p
+∇L,∇L,log∇L ←−∞ (cid:46)Initializeinside(∇L),outside(∇L)gradients,andlogof∇L
+α β θ α β θ
+fors=1,...,n−1do (cid:46)Backpropagateδto∇Land∇L
+α β
+fort=s+1,...,ndo
+∇L[s,t,R,0],∇L[s,t,R,0]←δ[s,t]
+α β
+∇L[1,n,R,1]← −δ[s,t]
+α ⊕
+ifs>1then
+∇L[s,t,L,0],∇L[s,t,L,0]←δ[t,s]
+α β
+∇L[1,n,R,1]← −δ[s,t]
+α ⊕
+fork=1,...,ndo (cid:46)Backpropagatethroughoutsidestep
+fors=1,...,n−kdo
+t←s+k
+ν ←∇L[s,t,R,0]⊗β[s,t,R,0] (cid:46)ν,γaretemporaryvalues
+β
+foru=t,...,ndo
+∇L[s,u,R,1],∇L[t,u,R,1]← ν⊗β[s,u,R,1]⊗α[t,u,R,1]
+β α ⊕
+ifs>1then
+ν ←∇L[s,t,L,0]⊗β[s,t,L,0]
+β
+foru=1,...,sdo
+∇L[u,t,L,1],∇L[u,s,L,1]← ν⊗β[u,t,L,1]⊗α[u,s,L,1]
+β α ⊕
+ν ←∇L[s,t,L,1]⊗β[s,t,L,1]
+β
+foru=t,...,ndo
+∇L[s,u,L,1],∇L[t,u,L,0]← ν⊗β[s,u,L,1]⊗α[t,u,L,1]
+β α ⊕
+foru=1,...,s−1do
+γ ←β[u,t,R,0]⊗α[u,s−1,R,1]⊗θ
+ut
+∇L[u,t,R,0],∇L[u,s−1,R,1],log∇L[u,t]← ν⊗γ
+β α θ ⊕
+γ ←β[u,t,L,0]⊗α[u,s−1,R,1]⊗θ
+tu
+∇L[u,t,L,0],∇L[u,s−1,R,1],log∇L[t,u]← ν⊗γ
+β α θ ⊕
+ν ←∇L[s,t,R,1]⊗β[s,t,R,1]
+β
+foru=1,...,sdo
+∇L[u,t,R,1],∇L[u,s,R,0]← ν⊗β[u,t,R,1]⊗α[u,s,R,0]
+β α ⊕
+foru=t+1,...,ndo
+γ ←β[s,u,R,0]⊗α[t+1,u,L,1]⊗θ
+su
+∇L[s,u,R,0],∇L[t+1,u,L,1],log∇L[s,u]← ν⊗γ
+β α θ ⊕
+γ ←β[s,u,L,0]⊗α[t+1,u,L,1]⊗θ
+us
+∇L[s,u,L,0],∇L[t+1,u,L,1],log∇L[u,s]← ν⊗γ
+β α θ ⊕
+fork=n,...,1do (cid:46)Backpropagatethroughinsidestep
+fors=1,...,n−kdo
+t←s+k
+ν ←∇L[s,t,R,1]⊗α[s,t,R,1]
+α
+foru=s+1,...,tdo
+∇L[u,t,R,0],∇L[u,t,R,1]← ν⊗α[s,u,R,0]⊗α[u,t,R,1]
+α α ⊕
+ifs>1then
+ν ←∇L[s,t,L,1]⊗α[s,t,L,1]
+α
+foru=s,...,t−1do
+∇L[s,u,L,1],∇L[u,t,L,0]← ν⊗α[s,u,L,1]⊗α[u,t,L,0]
+α α ⊕
+ν ←∇L[s,t,L,0]⊗α[s,t,L,0]
+α
+foru=s,...,t−1do
+γ ←α[s,u,R,1]⊗α[u+1,t,L,1]⊗θ
+ts
+∇L[s,u,R,1],∇L[u+1,t,L,1],log∇L[t,s]← ν⊗γ
+α α θ ⊕
+ν ←∇L[s,t,R,0]⊗α[s,t,R,0]
+α
+foru=s,...,t−1do
+γ ←α[s,u,R,1]⊗α[u+1,t,L,1]⊗θ
+st
+∇L[s,u,R,1],∇L[u+1,t,L,1],log∇L[s,t]← ν⊗γ
+α α θ ⊕
+returnsignexplog∇L (cid:46)Exponentiateloggradient,multiplybysign,andreturn∇L
+θ θ
+Figure7: Backpropagationthroughtheinside-outsidealgorithmtocalculatethegradientwithrespecttothe
+input potentials. ∇a denotes the Jacobian of a with respect to b (so ∇L is the gradient with respect to θ).
+b θ
+a,b← cmeansa←a⊕candb←b⊕c.
+⊕
+21
