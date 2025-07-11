@@ -94,7 +94,7 @@ class LitLens:
         return response.splitlines() if response else []
     
 if __name__ == "__main__":
-    paper_name = "Routing-Aware Placement for Zoned Neutral Atom-based Quantum Computing"
+    paper_name = "Computing"
     arxiv_id = get_arxiv_id_by_title(paper_name)
     print(f"arXiv:{arxiv_id}: ", get_basic_info(arxiv_id)['title'])
     litlens = LitLens()

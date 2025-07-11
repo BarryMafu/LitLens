@@ -49,7 +49,7 @@ def search_arxiv(query: str, max_results: int = 10):
         'max_results': max_results
     }
     response = requests.get(url, params=params)
-    print(response.content)
+    print(response.text)
     
     # Check if the request was successful
     if response.status_code != RESPONSE_CODE_OK:

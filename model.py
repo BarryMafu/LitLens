@@ -15,7 +15,7 @@ from dataclasses import dataclass
 class ModelConfig:
     model_name: str = "deepseek-r1-250528"
     base_url: str = "https://ark.cn-beijing.volces.com/api/v3"
-    api_key: str = os.getenv("API_KEY")
+    api_key: str = "156c2c2f-fb3a-4ef0-85a5-b3517797cf46"
 
 class LanguageModel:
     def __init__(self, model_config: ModelConfig = ModelConfig()):
